@@ -50,10 +50,20 @@ done
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 git_root="$(git rev-parse --show-toplevel)"
 
+case "$OSTYPE" in
+    linux*)   os=linux ;;
+    msys*)    os=windows ;;
+esac
+
+case `arch` in
+    x86_64)   arch=x64 ;;
+    aarch64)  arch=aarch64 ;;
+esac
+
 export PYTHONPATH=$git_root/deps
 
 conan_ref="jaysinco/stable"
-conan_profile="$git_root/configs/conan.profile"
+conan_profile="$git_root/configs/conan.$os.$arch.profile"
 build_type=Release
 
 if [ $build_debug -eq 1 ]; then
