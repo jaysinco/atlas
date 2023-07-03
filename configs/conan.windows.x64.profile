@@ -3,6 +3,7 @@ os=Windows
 os_build=Windows
 arch=x86_64
 arch_build=x86_64
+# Visual Studio 2019
 compiler=Visual Studio
 compiler.version=16
 compiler.runtime=MD

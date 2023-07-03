@@ -30,5 +30,11 @@ find_package(concurrent-queue REQUIRED CONFIG)
 find_package(threadpool REQUIRED CONFIG)
 find_package(Qt5Widgets REQUIRED CONFIG)
 
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(ATLAS_RUNTIME_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})
+elseif(CMAKE_BUILD_TYPE MATCHES "Release")
+    set(ATLAS_RUNTIME_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE})
+endif()
+
 include_directories(src)
 add_subdirectory(src)
