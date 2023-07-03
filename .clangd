@@ -1,0 +1,7 @@
+CompileFlags:
+  CompilationDatabase: out
+
+InlayHints:
+  Enabled: No
+  ParameterNames: Yes
+  DeducedTypes: Yes

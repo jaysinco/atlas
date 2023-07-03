@@ -1,0 +1,38 @@
+diff --git a/uSockets.vcxproj b/uSockets.vcxproj
+index e3871f3..6f0f6b9 100644
+--- a/uSockets.vcxproj
++++ b/uSockets.vcxproj
+@@ -23,7 +23,7 @@
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.default.props" />
+   <PropertyGroup>
+     <ConfigurationType>StaticLibrary</ConfigurationType>
+-    <PlatformToolset>v141</PlatformToolset>
++    <PlatformToolset>v142</PlatformToolset>
+     <ProjectName>uSockets</ProjectName>
+   </PropertyGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+@@ -34,13 +34,16 @@
+   <ItemDefinitionGroup>
+     <ClCompile>
+       <AdditionalIncludeDirectories>src</AdditionalIncludeDirectories>
+-      <PreprocessorDefinitions>LIBUS_NO_SSL</PreprocessorDefinitions>
++      <PreprocessorDefinitions>LIBUS_USE_OPENSSL</PreprocessorDefinitions>
++      <LanguageStandard>stdcpp17</LanguageStandard>
+     </ClCompile>
+   </ItemDefinitionGroup>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+   <ItemGroup>
+     <ClCompile Include="src\*.c" />
+     <ClCompile Include="src\eventing\*.c" />
++    <ClCompile Include="src\crypto\*.c" />
++    <ClCompile Include="src\crypto\*.cpp" />
+   </ItemGroup>
+   <ItemGroup>
+     <ClInclude Include="src\*.h" />
+@@ -50,4 +53,4 @@
+     <ClInclude Include="src\interfaces\*.h" />
+   </ItemGroup>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Targets" />
+-</Project>
++</Project>
+\ No newline at end of file
