@@ -3,7 +3,7 @@
 #include <filesystem>
 #define CURR_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-namespace utils
+namespace toolkit
 {
 
 std::filesystem::path const& sourceRepo();
@@ -12,4 +12,4 @@ std::filesystem::path const& currentExeDir();
 std::filesystem::path defaultLoggingDir();
 Expected<std::string> readFile(std::filesystem::path const& path);
 
-}  // namespace utils
+}  // namespace toolkit

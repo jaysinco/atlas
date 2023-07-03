@@ -2,7 +2,7 @@
 #include <string_view>
 #include <string>
 
-namespace utils
+namespace toolkit
 {
 
 enum class CodePage
@@ -16,4 +16,4 @@ enum class CodePage
 std::string ws2s(std::wstring_view ws, CodePage cp = CodePage::kLOCAL);
 std::wstring s2ws(std::string_view s, CodePage cp = CodePage::kLOCAL);
 
-}  // namespace utils
+}  // namespace toolkit

@@ -11,6 +11,6 @@ macro(single_file_executable)
     single_file_exe_with_prefix(${MAIN} ${ARGN})
 endmacro()
 
-add_subdirectory(utils)
+add_subdirectory(toolkit)
 add_subdirectory(parser)
 add_subdirectory(test)

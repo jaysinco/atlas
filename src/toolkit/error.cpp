@@ -1,6 +1,6 @@
 #include "error.h"
 
-namespace utils
+namespace toolkit
 {
 
 nonstd::unexpected_type<Error> unexpected(std::string const& s)
@@ -8,4 +8,4 @@ nonstd::unexpected_type<Error> unexpected(std::string const& s)
     return nonstd::unexpected_type<Error>(s);
 }
 
-}  // namespace utils
+}  // namespace toolkit

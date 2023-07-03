@@ -5,7 +5,7 @@
 #include <fmt/format.h>
 #define FSTR(f, ...) (fmt::format(f, __VA_ARGS__))
 #define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, __VA_ARGS__))
-#define MY_THROW(f, ...) throw utils::Error(LOG_FSTR(f, __VA_ARGS__))
+#define MY_THROW(f, ...) throw toolkit::Error(LOG_FSTR(f, __VA_ARGS__))
 #define MY_TRY try {
 #define MY_CATCH                            \
     }                                       \
@@ -20,7 +20,7 @@
 #define WLOG(...) (LOG_FUNC(spdlog::level::warn, __VA_ARGS__))
 #define ELOG(...) (LOG_FUNC(spdlog::level::err, __VA_ARGS__))
 
-namespace utils
+namespace toolkit
 {
 
 enum LogLevel : int
@@ -39,4 +39,4 @@ void initLogger(std::string const& program, bool logtostderr, bool logtofile, Lo
                 LogLevel logbuflevel, int logbufsecs, std::filesystem::path const& logdir,
                 int maxlogsize);
 
-}  // namespace utils
+}  // namespace toolkit

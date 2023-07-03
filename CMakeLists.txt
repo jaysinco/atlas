@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    add_compile_options(-std=c++17)
 elseif(WIN32)
     add_compile_definitions(
         WINVER=0x0601

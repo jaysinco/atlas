@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace utils
+namespace toolkit
 {
 
 std::filesystem::path const& sourceRepo()
@@ -47,4 +47,4 @@ Expected<std::string> readFile(std::filesystem::path const& path)
     return ss.str();
 }
 
-}  // namespace utils
+}  // namespace toolkit
