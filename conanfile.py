@@ -53,8 +53,10 @@ class AtlasConan(MyConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG"] = os.path.join(self.source_folder, "bin")
-        tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE"] = os.path.join(self.source_folder, "bin", "Release")
+        tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG"] = self._normalize_path(
+            os.path.join(self.source_folder, "bin"))
+        tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE"] = self._normalize_path(
+            os.path.join(self.source_folder, "bin", "Release"))
         tc.variables["CMAKE_PREFIX_PATH"] = self._cmake_path()
         self._setup_pkg_root(tc)
         tc.generate()
@@ -69,7 +71,7 @@ class AtlasConan(MyConanFile):
     def _setup_pkg_root(self, tc):
         for pkg in self.deps_cpp_info._dependencies:
             root = "{}_ROOT".format(pkg)
-            tc.variables[root] = self.deps_cpp_info[pkg].cpp_info.rootpath
+            tc.variables[root] = self._normalize_path(self.deps_cpp_info[pkg].cpp_info.rootpath)
 
     def _cmake_path(self):
         prefix_path = []

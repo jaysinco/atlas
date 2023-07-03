@@ -11,5 +11,6 @@ std::filesystem::path const& projectRoot();
 std::filesystem::path const& currentExeDir();
 std::filesystem::path defaultLoggingDir();
 Expected<std::string> readFile(std::filesystem::path const& path);
+bool setenv(char const* var, char const* value);
 
 }  // namespace utils

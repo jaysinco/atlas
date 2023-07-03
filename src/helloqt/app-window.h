@@ -4,7 +4,7 @@
 class QLabel;
 class QPushButton;
 
-class AppWindow: public QMainWindow
+class AppWindow: public QWidget
 {
     Q_OBJECT
 

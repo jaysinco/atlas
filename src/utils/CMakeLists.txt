@@ -4,9 +4,9 @@ set(MAIN ${CURRENT_DIR_NAME})
 add_library(${MAIN}
     error.cpp
     encoding.cpp
-    fs.cpp
     logging.cpp
     args.cpp
+    toolkit.cpp
 )
 
 exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse HEAD" OUTPUT_VARIABLE GIT_HASH)
