@@ -1,4 +1,5 @@
-#include "toolkit/args.h"
+#include "utils/args.h"
+#include "utils/encoding.h"
 #include <boost/phoenix/phoenix.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
@@ -46,8 +47,8 @@ struct ErrorHandler
         int ln_pos = std::distance(ln_start, err_pos);
         int line = boost::spirit::get_line(err_pos);
         ELOG("{}({},{}): error: {} expected\n{}\n{}^",
-             toolkit::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what,
-             toolkit::ws2s(std::wstring(ln_start, ln_end)), std::string(ln_pos, ' '));
+             utils::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what,
+             utils::ws2s(std::wstring(ln_start, ln_end)), std::string(ln_pos, ' '));
     }
 
     std::filesystem::path source_file;
@@ -79,18 +80,18 @@ struct Expression: qi::grammar<Iterator, ast::Employee()>
 void parsing(std::filesystem::path const& source_file)
 {
     using Iterator = boost::spirit::line_pos_iterator<std::wstring::const_iterator>;
-    auto raw = toolkit::readFile(source_file);
-    std::wstring input = toolkit::s2ws(*raw, toolkit::CodePage::kUTF8);
+    auto raw = utils::readFile(source_file);
+    std::wstring input = utils::s2ws(*raw, utils::CodePage::kUTF8);
     Iterator beg(input.begin());
     Iterator end(input.end());
     parser::Expression<Iterator> expr(source_file);
     ast::Employee attr;
     bool ok = qi::parse(beg, end, expr, attr);
-    ILOG("{} {}", ok, toolkit::ws2s(attr.surname));
+    ILOG("{} {}", ok, utils::ws2s(attr.surname));
 }
 
 int main(int argc, char** argv)
 {
     INIT_LOG(argc, argv);
-    parsing(toolkit::projectRoot() / "src/parser/res/input.txt");
+    parsing(utils::projectRoot() / "src/parser/res/input.txt");
 }

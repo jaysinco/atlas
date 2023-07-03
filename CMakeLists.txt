@@ -28,6 +28,7 @@ find_package(nlohmann-json REQUIRED CONFIG)
 find_package(uWebSockets REQUIRED CONFIG)
 find_package(concurrent-queue REQUIRED CONFIG)
 find_package(threadpool REQUIRED CONFIG)
+find_package(Qt5Widgets REQUIRED CONFIG)
 
 include_directories(src)
 add_subdirectory(src)

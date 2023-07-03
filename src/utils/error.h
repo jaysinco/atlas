@@ -1,7 +1,7 @@
 #pragma once
 #include <nonstd/expected.hpp>
 
-namespace toolkit
+namespace utils
 {
 
 struct Error: public std::runtime_error
@@ -30,4 +30,4 @@ ScopeExit<T> scopeExit(T&& t)
     return ScopeExit<T>(std::move(t));
 }
 
-}  // namespace toolkit
+}  // namespace utils

@@ -50,4 +50,5 @@ echo start! \
 && pkga 0 uwebsockets \
 && pkga 0 concurrent-queue \
 && pkga 0 threadpool \
+&& pkga 0 qt5 \
 && echo done!

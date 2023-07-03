@@ -1,7 +1,7 @@
 #include "args.h"
 #define HELP_MESSAGE "shows help message and exits"
 
-namespace toolkit
+namespace utils
 {
 
 Args::Args(): opt_args_("Optional arguments", 70) {}
@@ -167,4 +167,4 @@ void Args::addSubcommandFlags()
     positional("subargs", po::value<std::vector<std::string>>(), "arguments for command", -1);
 }
 
-}  // namespace toolkit
+}  // namespace utils

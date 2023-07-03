@@ -6,14 +6,8 @@
 #include <fstream>
 #include <sstream>
 
-namespace toolkit
+namespace utils
 {
-
-std::filesystem::path const& sourceRepo()
-{
-    static std::filesystem::path repo(std::getenv("MY_SOURCE_REPO"));
-    return repo;
-}
 
 std::filesystem::path const& projectRoot()
 {
@@ -47,4 +41,4 @@ Expected<std::string> readFile(std::filesystem::path const& path)
     return ss.str();
 }
 
-}  // namespace toolkit
+}  // namespace utils

@@ -4,7 +4,7 @@
 #include <clocale>
 #include <memory>
 
-namespace toolkit
+namespace utils
 {
 
 class IconvWrapper
@@ -85,4 +85,4 @@ std::wstring s2ws(std::string_view s, CodePage cp)
     return conv.convert<std::wstring>(s, s.size() * 4);
 }
 
-}  // namespace toolkit
+}  // namespace utils

@@ -4,7 +4,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-namespace toolkit
+namespace utils
 {
 
 static spdlog::level::level_enum level(LogLevel level)
@@ -54,4 +54,4 @@ void initLogger(std::string const& program, bool logtostderr, bool logtofile, Lo
     DLOG("### BUILD AT: {} {} ###", __DATE__, __TIME__);
 }
 
-}  // namespace toolkit
+}  // namespace utils
