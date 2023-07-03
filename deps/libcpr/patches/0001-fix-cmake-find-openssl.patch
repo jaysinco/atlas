@@ -1,0 +1,47 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f39ec39..f077e75 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -116,7 +116,7 @@ if(CPR_ENABLE_SSL)
+     else()
+         if(CPR_FORCE_OPENSSL_BACKEND)
+             find_package(OpenSSL)
+-            if(OPENSSL_FOUND)
++            if(OpenSSL_FOUND)
+                 message(STATUS "Using OpenSSL.")
+                 set(SSL_BACKEND_USED "OpenSSL")
+             else()
+@@ -257,7 +257,7 @@ else()
+     if(BUILD_CURL_EXE)
+         set_property(TARGET curl PROPERTY FOLDER "external")
+     endif()
+-        
++
+     set_property(TARGET libcurl PROPERTY FOLDER "external")
+ endif()
+ 
+@@ -285,13 +285,13 @@ if(CPR_BUILD_TESTS)
+         FetchContent_MakeAvailable(googletest)
+ 
+         restore_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BKP)
+-        
++
+         add_library(gtest_int INTERFACE)
+         target_link_libraries(gtest_int INTERFACE gtest)
+         target_include_directories(gtest_int INTERFACE ${googletest_SOURCE_DIR}/include)
+ 
+         add_library(GTest::GTest ALIAS gtest_int)
+-       
++
+         # Group under the "tests/gtest" project folder in IDEs such as Visual Studio.
+     set_property(TARGET gtest PROPERTY FOLDER "tests/gtest")
+     set_property(TARGET gtest_main PROPERTY FOLDER "tests/gtest")
+@@ -320,7 +320,7 @@ if(CPR_BUILD_TESTS)
+     # Disable linting for mongoose
+     clear_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BKP)
+ 
+-    FetchContent_Declare(mongoose 
++    FetchContent_Declare(mongoose
+                          URL                    https://github.com/cesanta/mongoose/archive/6.18.tar.gz
+                          URL_HASH               SHA256=f5c10346abc9c72f7cac7885d853ca064fb09aad57580433941a8fd7a3543769 # the hash for 6.18.tar.gz
+                          USES_TERMINAL_DOWNLOAD TRUE)   # <---- This is needed only for Ninja to show download progress

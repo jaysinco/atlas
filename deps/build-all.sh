@@ -41,6 +41,8 @@ echo start! \
 && pkga 1 catch2 \
 && pkga 0 expected-lite \
 && pkga 1 zlib \
+&& pkga 1 zstd \
+&& pkga 1 sqlite3 \
 && pkga 0 openssl \
 && pkga 0 range-v3 \
 && pkga 1 libiconv \
@@ -48,6 +50,8 @@ echo start! \
 && pkga 1 libuv \
 && pkga 1 usockets \
 && pkga 0 uwebsockets \
+&& pkga 1 libcurl \
+&& pkga 1 libcpr \
 && pkga 0 concurrent-queue \
 && pkga 0 threadpool \
 && pkga 0 qt5 \
