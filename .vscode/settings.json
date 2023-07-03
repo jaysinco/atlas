@@ -1,0 +1,8 @@
+{
+    "files.exclude": {
+        "deps/*/*/*": true,
+    },
+    "files.watcherExclude": {
+        "{bin,out,dpes}": true,
+    },
+}

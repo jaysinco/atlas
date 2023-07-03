@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -h)
             echo
-            echo "Usage: recipe.sh [targets] [actions] [configs]"
+            echo "Usage: `basename "$0"` [targets] [actions] [configs]"
             echo
             echo "Actions:"
             echo "  -c   clean output"
@@ -62,7 +62,7 @@ esac
 
 export PYTHONPATH=$git_root/deps
 
-conan_ref="jaysinco/stable"
+conan_ref="sinco/stable"
 conan_profile="$git_root/configs/conan.$os.$arch.profile"
 build_type=Release
 

@@ -13,9 +13,9 @@ esac
 function pkga() {
     local build_debug=$1
     local name=$2
-    $git_root/deps/recipe.sh $name -r && \
+    $git_root/deps/build-recipe.sh $name -r && \
     if [ $build_debug -eq 1 ]; then
-        $git_root/deps/recipe.sh $name -r -d
+        $git_root/deps/build-recipe.sh $name -r -d
     fi
 }
 

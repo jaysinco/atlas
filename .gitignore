@@ -1,5 +1,5 @@
 /bin
 /out
-/CMakeUserPresets.json
 /deps/*/out
 /deps/*/src
+/CMakeUserPresets.json
