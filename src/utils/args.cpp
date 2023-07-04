@@ -33,19 +33,21 @@ Args& Args::addSub(std::string const& name, std::string const& desc)
     return *pargs;
 }
 
-void Args::parse()
+MyErrCode Args::parse()
 {
     po::command_line_parser parser(argc_, argv_);
-    parse(parser, true);
+    CHECK_ERR_RET(parse(parser, true));
+    return MyErrCode::kOk;
 }
 
-void Args::parse(std::vector<std::string> const& args)
+MyErrCode Args::parse(std::vector<std::string> const& args)
 {
     po::command_line_parser parser(args);
-    parse(parser, false);
+    CHECK_ERR_RET(parse(parser, false));
+    return MyErrCode::kOk;
 }
 
-void Args::parse(po::command_line_parser& parser, bool init_logger)
+MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
 {
     if (containSub()) {
         parser.allow_unregistered();
@@ -71,7 +73,8 @@ void Args::parse(po::command_line_parser& parser, bool init_logger)
         std::string cmd = get<std::string>("command");
         auto it = subs_.find(cmd);
         if (it == subs_.end()) {
-            MY_THROW("command not found: {}", cmd);
+            ELOG("command not found: {}", cmd);
+            return MyErrCode::kNotFound;
         }
         it->second.show = true;
         if (it->first == "help") {
@@ -90,11 +93,13 @@ void Args::parse(po::command_line_parser& parser, bool init_logger)
     }
 
     if (init_logger) {
-        initLogger(program_, get<bool>("logtostderr"), get<bool>("logtofile"),
-                   static_cast<LogLevel>(get<int>("minloglevel")),
-                   static_cast<LogLevel>(get<int>("logbuflevel")), get<int>("logbufsecs"),
-                   defaultLoggingDir(), get<int>("maxlogsize"));
+        CHECK_ERR_RET(initLogger(program_, get<bool>("logtostderr"), get<bool>("logtofile"),
+                                 static_cast<LogLevel>(get<int>("minloglevel")),
+                                 static_cast<LogLevel>(get<int>("logbuflevel")),
+                                 get<int>("logbufsecs"), defaultLoggingDir(),
+                                 get<int>("maxlogsize")));
     }
+    return MyErrCode::kOk;
 }
 
 void Args::printUsage(std::ostream& os)
@@ -152,8 +157,10 @@ void Args::addLoggingFlags()
 {
     po::options_description log_args("Logging arguments");
     auto args_init = log_args.add_options();
-    args_init("minloglevel", po::value<int>()->default_value(kINFO), "log level (0-6)");
-    args_init("logbuflevel", po::value<int>()->default_value(kERROR), "log buffered level");
+    args_init("minloglevel", po::value<int>()->default_value(static_cast<int>(LogLevel::kINFO)),
+              "log level (0-6)");
+    args_init("logbuflevel", po::value<int>()->default_value(static_cast<int>(LogLevel::kERROR)),
+              "log buffered level");
     args_init("logbufsecs", po::value<int>()->default_value(30), "max secs logs may be buffered");
     args_init("logtostderr", po::value<bool>()->default_value(true), "log to stderr");
     args_init("logtofile", po::value<bool>()->default_value(false), "log to file");

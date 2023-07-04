@@ -1,6 +1,5 @@
 #include "utils/args.h"
 #include <uWebSockets/App.h>
-#include <fmt/ostream.h>
 
 int main(int argc, char** argv)
 {
@@ -13,7 +12,11 @@ int main(int argc, char** argv)
     opt.cert_file_name = cert_file.c_str();
 
     uWS::SSLApp(opt)
-        .get("/*", [](auto* res, auto* req) { res->end("Hello world!"); })
+        .get("/*",
+             [](auto* res, auto* req) {
+                 res->writeHeader("Content-Type", "text/html; charset=utf-8");
+                 res->end("Hello world!");
+             })
         .listen(8080,
                 [](auto* listen_socket) {
                     if (listen_socket) {

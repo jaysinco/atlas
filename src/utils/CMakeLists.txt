@@ -3,10 +3,11 @@ set(MAIN ${CURRENT_DIR_NAME})
 
 add_library(${MAIN}
     error.cpp
+    base.cpp
     encoding.cpp
     logging.cpp
     args.cpp
-    toolkit.cpp
+    # sqlite-helper.cpp
 )
 
 exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse HEAD" OUTPUT_VARIABLE GIT_HASH)
@@ -19,4 +20,5 @@ target_link_libraries(${MAIN} PUBLIC
     Boost::program_options
     nonstd::expected-lite
     Iconv::Iconv
+    SQLite::SQLite3
 )

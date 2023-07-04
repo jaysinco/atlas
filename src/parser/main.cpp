@@ -77,10 +77,13 @@ struct Expression: qi::grammar<Iterator, ast::Employee()>
 
 }  // namespace parser
 
-void parsing(std::filesystem::path const& source_file)
+MyErrCode parsing(std::filesystem::path const& source_file)
 {
     using Iterator = boost::spirit::line_pos_iterator<std::wstring::const_iterator>;
     auto raw = utils::readFile(source_file);
+    if (!raw) {
+        return raw.error();
+    }
     std::wstring input = utils::s2ws(*raw, utils::CodePage::kUTF8);
     Iterator beg(input.begin());
     Iterator end(input.end());
@@ -88,6 +91,7 @@ void parsing(std::filesystem::path const& source_file)
     ast::Employee attr;
     bool ok = qi::parse(beg, end, expr, attr);
     ILOG("{} {}", ok, utils::ws2s(attr.surname));
+    return MyErrCode::kOk;
 }
 
 int main(int argc, char** argv)

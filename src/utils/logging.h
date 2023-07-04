@@ -1,10 +1,10 @@
 #pragma once
-#include "toolkit.h"
+#include "base.h"
 #include <spdlog/spdlog.h>
 
 #define FSTR(f, ...) (fmt::format(f, __VA_ARGS__))
 #define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, __VA_ARGS__))
-#define MY_THROW(f, ...) throw utils::Error(LOG_FSTR(f, __VA_ARGS__))
+#define MY_THROW(f, ...) throw std::runtime_error(LOG_FSTR(f, __VA_ARGS__))
 #define MY_TRY try {
 #define MY_CATCH                            \
     }                                       \
@@ -22,7 +22,7 @@
 namespace utils
 {
 
-enum LogLevel : int
+enum class LogLevel : int
 {
     kTRACE = 0,
     kDEBUG = 1,
@@ -34,8 +34,8 @@ enum LogLevel : int
     kTOTAL,
 };
 
-void initLogger(std::string const& program, bool logtostderr, bool logtofile, LogLevel minloglevel,
-                LogLevel logbuflevel, int logbufsecs, std::filesystem::path const& logdir,
-                int maxlogsize);
+MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofile,
+                     LogLevel minloglevel, LogLevel logbuflevel, int logbufsecs,
+                     std::filesystem::path const& logdir, int maxlogsize);
 
 }  // namespace utils

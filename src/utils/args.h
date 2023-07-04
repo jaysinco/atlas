@@ -19,7 +19,7 @@ public:
     void optional(char const* name, po::value_semantic const* s, char const* description);
     void positional(char const* name, po::value_semantic const* s, char const* description,
                     int max_count);
-    void parse();
+    MyErrCode parse();
     bool has(std::string const& name) const;
     Args& addSub(std::string const& name, std::string const& desc);
     bool hasSub(std::string const& name) const;
@@ -42,8 +42,8 @@ private:
     void addLoggingFlags();
     void addSubcommandFlags();
     void printUsage(std::ostream& os = std::cerr);
-    void parse(std::vector<std::string> const& args);
-    void parse(po::command_line_parser& parser, bool init_logger);
+    MyErrCode parse(std::vector<std::string> const& args);
+    MyErrCode parse(po::command_line_parser& parser, bool init_logger);
 
     struct SubCmd
     {

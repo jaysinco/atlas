@@ -1,5 +1,6 @@
-#include "toolkit.h"
+#include "base.h"
 #include "encoding.h"
+#include "logging.h"
 #include <stdlib.h>
 #ifdef __linux__
 #include <unistd.h>
@@ -17,7 +18,7 @@ namespace utils
 
 std::filesystem::path const& projectRoot()
 {
-    static auto root = currentExeDir().parent_path();
+    static auto root = currentExeDir().parent_path().parent_path();
     return root;
 }
 
@@ -47,19 +48,20 @@ Expected<std::string> readFile(std::filesystem::path const& path)
 {
     std::ifstream in_file(path);
     if (!in_file) {
-        return unexpected("failed to open file");
+        ELOG("failed to open file: {}", path.string());
+        return unexpected(MyErrCode::kUnknown);
     }
     std::stringstream ss;
     ss << in_file.rdbuf();
     return ss.str();
 }
 
-bool setenv(char const* var, char const* value)
+MyErrCode setEnv(char const* varname, char const* value)
 {
 #ifdef __linux__
-    return setenv(var, value, 1) == 0;
+    return ::setenv(varname, value, 1) == 0 ? MyErrCode::kOk : MyErrCode::kUnknown;
 #elif _WIN32
-    return _putenv_s(var, value) == 0;
+    return _putenv_s(varname, value) == 0 ? MyErrCode::kOk : MyErrCode::kUnknown;
 #endif
 }
 

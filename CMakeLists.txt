@@ -28,6 +28,8 @@ find_package(nlohmann-json REQUIRED CONFIG)
 find_package(uWebSockets REQUIRED CONFIG)
 find_package(concurrent-queue REQUIRED CONFIG)
 find_package(threadpool REQUIRED CONFIG)
+find_package(cpr REQUIRED CONFIG)
+find_package(SQLite3 REQUIRED CONFIG)
 find_package(Qt5Widgets REQUIRED CONFIG)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")

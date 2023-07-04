@@ -54,7 +54,8 @@ conan_profile="$git_root/configs/conan.$os.$arch.profile"
 build_folder=$git_root/out/$build_type
 
 if [ $do_clean -eq 1 ]; then
-    rm -rf $git_root/out $git_root/bin
+    rm -rf $git_root/out/$build_type
+    rm -rf $git_root/bin/$build_type
 fi
 
 if [ $do_rm_cmake_cache -eq 1 ]; then

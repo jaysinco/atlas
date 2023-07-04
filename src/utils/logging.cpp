@@ -7,21 +7,23 @@
 namespace utils
 {
 
-static spdlog::level::level_enum level(LogLevel level)
+static Expected<spdlog::level::level_enum> level(LogLevel level)
 {
-    if (level < 0 || level >= kTOTAL) {
-        MY_THROW("invalid log level: {}", level);
+    if (static_cast<int>(level) < 0 || level >= LogLevel::kTOTAL) {
+        ELOG("invalid log level: {}", static_cast<int>(level));
+        return unexpected(MyErrCode::kInvalidArgument);
     }
     return static_cast<spdlog::level::level_enum>(level);
 }
 
-void initLogger(std::string const& program, bool logtostderr, bool logtofile, LogLevel minloglevel,
-                LogLevel logbuflevel, int logbufsecs, std::filesystem::path const& logdir,
-                int maxlogsize)
+MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofile,
+                     LogLevel minloglevel, LogLevel logbuflevel, int logbufsecs,
+                     std::filesystem::path const& logdir, int maxlogsize)
 {
     if (spdlog::get(program)) {
-        return;
+        return MyErrCode::kOk;
     }
+
     std::vector<spdlog::sink_ptr> sinks;
     if (logtofile) {
         std::filesystem::path fpath(logdir);
@@ -44,14 +46,23 @@ void initLogger(std::string const& program, bool logtostderr, bool logtofile, Lo
     }
 
     auto logger = std::make_shared<spdlog::logger>(program, sinks.begin(), sinks.end());
-    logger->set_level(level(minloglevel));
-    logger->flush_on(level(logbuflevel));
+    auto loglevel = level(minloglevel);
+    if (!loglevel) {
+        return loglevel.error();
+    }
+    logger->set_level(*loglevel);
+    auto buflevel = level(logbuflevel);
+    if (!buflevel) {
+        return buflevel.error();
+    }
+    logger->flush_on(*buflevel);
     spdlog::set_default_logger(logger);
     spdlog::flush_every(std::chrono::seconds(logbufsecs));
 
     DLOG("### GIT HASH: {} ###", _GIT_HASH);
     DLOG("### GIT BRANCH: {} ###", _GIT_BRANCH);
     DLOG("### BUILD AT: {} {} ###", __DATE__, __TIME__);
+    return MyErrCode::kOk;
 }
 
 }  // namespace utils

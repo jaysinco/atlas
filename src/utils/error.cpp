@@ -3,9 +3,9 @@
 namespace utils
 {
 
-nonstd::unexpected_type<Error> unexpected(std::string const& s)
+nonstd::unexpected_type<MyErrCode> unexpected(MyErrCode err)
 {
-    return nonstd::unexpected_type<Error>(s);
+    return nonstd::unexpected_type<MyErrCode>(err);
 }
 
 }  // namespace utils

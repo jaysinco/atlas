@@ -41,6 +41,8 @@ class AtlasConan(MyConanFile):
         self.requires(self._ref_pkg("uwebsockets/20.14.0"))
         self.requires(self._ref_pkg("concurrent-queue/1.0.3"))
         self.requires(self._ref_pkg("threadpool/3.3.0"))
+        self.requires(self._ref_pkg("libcpr/1.9.2"))
+        self.requires(self._ref_pkg("sqlite3/3.39.4"))
         self.requires(self._ref_pkg("qt5/5.15.6"))
 
     def layout(self):
@@ -54,7 +56,7 @@ class AtlasConan(MyConanFile):
     def generate(self):
         tc = CMakeToolchain(self)
         tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG"] = self._normalize_path(
-            os.path.join(self.source_folder, "bin"))
+            os.path.join(self.source_folder, "bin", "Debug"))
         tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE"] = self._normalize_path(
             os.path.join(self.source_folder, "bin", "Release"))
         tc.variables["CMAKE_PREFIX_PATH"] = self._cmake_path()
