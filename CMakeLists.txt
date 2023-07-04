@@ -9,6 +9,7 @@ if(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
     add_compile_options(-std=c++17)
+    add_link_options(-rdynamic)
 elseif(WIN32)
     add_compile_definitions(
         WINVER=0x0601

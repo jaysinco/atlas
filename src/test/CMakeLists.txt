@@ -14,6 +14,7 @@ macro(single_file_executable)
     single_file_exe_with_prefix(${MAIN} ${ARGN})
 endmacro()
 
+single_file_executable(crash utils)
 single_file_executable(https-server utils uWebSockets)
 single_file_executable(https-client utils cpr::cpr)
 

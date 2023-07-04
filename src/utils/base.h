@@ -29,6 +29,7 @@ std::filesystem::path currentExeDir();
 std::filesystem::path currentExePath();
 std::filesystem::path defaultLoggingDir();
 
+MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
 Expected<std::string> readFile(std::filesystem::path const& path);
 

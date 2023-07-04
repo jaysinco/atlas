@@ -24,8 +24,10 @@ COMMIT;
 )";
 
     auto db_path = utils::currentExeDir() / "sql.db";
-    CHECK(utils::SQLiteHelper::execSQLs(db_path, sqls) == MyErrCode::kOk);
-    if (std::filesystem::exists(db_path)) {
-        std::filesystem::remove(db_path);
-    }
+    utils::scopeExit([&] {
+        if (std::filesystem::exists(db_path)) {
+            std::filesystem::remove(db_path);
+        }
+    });
+    REQUIRE(utils::SQLiteHelper::execSQLs(db_path, sqls) == MyErrCode::kOk);
 }

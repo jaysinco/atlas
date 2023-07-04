@@ -2,10 +2,12 @@
 #include "encoding.h"
 #include "logging.h"
 #include <stdlib.h>
+#include <signal.h>
 #ifdef __linux__
 #include <unistd.h>
 #include <limits.h>
 #include <libgen.h>
+#include <execinfo.h>
 #elif _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -56,6 +58,26 @@ MyErrCode setEnv(char const* varname, char const* value)
 #elif _WIN32
     return _putenv_s(varname, value) == 0 ? MyErrCode::kOk : MyErrCode::kFailed;
 #endif
+}
+
+void handleSIGSEGV(int sig)
+{
+    fprintf(stderr, "signal SIGSEGV(%d) received!\n", sig);
+#ifdef __linux__
+    constexpr int kAddrsLen = 20;
+    void* addrs[kAddrsLen] = {nullptr};
+    int size = backtrace(addrs, kAddrsLen);
+    backtrace_symbols_fd(addrs, size, STDERR_FILENO);
+#elif _WIN32
+    // TODO: https://github.com/JochenKalmbach/StackWalker
+#endif
+    std::abort();
+}
+
+MyErrCode installCrashHook()
+{
+    signal(SIGSEGV, handleSIGSEGV);
+    return MyErrCode::kOk;
 }
 
 }  // namespace utils
