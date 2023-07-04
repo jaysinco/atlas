@@ -44,6 +44,8 @@ class AtlasConan(MyConanFile):
         self.requires(self._ref_pkg("libcpr/1.9.2"))
         self.requires(self._ref_pkg("sqlite3/3.39.4"))
         self.requires(self._ref_pkg("qt5/5.15.6"))
+        if self.settings.os == "Windows":
+            self.requires(self._ref_pkg("stackwalker/2023.06.24"))
 
     def layout(self):
         build_folder = "out"

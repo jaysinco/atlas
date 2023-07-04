@@ -21,5 +21,6 @@ target_link_libraries(${MAIN} PUBLIC
     spdlog::spdlog
     nonstd::expected-lite
     Iconv::Iconv
-    SQLite::SQLite3   
+    SQLite::SQLite3
+    $<IF:$<BOOL:${WIN32}>,stackwalker,>
 )

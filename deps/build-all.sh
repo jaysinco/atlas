@@ -35,6 +35,7 @@ echo start! \
 && pkgw 0 jom \
 && pkgw 0 nasm \
 && pkgw 0 strawberryperl \
+&& pkgw 1 stackwalker \
 && pkga 1 fmt \
 && pkga 1 spdlog \
 && pkga 0 boost \

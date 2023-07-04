@@ -1,0 +1,25 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c9138ca..c34b8c1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,6 @@
++cmake_minimum_required(VERSION 3.16)
+ project(StackWalker-project)
+
+-cmake_minimum_required(VERSION 3.5)
+
+ if(NOT CMAKE_BUILD_TYPE)
+     set(CMAKE_BUILD_TYPE Release)
+@@ -68,9 +68,9 @@ else()
+ endif()
+
+ message(STATUS "CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
+-set (CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_PREFIX}/include")
+-set (CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_PREFIX}/lib")
+-set (CMAKE_INSTALL_BINDIR "${CMAKE_INSTALL_PREFIX}/bin")
++set (CMAKE_INSTALL_INCLUDEDIR "include")
++set (CMAKE_INSTALL_LIBDIR "lib")
++set (CMAKE_INSTALL_BINDIR "bin")
+ message(STATUS "CMAKE_INSTALL_INCLUDEDIR: ${CMAKE_INSTALL_INCLUDEDIR}")
+ message(STATUS "CMAKE_INSTALL_LIBDIR: ${CMAKE_INSTALL_LIBDIR}")
+ message(STATUS "CMAKE_INSTALL_BINDIR: ${CMAKE_INSTALL_BINDIR}")

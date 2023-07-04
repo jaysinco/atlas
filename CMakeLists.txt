@@ -17,6 +17,7 @@ elseif(WIN32)
         NOMINMAX
     )
     add_compile_options(/utf-8 /permissive-)
+    find_package(stackwalker REQUIRED CONFIG)
 endif()
 
 find_package(spdlog REQUIRED CONFIG)

@@ -11,6 +11,7 @@
 #elif _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "StackWalker.h"
 #endif
 #include <fstream>
 #include <sstream>
@@ -60,6 +61,14 @@ MyErrCode setEnv(char const* varname, char const* value)
 #endif
 }
 
+#ifdef _WIN32
+class MyStackWalker: public StackWalker
+{
+protected:
+    void OnOutput(LPCSTR text) override { fprintf(stderr, "%s", text); }
+};
+#endif
+
 void handleSIGSEGV(int sig)
 {
     fprintf(stderr, "signal SIGSEGV(%d) received!\n", sig);
@@ -69,7 +78,8 @@ void handleSIGSEGV(int sig)
     int size = backtrace(addrs, kAddrsLen);
     backtrace_symbols_fd(addrs, size, STDERR_FILENO);
 #elif _WIN32
-    // TODO: https://github.com/JochenKalmbach/StackWalker
+    MyStackWalker sw;
+    sw.ShowCallstack();
 #endif
     std::abort();
 }
