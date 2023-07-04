@@ -7,7 +7,7 @@ add_library(${MAIN}
     encoding.cpp
     logging.cpp
     args.cpp
-    # sqlite-helper.cpp
+    sqlite-helper.cpp
 )
 
 exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse HEAD" OUTPUT_VARIABLE GIT_HASH)
@@ -16,9 +16,10 @@ exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse --abbrev-ref HEAD" OUTP
 target_compile_definitions(${MAIN} PRIVATE -D_GIT_BRANCH="${GIT_BRANCH}")
 
 target_link_libraries(${MAIN} PUBLIC
-    spdlog::spdlog
+    Boost::headers
     Boost::program_options
+    spdlog::spdlog
     nonstd::expected-lite
     Iconv::Iconv
-    SQLite::SQLite3
+    SQLite::SQLite3   
 )

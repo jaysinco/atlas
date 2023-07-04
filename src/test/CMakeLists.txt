@@ -14,9 +14,17 @@ macro(single_file_executable)
     single_file_exe_with_prefix(${MAIN} ${ARGN})
 endmacro()
 
-add_executable(${MAIN} main.cpp)
-target_link_libraries(${MAIN} utils)
-
 single_file_executable(https-server utils uWebSockets)
 single_file_executable(https-client utils cpr::cpr)
+
+add_executable(${MAIN}
+    main.cpp
+    test-database.cpp
+)
+target_link_libraries(${MAIN}
+    utils
+    Catch2::Catch2WithMain
+)
+
+
 

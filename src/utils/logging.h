@@ -34,8 +34,10 @@ enum class LogLevel : int
     kTOTAL,
 };
 
-MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofile,
-                     LogLevel minloglevel, LogLevel logbuflevel, int logbufsecs,
-                     std::filesystem::path const& logdir, int maxlogsize);
+MyErrCode initLogger(std::string const& program = currentExeName(), bool logtostderr = true,
+                     bool logtofile = false, LogLevel minloglevel = LogLevel::kINFO,
+                     LogLevel logbuflevel = LogLevel::kERROR, int logbufsecs = 30,
+                     std::filesystem::path const& logdir = defaultLoggingDir(),
+                     int maxlogsize = 100);
 
 }  // namespace utils

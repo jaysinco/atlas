@@ -1,9 +1,12 @@
 #pragma once
-#include <sqlite3.h>
+#include "error.h"
 #include <string>
 #include <variant>
 #include <filesystem>
 #include <vector>
+
+class sqlite3;
+class sqlite3_stmt;
 
 namespace utils
 {
@@ -21,7 +24,7 @@ struct NullType
 {
 };
 
-extern NullType g_null;
+extern NullType g_null_v;
 
 enum class CellType
 {
@@ -45,40 +48,41 @@ struct SQLUnit
 class SQLiteHelper
 {
 public:
-    static AtlasErr execSQLs(std::filesystem::path const& dbpath, std::string const& sqls);
-    static AtlasErr execSQLs(std::filesystem::path const& dbpath, std::vector<SQLUnit> const& sqls);
-    static AtlasErr querySQL(std::filesystem::path const& dbpath, SQLUnit const& sql,
-                             std::vector<CellType> const& types, RowsValue& rows);
+    SQLiteHelper(SQLiteHelper const&) = delete;
+    static MyErrCode execSQLs(std::filesystem::path const& db_path, std::string const& sqls);
+    static MyErrCode execSQLs(std::filesystem::path const& db_path,
+                              std::vector<SQLUnit> const& sqls);
+    static MyErrCode querySQL(std::filesystem::path const& db_path, SQLUnit const& sql,
+                              std::vector<CellType> const& types, RowsValue& rows);
 
 private:
     class Stmt
     {
     public:
-        friend class SQLiteWrapper;
+        friend class SQLiteHelper;
         Stmt() = default;
         Stmt(Stmt const&) = delete;
         ~Stmt();
-        bool bind(std::vector<CellValue> const& vals);
-        bool step(bool& done);
-        bool stepUtilDone();
-        bool column(int index, CellType const& type, CellValue& val);
-        bool reset();
+        MyErrCode bind(std::vector<CellValue> const& vals);
+        MyErrCode step(bool& done);
+        MyErrCode stepUtilDone();
+        MyErrCode column(int index, CellType const& type, CellValue& val);
+        MyErrCode reset();
 
     private:
         sqlite3* db_ = nullptr;
         sqlite3_stmt* stmt_ = nullptr;
     };
 
-    SQLiteWrapper() = default;
-    SQLiteWrapper(SQLiteWrapper const&) = delete;
-    ~SQLiteWrapper();
+    SQLiteHelper() = default;
+    ~SQLiteHelper();
 
-    SVErrCode open(std::string const& filePath);
-    SVErrCode prepare(std::string const& sql, Stmt& stmt);
-    SVErrCode exec(std::string const& sql);
+    MyErrCode open(std::string const& db_path);
+    MyErrCode prepare(std::string const& sql, Stmt& stmt);
+    MyErrCode exec(std::string const& sql);
 
-    std::string filePath;
-    sqlite3* db = nullptr;
+    std::string db_path_;
+    sqlite3* db_ = nullptr;
 };
 
 }  // namespace utils

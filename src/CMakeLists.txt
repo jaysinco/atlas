@@ -4,14 +4,14 @@ if (WIN32)
         ${qt5_ROOT}/bin/Qt5Core.dll
         ${qt5_ROOT}/bin/Qt5Gui.dll
         ${qt5_ROOT}/plugins/platforms/qwindows.dll
-        DESTINATION ${ATLAS_RUNTIME_DIR}
+        DESTINATION ${MY_RUNTIME_DIR}
     )
 elseif (UNIX)
     file(COPY
         ${qt5_ROOT}/lib/libQt5Widgets.so.5
         ${qt5_ROOT}/lib/libQt5Core.so.5
         ${qt5_ROOT}/lib/libQt5Gui.so.5
-        DESTINATION ${ATLAS_RUNTIME_DIR}
+        DESTINATION ${MY_RUNTIME_DIR}
         FOLLOW_SYMLINK_CHAIN
     )
 endif()

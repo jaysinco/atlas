@@ -7,10 +7,29 @@
 namespace utils
 {
 
-std::filesystem::path const& projectRoot();
-std::filesystem::path const& currentExeDir();
+template <typename T>
+struct ScopeExit
+{
+    explicit ScopeExit(T&& t): t(std::move(t)) {}
+
+    ~ScopeExit() { t(); }
+
+    T t;
+};
+
+template <typename T>
+ScopeExit<T> scopeExit(T&& t)
+{
+    return ScopeExit<T>(std::move(t));
+}
+
+std::string currentExeName();
+std::filesystem::path projectRoot();
+std::filesystem::path currentExeDir();
+std::filesystem::path currentExePath();
 std::filesystem::path defaultLoggingDir();
-Expected<std::string> readFile(std::filesystem::path const& path);
+
 MyErrCode setEnv(char const* varname, char const* value);
+Expected<std::string> readFile(std::filesystem::path const& path);
 
 }  // namespace utils
