@@ -15,20 +15,14 @@ class StackWalkerConan(MyConanFile):
     settings = "os", "arch", "compiler", "build_type"
     options = {
         "shared": [True, False],
-        "fPIC": [True, False],
     }
     default_options = {
         "shared": False,
-        "fPIC": True,
     }
 
-    def config_options(self):
-        if self.settings.os == "Windows":
-            del self.options.fPIC
-
     def configure(self):
-        if self.options.shared:
-            del self.options.fPIC
+        if self.settings.os != "Windows":
+            raise ConanInvalidConfiguration("Only Windows supported")
 
     def source(self):
         srcFile = self._src_abspath(f"{self.name}-v{self.version}.tar.gz")
