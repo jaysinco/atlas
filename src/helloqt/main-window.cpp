@@ -1,10 +1,10 @@
-#include "app-window.h"
+#include "main-window.h"
 #include "utils/logging.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
 
-AppWindow::AppWindow(QWidget* parent): QWidget(parent)
+MainWindow::MainWindow(QWidget* parent): QWidget(parent)
 {
     resize(800, 600);
     label_ = new QLabel("YES", this);
@@ -24,6 +24,6 @@ AppWindow::AppWindow(QWidget* parent): QWidget(parent)
     retranslateUi();
 }
 
-AppWindow::~AppWindow() = default;
+MainWindow::~MainWindow() = default;
 
-void AppWindow::retranslateUi() { setWindowTitle(tr("helloqt")); }
+void MainWindow::retranslateUi() { setWindowTitle(tr("helloqt")); }

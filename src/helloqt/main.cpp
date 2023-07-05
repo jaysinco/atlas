@@ -1,14 +1,23 @@
 #include "utils/args.h"
-#include "app-window.h"
+#include "main-window.h"
 #include <QApplication>
+#include <QFontDatabase>
 
 int main(int argc, char** argv)
 {
     MY_TRY;
     INIT_LOG(argc, argv);
-    utils::setEnv("QT_QPA_PLATFORM_PLUGIN_PATH", utils::currentExeDir().string().c_str());
+    std::string ced = utils::currentExeDir();
+    utils::setEnv("QT_QPA_PLATFORM_PLUGIN_PATH", ced.c_str());
     QApplication app(argc, argv);
-    AppWindow w;
+    // int font_id = QFontDatabase::addApplicationFont(":/fonts/FangZhengHeiTiJianTi.ttf");
+    // if (font_id != -1) {
+    //     QFont font("FangZhengHeiTiJianTi");
+    //     QApplication::setFont(font);
+    // } else {
+    //     ELOG("failed to load font!");
+    // }
+    MainWindow w;
     w.show();
     return QApplication::exec();
     MY_CATCH;

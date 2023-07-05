@@ -1,16 +1,16 @@
 #pragma once
-#include <QMainWindow>
+#include <QWidget>
 
 class QLabel;
 class QPushButton;
 
-class AppWindow: public QWidget
+class MainWindow: public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit AppWindow(QWidget* parent = nullptr);
-    ~AppWindow() override;
+    explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
 
     void retranslateUi();
 

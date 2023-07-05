@@ -11,6 +11,9 @@ elseif (UNIX)
         ${qt5_ROOT}/lib/libQt5Widgets.so.5
         ${qt5_ROOT}/lib/libQt5Core.so.5
         ${qt5_ROOT}/lib/libQt5Gui.so.5
+        ${qt5_ROOT}/lib/libQt5XcbQpa.so.5
+        ${qt5_ROOT}/lib/libQt5DBus.so.5
+        ${qt5_ROOT}/plugins/platforms/libqxcb.so
         DESTINATION ${MY_RUNTIME_DIR}
         FOLLOW_SYMLINK_CHAIN
     )

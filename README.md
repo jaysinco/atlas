@@ -4,7 +4,7 @@
 * cmake
 * linux
     * gcc 11
-    * `apt-get build-dep -y qt5-default`
+    * `apt-get install '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev`
 * windows
     * visual studio 2019
     * `pacman --noconfirm -S base-devel binutils gcc`
