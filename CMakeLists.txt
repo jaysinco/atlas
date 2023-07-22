@@ -33,6 +33,7 @@ find_package(threadpool REQUIRED CONFIG)
 find_package(cpr REQUIRED CONFIG)
 find_package(SQLite3 REQUIRED CONFIG)
 find_package(Qt5Widgets REQUIRED CONFIG)
+find_package(opencl-headers REQUIRED CONFIG)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
     set(MY_RUNTIME_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})

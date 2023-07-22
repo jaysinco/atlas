@@ -56,4 +56,5 @@ echo start! \
 && pkga 0 concurrent-queue \
 && pkga 0 threadpool \
 && pkga 0 qt5 \
+&& pkga 0 opencl-headers \
 && echo done!

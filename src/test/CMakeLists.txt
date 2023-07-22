@@ -17,6 +17,9 @@ endmacro()
 single_file_executable(crash utils)
 single_file_executable(https-server utils uWebSockets)
 single_file_executable(https-client utils cpr::cpr)
+single_file_executable(ocl utils opencl-headers
+    $<IF:$<BOOL:${WIN32}>,"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64/OpenCL",>
+)
 
 add_executable(${MAIN}
     main.cpp
@@ -26,6 +29,3 @@ target_link_libraries(${MAIN}
     utils
     Catch2::Catch2WithMain
 )
-
-
-
