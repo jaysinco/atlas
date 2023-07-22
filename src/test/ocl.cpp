@@ -113,7 +113,7 @@ int main(int argc, char** argv)
         arr_sum_cpu(a.data(), b.data(), c1.data(), narr);
     }
     clock_t end1 = clock();
-    double seqTime1 = ((double)10e3 * (end1 - start1)) / CLOCKS_PER_SEC / count;
+    double seqTime1 = ((double)1e3 * (end1 - start1)) / CLOCKS_PER_SEC / count;
 
     // gpu
     auto device = get_default_device();
@@ -137,7 +137,7 @@ int main(int argc, char** argv)
         arr_sum_gpu(a.data(), b.data(), c2.data(), narr, context, program, device);
     }
     clock_t end2 = clock();
-    double seqTime2 = ((double)10e3 * (end2 - start2)) / CLOCKS_PER_SEC / count;
+    double seqTime2 = ((double)1e3 * (end2 - start2)) / CLOCKS_PER_SEC / count;
 
     // report
     bool equal = check_equal(c1.data(), c2.data(), narr);

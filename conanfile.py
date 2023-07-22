@@ -30,6 +30,9 @@ class AtlasConan(MyConanFile):
         if self.options.shared:
             del self.options.fPIC
 
+    def build_requirements(self):
+        self.build_requires(self._ref_pkg("xxd/2023.04.13"))
+
     def requirements(self):
         self.requires(self._ref_pkg("spdlog/1.10.0"))
         self.requires(self._ref_pkg("boost/1.79.0"))

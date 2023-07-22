@@ -18,7 +18,7 @@ single_file_executable(crash utils)
 single_file_executable(https-server utils uWebSockets)
 single_file_executable(https-client utils cpr::cpr)
 single_file_executable(ocl utils opencl-headers
-    $<IF:$<BOOL:${WIN32}>,"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64/OpenCL",>
+    $<IF:$<BOOL:${WIN32}>,${CMAKE_CURRENT_SOURCE_DIR}/res/OpenCL.lib,>
 )
 
 add_executable(${MAIN}
