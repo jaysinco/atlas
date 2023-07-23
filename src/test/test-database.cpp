@@ -24,7 +24,7 @@ COMMIT;
 )";
 
     auto db_path = utils::currentExeDir() / "sql.db";
-    utils::scopeExit([&] {
+    auto db_guard = utils::scopeExit([&] {
         if (std::filesystem::exists(db_path)) {
             std::filesystem::remove(db_path);
         }
