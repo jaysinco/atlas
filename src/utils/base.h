@@ -2,10 +2,10 @@
 #include "error.h"
 #include <filesystem>
 
-#define CURR_FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define XXD_DECLARE_RES(res)    \
     extern unsigned char res[]; \
     extern unsigned int res##_LEN;
+
 #define XXD_GET_RES(res) (std::string_view(reinterpret_cast<char*>(res), res##_LEN))
 
 namespace utils

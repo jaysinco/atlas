@@ -1,5 +1,6 @@
 #include "logging.h"
 #include <fmt/chrono.h>
+#include <spdlog/spdlog.h>
 #include <spdlog/details/os.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -35,13 +36,13 @@ MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofil
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             fpath.string(), maxlogsize * 1024 * 1024, 10, true);
         file_sink->set_level(spdlog::level::trace);
-        file_sink->set_pattern("%L%m%d %H:%M:%S.%f %t %s:%#] %v");
+        file_sink->set_pattern("%L%m%d %P %t %H:%M:%S.%f] %v");
         sinks.push_back(file_sink);
     }
     if (logtostderr) {
         auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
         console_sink->set_level(spdlog::level::trace);  //
-        console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%s:%#] %v");
+        console_sink->set_pattern("%^%L%m%d %P %t %H:%M:%S.%f] %v%$");
         sinks.push_back(console_sink);
     }
 
@@ -63,6 +64,17 @@ MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofil
     DLOG("### GIT BRANCH: {} ###", _GIT_BRANCH);
     DLOG("### BUILD AT: {} {} ###", __DATE__, __TIME__);
     return MyErrCode::kOk;
+}
+
+void logPrint(LogLevel level, std::string_view content)
+{
+    spdlog::default_logger_raw()->log(static_cast<spdlog::level::level_enum>(level), content);
+}
+
+void logPrint(LogLevel level, char const* filepath, int line, std::string_view content)
+{
+    logPrint(level, FSTR("[{}:{}] {}", std::filesystem::path(filepath).filename().string(), line,
+                         content));
 }
 
 }  // namespace utils

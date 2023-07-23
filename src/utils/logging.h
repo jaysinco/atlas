@@ -1,8 +1,9 @@
 #pragma once
 #include "base.h"
-#include <spdlog/spdlog.h>
+#include <fmt/format.h>
 
-#define FSTR(f, ...) (fmt::format(f, __VA_ARGS__))
+#define FSTR(...) (fmt::format(__VA_ARGS__))
+#define CURR_FILENAME (std::filesystem::path(__FILE__).filename().string())
 #define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, __VA_ARGS__))
 #define MY_THROW(f, ...) throw std::runtime_error(LOG_FSTR(f, __VA_ARGS__))
 #define MY_TRY try {
@@ -12,12 +13,15 @@
     {                                       \
         ELOG("[exception] {}", err.what()); \
     }
-#define LOG_FUNC(level, ...) SPDLOG_LOGGER_CALL(spdlog::default_logger_raw(), level, __VA_ARGS__)
-#define TLOG(...) (LOG_FUNC(spdlog::level::trace, __VA_ARGS__))
-#define DLOG(...) (LOG_FUNC(spdlog::level::debug, __VA_ARGS__))
-#define ILOG(...) (LOG_FUNC(spdlog::level::info, __VA_ARGS__))
-#define WLOG(...) (LOG_FUNC(spdlog::level::warn, __VA_ARGS__))
-#define ELOG(...) (LOG_FUNC(spdlog::level::err, __VA_ARGS__))
+
+#define LOG_FUNC(level, ...) utils::logPrint(level, FSTR(__VA_ARGS__))
+#define LOG_FUNC_DETAILED(level, ...) utils::logPrint(level, __FILE__, __LINE__, FSTR(__VA_ARGS__))
+
+#define TLOG(...) (LOG_FUNC(utils::LogLevel::kTRACE, __VA_ARGS__))
+#define DLOG(...) (LOG_FUNC(utils::LogLevel::kDEBUG, __VA_ARGS__))
+#define ILOG(...) (LOG_FUNC(utils::LogLevel::kINFO, __VA_ARGS__))
+#define WLOG(...) (LOG_FUNC_DETAILED(utils::LogLevel::kWARN, __VA_ARGS__))
+#define ELOG(...) (LOG_FUNC_DETAILED(utils::LogLevel::kERROR, __VA_ARGS__))
 
 namespace utils
 {
@@ -39,5 +43,8 @@ MyErrCode initLogger(std::string const& program = currentExeName(), bool logtost
                      LogLevel logbuflevel = LogLevel::kERROR, int logbufsecs = 30,
                      std::filesystem::path const& logdir = defaultLoggingDir(),
                      int maxlogsize = 100);
+
+void logPrint(LogLevel level, std::string_view content);
+void logPrint(LogLevel level, char const* filepath, int line, std::string_view content);
 
 }  // namespace utils
