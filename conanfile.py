@@ -46,7 +46,6 @@ class AtlasConan(MyConanFile):
         self.requires(self._ref_pkg("threadpool/3.3.0"))
         self.requires(self._ref_pkg("libcpr/1.9.2"))
         self.requires(self._ref_pkg("sqlite3/3.39.4"))
-        self.requires(self._ref_pkg("qt5/5.15.6"))
         self.requires(self._ref_pkg("opencl-headers/2023.04.17"))
         if self.settings.os == "Windows":
             self.requires(self._ref_pkg("stackwalker/2023.06.24"))
@@ -83,9 +82,7 @@ class AtlasConan(MyConanFile):
 
     def _cmake_path(self):
         prefix_path = []
-        cmake_dir = {
-            "qt5" : "lib/cmake",
-        }
+        cmake_dir = {}
         for pkg in cmake_dir:
             prefix_path.append(self._normalize_path(
                 os.path.join(self.deps_cpp_info[pkg].cpp_info.rootpath, cmake_dir[pkg])))
