@@ -5,17 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <gbm.h>
-
 #define GL_GLEXT_PROTOTYPES 1
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-
 #include <assert.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -46,13 +43,13 @@ static struct
     uint32_t connector_id;
 } drm;
 
-struct drm_fb
+struct DrmFb
 {
     struct gbm_bo* bo;
     uint32_t fb_id;
 };
 
-static uint32_t find_crtc_for_encoder(drmModeRes const* resources, drmModeEncoder const* encoder)
+static uint32_t findCrtcForEncoder(drmModeRes const* resources, drmModeEncoder const* encoder)
 {
     int i;
 
@@ -71,8 +68,7 @@ static uint32_t find_crtc_for_encoder(drmModeRes const* resources, drmModeEncode
     return -1;
 }
 
-static uint32_t find_crtc_for_connector(drmModeRes const* resources,
-                                        drmModeConnector const* connector)
+static uint32_t findCrtcForConnector(drmModeRes const* resources, drmModeConnector const* connector)
 {
     int i;
 
@@ -81,7 +77,7 @@ static uint32_t find_crtc_for_connector(drmModeRes const* resources,
         drmModeEncoder* encoder = drmModeGetEncoder(drm.fd, encoder_id);
 
         if (encoder) {
-            const uint32_t crtc_id = find_crtc_for_encoder(resources, encoder);
+            const uint32_t crtc_id = findCrtcForEncoder(resources, encoder);
 
             drmModeFreeEncoder(encoder);
             if (crtc_id != 0) {
@@ -94,11 +90,11 @@ static uint32_t find_crtc_for_connector(drmModeRes const* resources,
     return -1;
 }
 
-static int init_drm(int disp_idx)
+static int initDrm(int disp_idx)
 {
     drmModeRes* resources;
-    drmModeConnector* connector = NULL;
-    drmModeEncoder* encoder = NULL;
+    drmModeConnector* connector = nullptr;
+    drmModeEncoder* encoder = nullptr;
     int i, area;
 
     drm.fd = open("/dev/dri/card0", O_RDWR);
@@ -125,7 +121,7 @@ static int init_drm(int disp_idx)
             }
         }
         drmModeFreeConnector(connector);
-        connector = NULL;
+        connector = nullptr;
     }
 
     if (!connector) {
@@ -159,15 +155,17 @@ static int init_drm(int disp_idx)
     /* find encoder: */
     for (i = 0; i < resources->count_encoders; i++) {
         encoder = drmModeGetEncoder(drm.fd, resources->encoders[i]);
-        if (encoder->encoder_id == connector->encoder_id) break;
+        if (encoder->encoder_id == connector->encoder_id) {
+            break;
+        }
         drmModeFreeEncoder(encoder);
-        encoder = NULL;
+        encoder = nullptr;
     }
 
     if (encoder) {
         drm.crtc_id = encoder->crtc_id;
     } else {
-        uint32_t crtc_id = find_crtc_for_connector(resources, connector);
+        uint32_t crtc_id = findCrtcForConnector(resources, connector);
         if (crtc_id == 0) {
             printf("no crtc found!\n");
             return -1;
@@ -181,7 +179,7 @@ static int init_drm(int disp_idx)
     return 0;
 }
 
-static int init_gbm(void)
+static int initGbm()
 {
     gbm.dev = gbm_create_device(drm.fd);
 
@@ -196,34 +194,34 @@ static int init_gbm(void)
     return 0;
 }
 
-static int init_gl(void)
+static int initGL()
 {
     EGLint major, minor, n;
     GLuint vertex_shader, fragment_shader;
     GLint ret;
 
-    static const EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+    static EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
 
-    static const EGLint config_attribs[] = {EGL_SURFACE_TYPE,
-                                            EGL_WINDOW_BIT,
-                                            EGL_RED_SIZE,
-                                            1,
-                                            EGL_GREEN_SIZE,
-                                            1,
-                                            EGL_BLUE_SIZE,
-                                            1,
-                                            EGL_ALPHA_SIZE,
-                                            0,
-                                            EGL_RENDERABLE_TYPE,
-                                            EGL_OPENGL_ES2_BIT,
-                                            EGL_NONE};
+    static EGLint config_attribs[] = {EGL_SURFACE_TYPE,
+                                      EGL_WINDOW_BIT,
+                                      EGL_RED_SIZE,
+                                      1,
+                                      EGL_GREEN_SIZE,
+                                      1,
+                                      EGL_BLUE_SIZE,
+                                      1,
+                                      EGL_ALPHA_SIZE,
+                                      0,
+                                      EGL_RENDERABLE_TYPE,
+                                      EGL_OPENGL_ES2_BIT,
+                                      EGL_NONE};
 
-    PFNEGLGETPLATFORMDISPLAYEXTPROC get_platform_display = NULL;
-    get_platform_display =
-        (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
-    assert(get_platform_display != NULL);
+    PFNEGLGETPLATFORMDISPLAYEXTPROC get_platform_display = nullptr;
+    get_platform_display = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(
+        eglGetProcAddress("eglGetPlatformDisplayEXT"));
+    assert(get_platform_display != nullptr);
 
-    gl.display = get_platform_display(EGL_PLATFORM_GBM_KHR, gbm.dev, NULL);
+    gl.display = get_platform_display(EGL_PLATFORM_GBM_KHR, gbm.dev, nullptr);
 
     if (!eglInitialize(gl.display, &major, &minor)) {
         printf("failed to initialize\n");
@@ -247,12 +245,12 @@ static int init_gl(void)
     }
 
     gl.context = eglCreateContext(gl.display, gl.config, EGL_NO_CONTEXT, context_attribs);
-    if (gl.context == NULL) {
+    if (gl.context == nullptr) {
         printf("failed to create context\n");
         return -1;
     }
 
-    gl.surface = eglCreateWindowSurface(gl.display, gl.config, gbm.surface, NULL);
+    gl.surface = eglCreateWindowSurface(gl.display, gl.config, gbm.surface, nullptr);
     if (gl.surface == EGL_NO_SURFACE) {
         printf("failed to create egl surface\n");
         return -1;
@@ -273,25 +271,29 @@ static void draw(uint32_t i)
     glClearColor(0.2f + (i % 80 / 100.0), 0.3f, 0.5f, 1.0f);
 }
 
-static void drm_fb_destroy_callback(struct gbm_bo* bo, void* data)
+static void drmFbDestroyCallback(struct gbm_bo* bo, void* data)
 {
-    struct drm_fb* fb = (drm_fb*)data;
+    struct DrmFb* fb = reinterpret_cast<DrmFb*>(data);
     struct gbm_device* gbm = gbm_bo_get_device(bo);
 
-    if (fb->fb_id) drmModeRmFB(drm.fd, fb->fb_id);
+    if (fb->fb_id) {
+        drmModeRmFB(drm.fd, fb->fb_id);
+    }
 
     free(fb);
 }
 
-static struct drm_fb* drm_fb_get_from_bo(struct gbm_bo* bo)
+static struct DrmFb* drmFbGetFromBo(struct gbm_bo* bo)
 {
-    struct drm_fb* fb = (drm_fb*)gbm_bo_get_user_data(bo);
+    struct DrmFb* fb = reinterpret_cast<DrmFb*>(gbm_bo_get_user_data(bo));
     uint32_t width, height, stride, handle;
     int ret;
 
-    if (fb) return fb;
+    if (fb) {
+        return fb;
+    }
 
-    fb = (drm_fb*)calloc(1, sizeof *fb);
+    fb = reinterpret_cast<DrmFb*>(calloc(1, sizeof *fb));
     fb->bo = bo;
 
     width = gbm_bo_get_width(bo);
@@ -303,18 +305,18 @@ static struct drm_fb* drm_fb_get_from_bo(struct gbm_bo* bo)
     if (ret) {
         printf("failed to create fb: %s\n", strerror(errno));
         free(fb);
-        return NULL;
+        return nullptr;
     }
 
-    gbm_bo_set_user_data(bo, fb, drm_fb_destroy_callback);
+    gbm_bo_set_user_data(bo, fb, drmFbDestroyCallback);
 
     return fb;
 }
 
-static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsigned int usec,
-                              void* data)
+static void pageFlipHandler(int fd, unsigned int frame, unsigned int sec, unsigned int usec,
+                            void* data)
 {
-    int* waiting_for_flip = (int*)data;
+    int* waiting_for_flip = reinterpret_cast<int*>(data);
     *waiting_for_flip = 0;
 }
 
@@ -323,14 +325,14 @@ int main(int argc, char* argv[])
     fd_set fds;
     drmEventContext evctx = {
         .version = DRM_EVENT_CONTEXT_VERSION,
-        .page_flip_handler = page_flip_handler,
+        .page_flip_handler = pageFlipHandler,
     };
     struct gbm_bo* bo;
-    struct drm_fb* fb;
+    struct DrmFb* fb;
     uint32_t i = 0;
     int ret;
 
-    ret = init_drm(std::atoi(argv[1]));
+    ret = initDrm(std::atoi(argv[1]));
     if (ret) {
         printf("failed to initialize DRM\n");
         return ret;
@@ -340,13 +342,13 @@ int main(int argc, char* argv[])
     FD_SET(0, &fds);
     FD_SET(drm.fd, &fds);
 
-    ret = init_gbm();
+    ret = initGbm();
     if (ret) {
         printf("failed to initialize GBM\n");
         return ret;
     }
 
-    ret = init_gl();
+    ret = initGL();
     if (ret) {
         printf("failed to initialize EGL\n");
         return ret;
@@ -357,7 +359,7 @@ int main(int argc, char* argv[])
     glClear(GL_COLOR_BUFFER_BIT);
     eglSwapBuffers(gl.display, gl.surface);
     bo = gbm_surface_lock_front_buffer(gbm.surface);
-    fb = drm_fb_get_from_bo(bo);
+    fb = drmFbGetFromBo(bo);
 
     /* set mode: */
     ret = drmModeSetCrtc(drm.fd, drm.crtc_id, fb->fb_id, 0, 0, &drm.connector_id, 1, drm.mode);
@@ -366,7 +368,7 @@ int main(int argc, char* argv[])
         return ret;
     }
 
-    while (1) {
+    while (true) {
         struct gbm_bo* next_bo;
         int waiting_for_flip = 1;
 
@@ -374,7 +376,7 @@ int main(int argc, char* argv[])
 
         eglSwapBuffers(gl.display, gl.surface);
         next_bo = gbm_surface_lock_front_buffer(gbm.surface);
-        fb = drm_fb_get_from_bo(next_bo);
+        fb = drmFbGetFromBo(next_bo);
 
         /*
          * Here you could also update drm plane layers if you want
@@ -389,7 +391,7 @@ int main(int argc, char* argv[])
         }
 
         while (waiting_for_flip) {
-            ret = select(drm.fd + 1, &fds, NULL, NULL, NULL);
+            ret = select(drm.fd + 1, &fds, nullptr, nullptr, nullptr);
             if (ret < 0) {
                 printf("select err: %s\n", strerror(errno));
                 return ret;
