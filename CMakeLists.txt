@@ -40,5 +40,4 @@ elseif(CMAKE_BUILD_TYPE MATCHES "Release")
     set(MY_RUNTIME_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE})
 endif()
 
-include_directories(src)
 add_subdirectory(src)

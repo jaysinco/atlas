@@ -64,8 +64,8 @@ fi
 
 function preprocess_source() {
     if [ $do_preprocess -eq 1 ]; then
-        find src -iname *.h -or -iname *.cpp | xargs clang-format -i \
-        && find src -iname *.h -or -iname *.cpp | xargs \
+        find src/core -iname *.h -or -iname *.cpp | xargs clang-format -i \
+        && find src/core -iname *.h -or -iname *.cpp | xargs \
             clang-tidy --quiet --warnings-as-errors="*" -p $build_folder
     fi
 }

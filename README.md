@@ -7,11 +7,7 @@
     ```
 * flutter
     ```
-    export PUB_HOSTED_URL=https://pub.flutter-io.cn
-    export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
-    git clone -b 3.10.6 git@gitee.com:jaysinco/flutter.git
-    flutter doctor
-    flutter create --template=app --platforms=windows,linux --project-name=hello_flutter flutter
+    flutter create --template=app --platforms=windows,linux --project-name=hello_flutter
     ```
 * linux (devos)
 * windows

@@ -7,12 +7,9 @@
 #define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, __VA_ARGS__))
 #define MY_THROW(f, ...) throw std::runtime_error(LOG_FSTR(f, __VA_ARGS__))
 #define MY_TRY try {
-#define MY_CATCH                            \
-    }                                       \
-    catch (const std::exception& err)       \
-    {                                       \
-        ELOG("[exception] {}", err.what()); \
-    }
+#define MY_CATCH \
+    }            \
+    catch (std::exception const& err) { ELOG("[exception] {}", err.what()); }
 
 #define LOG_FUNC(level, ...) utils::logPrint(level, FSTR(__VA_ARGS__))
 #define LOG_FUNC_DETAILED(level, ...) utils::logPrint(level, __FILE__, __LINE__, FSTR(__VA_ARGS__))
