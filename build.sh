@@ -109,8 +109,8 @@ function build_flutter() {
     pro_build_folder_abs=$build_folder/$pro_name
     mkdir -p $pro_build_folder_abs
     pro_build_folder=`realpath $pro_build_folder_abs --relative-to=$pro_source_folder`
-    pro_bundle_folder=$pro_build_folder_abs/$os/$arch/${build_type,,}/bundle
     pro_binary_folder=$binary_folder/${build_type,,}
+    mkdir -p $pro_binary_folder
 
     pushd $pro_source_folder \
     && \
@@ -120,7 +120,13 @@ function build_flutter() {
     && \
     flutter build $os --${build_type,,} \
     && \
-    rsync -r $pro_bundle_folder/* $pro_binary_folder
+    if [ $os = "linux" ]; then
+        pro_bundle_folder=$pro_build_folder_abs/$os/$arch/${build_type,,}/bundle
+        rsync -r $pro_bundle_folder/* $pro_binary_folder
+    elif  [ $os = "windows" ]; then
+        pro_bundle_folder=$pro_build_folder_abs/$os/runner/${build_type,,}
+        cp -r $pro_bundle_folder/* $pro_binary_folder
+    fi
 }
 
 function build_gui() {
