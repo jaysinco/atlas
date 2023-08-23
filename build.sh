@@ -71,13 +71,18 @@ conan_profile=$git_root/configs/conan.$os.$arch.profile
 source_folder=$git_root/src
 build_folder=$git_root/out
 binary_folder=$git_root/bin
-
 core_source_folder=$source_folder/core
 core_build_folder=$build_folder/core/${build_type,,}
+gui_projects=("hello_flutter")
 
 function clean_build() {
     rm -rf $build_folder
     rm -rf $binary_folder
+    for pro in "${gui_projects[@]}"; do
+        pro_source_folder=$source_folder/$pro
+        rm -rf $pro_source_folder/.dart_tool
+        rm -rf $pro_source_folder/build
+    done
 }
 
 function preprocess_code() {
@@ -104,6 +109,8 @@ function build_flutter() {
     pro_build_folder_abs=$build_folder/$pro_name
     mkdir -p $pro_build_folder_abs
     pro_build_folder=`realpath $pro_build_folder_abs --relative-to=$pro_source_folder`
+    pro_bundle_folder=$pro_build_folder_abs/$os/$arch/${build_type,,}/bundle
+    pro_binary_folder=$binary_folder/${build_type,,}
 
     pushd $pro_source_folder \
     && \
@@ -111,11 +118,15 @@ function build_flutter() {
     && \
     flutter config --build-dir=$pro_build_folder \
     && \
-    flutter build $os --${build_type,,}
+    flutter build $os --${build_type,,} \
+    && \
+    rsync -r $pro_bundle_folder/* $pro_binary_folder
 }
 
 function build_gui() {
-    build_flutter hello_flutter
+    for pro in "${gui_projects[@]}"; do
+        build_flutter $pro
+    done
 }
 
 if [ $do_clean -eq 1 ]; then
