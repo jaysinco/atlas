@@ -54,16 +54,16 @@ class AtlasConan(MyConanFile):
         build_folder = "out"
         build_type = str(self.settings.build_type)
         self.folders.source = ""
-        self.folders.build = os.path.join(build_folder, build_type)
+        self.folders.build = os.path.join(build_folder, "core", build_type.lower())
         self.folders.generators = os.path.join(
             self.folders.build, "generators")
 
     def generate(self):
         tc = CMakeToolchain(self)
         tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG"] = self._normalize_path(
-            os.path.join(self.source_folder, "bin", "Debug"))
+            os.path.join(self.source_folder, "bin", "debug"))
         tc.variables["CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE"] = self._normalize_path(
-            os.path.join(self.source_folder, "bin", "Release"))
+            os.path.join(self.source_folder, "bin", "release"))
         tc.variables["CMAKE_PREFIX_PATH"] = self._cmake_path()
         self._setup_pkg_root(tc)
         tc.generate()
