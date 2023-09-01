@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Cpp",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/test",
+            "program": "${workspaceFolder}/bin/debug/test",
             "args": [],
             "environment": [],
-            "cwd": "${workspaceFolder}/bin",
+            "cwd": "${workspaceFolder}/bin/debug",
             "stopAtEntry": false,
             "logging": {
                 "moduleLoad": true,
@@ -28,6 +28,12 @@
                 ],
                 "miDebuggerPath": "/usr/bin/gdb"
             },
-        }
+        },
+        {
+            "name": "Flutter",
+            "type": "dart",
+            "request": "launch",
+            "program": "src/hello_flutter/lib/main.dart"
+        },
     ]
 }

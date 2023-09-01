@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
        nil) do_build_nil=1 && shift ;;
       core) do_build_core=1 && shift ;;
        gui) do_build_gui=1 && shift ;;
-         *) echo "Unknown option: $1" && exit 1 ;;
+         *) echo "unknown argument: $1" && exit 1 ;;
     esac
 done
 

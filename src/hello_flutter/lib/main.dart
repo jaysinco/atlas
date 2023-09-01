@@ -112,6 +112,13 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            const SizedBox(
+              width: 450,
+              child: TextField(
+                decoration: InputDecoration(
+                    border: OutlineInputBorder(), labelText: "search"),
+              ),
+            ),
           ],
         ),
       ),
