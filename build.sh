@@ -100,7 +100,9 @@ function build_core() {
         --build=never \
     && \
     conan build $git_root \
-        --install-folder=$core_build_folder
+        --install-folder=$core_build_folder \
+    && \
+    cp $core_build_folder/compile_commands.json $build_folder/core
 }
 
 function build_flutter() {

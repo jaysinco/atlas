@@ -38,6 +38,8 @@
 #include <unistd.h>
 #endif
 
+#include "utils/encoding.h"
+
 #if defined(_MSC_VER)
 #pragma warning(disable : 4244 4267)  // possible loss of data
 #endif
@@ -151,7 +153,12 @@ bool gpt_params_parse(int argc, char** argv, gpt_params& params)
                 invalid_param = true;
                 break;
             }
+#ifdef _WIN32
+            params.prompt =
+                utils::ws2s(utils::s2ws(argv[i], utils::CodePage::kGBK), utils::CodePage::kUTF8);
+#else
             params.prompt = argv[i];
+#endif
         } else if (arg == "-e" || arg == "--escape") {
             params.escape = true;
         } else if (arg == "--prompt-cache") {

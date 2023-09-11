@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: out/core/debug
+  CompilationDatabase: out/core
 
 InlayHints:
   Enabled: No

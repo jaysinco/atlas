@@ -13,14 +13,17 @@ add_executable(${MAIN}
 )
 
 if (WIN32)
-    target_compile_definitions(${MAIN} PUBLIC __AVX512VBMI__ __AVX512VNNI__)
-    target_compile_options(${MAIN} PUBLIC /arch:AVX /arch:AVX2 /arch:AVX512)
+    target_compile_options(${MAIN} PUBLIC /arch:AVX /arch:AVX2)
 else()
     target_compile_definitions(${MAIN} PUBLIC _GNU_SOURCE)
     target_compile_options(${MAIN} PUBLIC -mavx -mavx2 -mf16c -mfma)
 endif()
 
-target_compile_definitions(${MAIN} PUBLIC GGML_USE_K_QUANTS)
+target_compile_definitions(${MAIN} PUBLIC
+    GGML_USE_K_QUANTS
+    LOG_DISABLE_LOGS
+)
+
 target_link_libraries(${MAIN} utils)
 
 file(COPY res/chat.sh DESTINATION ${MY_RUNTIME_DIR})
