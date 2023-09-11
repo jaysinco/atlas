@@ -36,4 +36,5 @@ endfunction()
 
 add_subdirectory(utils)
 add_subdirectory(parser)
+add_subdirectory(llama)
 add_subdirectory(test)
