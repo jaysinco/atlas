@@ -90,19 +90,18 @@
 //  }
 //
 #ifndef LOG_TARGET
-    #define LOG_TARGET log_handler()
+#define LOG_TARGET log_handler()
 #endif
 
 #ifndef LOG_TEE_TARGET
-    #define LOG_TEE_TARGET stderr
+#define LOG_TEE_TARGET stderr
 #endif
 
 // Utility to obtain "pid" like unique process id and use it when creating log files.
 inline std::string log_get_pid()
 {
     static std::string pid;
-    if (pid.empty())
-    {
+    if (pid.empty()) {
         // std::this_thread::get_id() is the most portable way of obtaining a "process id"
         //  it's not the same as "pid" but is unique enough to solve multiple instances
         //  trying to write to the same log.
@@ -118,10 +117,12 @@ inline std::string log_get_pid()
 //  invocation with log_filename_generator( "llama", "log" ) creates a string "llama.<number>.log"
 //  where the number is a runtime id of the current thread.
 
-#define log_filename_generator(log_file_basename, log_file_extension) log_filename_generator_impl(log_file_basename, log_file_extension)
+#define log_filename_generator(log_file_basename, log_file_extension) \
+    log_filename_generator_impl(log_file_basename, log_file_extension)
 
 // INTERNAL, DO NOT USE
-inline std::string log_filename_generator_impl(const std::string & log_file_basename, const std::string & log_file_extension)
+inline std::string log_filename_generator_impl(std::string const& log_file_basename,
+                                               std::string const& log_file_extension)
 {
     std::stringstream buf;
 
@@ -135,7 +136,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 }
 
 #ifndef LOG_DEFAULT_FILE_NAME
-    #define LOG_DEFAULT_FILE_NAME log_filename_generator("llama", "log")
+#define LOG_DEFAULT_FILE_NAME log_filename_generator("llama", "log")
 #endif
 
 // Utility for turning #define values into string literals
@@ -154,29 +155,41 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_TIMESTAMPS
-    #ifndef _MSC_VER
-        #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
-        #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-    #else
-        #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
-        #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-    #endif
+#ifndef _MSC_VER
+#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
+#define LOG_TIMESTAMP_VAL                                                \
+    , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>( \
+           std::chrono::system_clock::now().time_since_epoch()))         \
+          .count()
 #else
-    #define LOG_TIMESTAMP_FMT "%s"
-    #define LOG_TIMESTAMP_VAL ,""
+#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
+#define LOG_TIMESTAMP_VAL                                                \
+    , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>( \
+           std::chrono::system_clock::now().time_since_epoch()))         \
+          .count()
+#endif
+#else
+#define LOG_TIMESTAMP_FMT "%s"
+#define LOG_TIMESTAMP_VAL , ""
 #endif
 
 #ifdef LOG_TEE_TIMESTAMPS
-    #ifndef _MSC_VER
-        #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
-        #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-    #else
-        #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
-        #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-    #endif
+#ifndef _MSC_VER
+#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
+#define LOG_TEE_TIMESTAMP_VAL                                            \
+    , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>( \
+           std::chrono::system_clock::now().time_since_epoch()))         \
+          .count()
 #else
-    #define LOG_TEE_TIMESTAMP_FMT "%s"
-    #define LOG_TEE_TIMESTAMP_VAL ,""
+#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
+#define LOG_TEE_TIMESTAMP_VAL                                            \
+    , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>( \
+           std::chrono::system_clock::now().time_since_epoch()))         \
+          .count()
+#endif
+#else
+#define LOG_TEE_TIMESTAMP_FMT "%s"
+#define LOG_TEE_TIMESTAMP_VAL , ""
 #endif
 
 // Allows disabling file/line/function prefix
@@ -187,29 +200,29 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_FILE_LINE_FUNCTION
-    #ifndef _MSC_VER
-        #define LOG_FLF_FMT "[%24s:%5d][%24s] "
-        #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-    #else
-        #define LOG_FLF_FMT "[%24s:%5ld][%24s] "
-        #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-    #endif
+#ifndef _MSC_VER
+#define LOG_FLF_FMT "[%24s:%5d][%24s] "
+#define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
 #else
-    #define LOG_FLF_FMT "%s"
-    #define LOG_FLF_VAL ,""
+#define LOG_FLF_FMT "[%24s:%5ld][%24s] "
+#define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+#endif
+#else
+#define LOG_FLF_FMT "%s"
+#define LOG_FLF_VAL , ""
 #endif
 
 #ifdef LOG_TEE_FILE_LINE_FUNCTION
-    #ifndef _MSC_VER
-        #define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
-        #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-    #else
-        #define LOG_TEE_FLF_FMT "[%24s:%5ld][%24s] "
-        #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-    #endif
+#ifndef _MSC_VER
+#define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
+#define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
 #else
-    #define LOG_TEE_FLF_FMT "%s"
-    #define LOG_TEE_FLF_VAL ,""
+#define LOG_TEE_FLF_FMT "[%24s:%5ld][%24s] "
+#define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+#endif
+#else
+#define LOG_TEE_FLF_FMT "%s"
+#define LOG_TEE_FLF_VAL , ""
 #endif
 
 // Utility for synchronizing log configuration state
@@ -225,22 +238,24 @@ enum LogTriState
 //  USE LOG() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_IMPL(str, ...)                                                                                          \
-    {                                                                                                               \
-        if (LOG_TARGET != nullptr)                                                                                  \
-        {                                                                                                           \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, __VA_ARGS__); \
-            fflush(LOG_TARGET);                                                                                     \
-        }                                                                                                           \
+#define LOG_IMPL(str, ...)                                                                \
+    {                                                                                     \
+        if (LOG_TARGET != nullptr) {                                                      \
+            fprintf(LOG_TARGET,                                                           \
+                    LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, \
+                    __VA_ARGS__);                                                         \
+            fflush(LOG_TARGET);                                                           \
+        }                                                                                 \
     }
 #else
-    #define LOG_IMPL(str, ...)                                                                                               \
-    {                                                                                                                    \
-        if (LOG_TARGET != nullptr)                                                                                       \
-        {                                                                                                                \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", ##__VA_ARGS__); \
-            fflush(LOG_TARGET);                                                                                          \
-        }                                                                                                                \
+#define LOG_IMPL(str, ...)                                                                   \
+    {                                                                                        \
+        if (LOG_TARGET != nullptr) {                                                         \
+            fprintf(LOG_TARGET,                                                              \
+                    LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", \
+                    ##__VA_ARGS__);                                                          \
+            fflush(LOG_TARGET);                                                              \
+        }                                                                                    \
     }
 #endif
 
@@ -248,32 +263,40 @@ enum LogTriState
 //  USE LOG_TEE() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_TEE_IMPL(str, ...)                                                                                                          \
-    {                                                                                                                                   \
-        if (LOG_TARGET != nullptr)                                                                                                      \
-        {                                                                                                                               \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, __VA_ARGS__);                     \
-            fflush(LOG_TARGET);                                                                                                         \
-        }                                                                                                                               \
-        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr && LOG_TEE_TARGET != nullptr)                         \
-        {                                                                                                                               \
-            fprintf(LOG_TEE_TARGET, LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL, __VA_ARGS__); \
-            fflush(LOG_TEE_TARGET);                                                                                                     \
-        }                                                                                                                               \
+#define LOG_TEE_IMPL(str, ...)                                                            \
+    {                                                                                     \
+        if (LOG_TARGET != nullptr) {                                                      \
+            fprintf(LOG_TARGET,                                                           \
+                    LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, \
+                    __VA_ARGS__);                                                         \
+            fflush(LOG_TARGET);                                                           \
+        }                                                                                 \
+        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr &&      \
+            LOG_TEE_TARGET != nullptr) {                                                  \
+            fprintf(LOG_TEE_TARGET,                                                       \
+                    LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str                             \
+                    "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL,                           \
+                    __VA_ARGS__);                                                         \
+            fflush(LOG_TEE_TARGET);                                                       \
+        }                                                                                 \
     }
 #else
-    #define LOG_TEE_IMPL(str, ...)                                                                                                               \
-    {                                                                                                                                        \
-        if (LOG_TARGET != nullptr)                                                                                                           \
-        {                                                                                                                                    \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", ##__VA_ARGS__);                     \
-            fflush(LOG_TARGET);                                                                                                              \
-        }                                                                                                                                    \
-        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr && LOG_TEE_TARGET != nullptr)                              \
-        {                                                                                                                                    \
-            fprintf(LOG_TEE_TARGET, LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL "", ##__VA_ARGS__); \
-            fflush(LOG_TEE_TARGET);                                                                                                          \
-        }                                                                                                                                    \
+#define LOG_TEE_IMPL(str, ...)                                                               \
+    {                                                                                        \
+        if (LOG_TARGET != nullptr) {                                                         \
+            fprintf(LOG_TARGET,                                                              \
+                    LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", \
+                    ##__VA_ARGS__);                                                          \
+            fflush(LOG_TARGET);                                                              \
+        }                                                                                    \
+        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr &&         \
+            LOG_TEE_TARGET != nullptr) {                                                     \
+            fprintf(LOG_TEE_TARGET,                                                          \
+                    LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str                                \
+                    "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL "",                           \
+                    ##__VA_ARGS__);                                                          \
+            fflush(LOG_TEE_TARGET);                                                          \
+        }                                                                                    \
     }
 #endif
 
@@ -285,9 +308,9 @@ enum LogTriState
 //  behaves like printf, and supports arguments the exact same way.
 //
 #ifndef _MSC_VER
-    #define LOG(...) LOG_IMPL(__VA_ARGS__, "")
+#define LOG(...) LOG_IMPL(__VA_ARGS__, "")
 #else
-    #define LOG(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "")
+#define LOG(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // Main TEE macro.
@@ -299,65 +322,59 @@ enum LogTriState
 //  by defining LOG_TEE_TARGET
 //
 #ifndef _MSC_VER
-    #define LOG_TEE(...) LOG_TEE_IMPL(__VA_ARGS__, "")
+#define LOG_TEE(...) LOG_TEE_IMPL(__VA_ARGS__, "")
 #else
-    #define LOG_TEE(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "")
+#define LOG_TEE(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // LOG macro variants with auto endline.
 #ifndef _MSC_VER
-    #define LOGLN(...) LOG_IMPL(__VA_ARGS__, "\n")
-    #define LOG_TEELN(...) LOG_TEE_IMPL(__VA_ARGS__, "\n")
+#define LOGLN(...) LOG_IMPL(__VA_ARGS__, "\n")
+#define LOG_TEELN(...) LOG_TEE_IMPL(__VA_ARGS__, "\n")
 #else
-    #define LOGLN(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "\n")
-    #define LOG_TEELN(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "\n")
+#define LOGLN(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "\n")
+#define LOG_TEELN(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "\n")
 #endif
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
+inline FILE* log_handler1_impl(bool change = false, LogTriState disable = LogTriStateSame,
+                               std::string const& filename = LOG_DEFAULT_FILE_NAME,
+                               FILE* target = nullptr)
 {
     static bool _initialized{false};
     static bool _disabled{(filename.empty() && target == nullptr)};
     static std::string log_current_filename{filename};
-    static FILE *log_current_target{target};
-    static FILE *logfile = nullptr;
+    static FILE* log_current_target{target};
+    static FILE* logfile = nullptr;
 
-    if (change)
-    {
-        if (disable == LogTriStateTrue)
-        {
+    if (change) {
+        if (disable == LogTriStateTrue) {
             // Disable primary target
             _disabled = true;
         }
         // If previously disabled, only enable, and keep previous target
-        else if (disable == LogTriStateFalse)
-        {
+        else if (disable == LogTriStateFalse) {
             _disabled = false;
         }
         // Otherwise, process the arguments
-        else if (log_current_filename != filename || log_current_target != target)
-        {
+        else if (log_current_filename != filename || log_current_target != target) {
             _initialized = false;
         }
     }
 
-    if (_disabled)
-    {
+    if (_disabled) {
         // Log is disabled
         return nullptr;
     }
 
-    if (_initialized)
-    {
+    if (_initialized) {
         // with fallback in case something went wrong
         return logfile ? logfile : stderr;
     }
 
     // do the (re)initialization
-    if (target != nullptr)
-    {
-        if (logfile != nullptr && logfile != stdout && logfile != stderr)
-        {
+    if (target != nullptr) {
+        if (logfile != nullptr && logfile != stdout && logfile != stderr) {
             fclose(logfile);
         }
 
@@ -365,13 +382,9 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         log_current_target = target;
 
         logfile = target;
-    }
-    else
-    {
-        if (log_current_filename != filename)
-        {
-            if (logfile != nullptr && logfile != stdout && logfile != stderr)
-            {
+    } else {
+        if (log_current_filename != filename) {
+            if (logfile != nullptr && logfile != stdout && logfile != stderr) {
                 fclose(logfile);
             }
         }
@@ -379,15 +392,16 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         logfile = fopen(filename.c_str(), "w");
     }
 
-    if (!logfile)
-    {
+    if (!logfile) {
         //  Verify whether the file was opened, otherwise fallback to stderr
         logfile = stderr;
 
-        fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", filename.c_str(), std::strerror(errno));
+        fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", filename.c_str(),
+                std::strerror(errno));
         fflush(stderr);
 
-        // At this point we let the init flag be to true below, and let the target fallback to stderr
+        // At this point we let the init flag be to true below, and let the target fallback to
+        // stderr
         //  otherwise we would repeatedly fopen() which was already unsuccessful
     }
 
@@ -397,7 +411,9 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
 }
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTriStateSame, FILE *target = nullptr, const std::string & filename = LOG_DEFAULT_FILE_NAME)
+inline FILE* log_handler2_impl(bool change = false, LogTriState disable = LogTriStateSame,
+                               FILE* target = nullptr,
+                               std::string const& filename = LOG_DEFAULT_FILE_NAME)
 {
     return log_handler1_impl(change, disable, filename, target);
 }
@@ -408,36 +424,38 @@ inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTri
 #define log_disable() log_disable_impl()
 
 // INTERNAL, DO NOT USE
-inline FILE *log_disable_impl()
-{
-    return log_handler1_impl(true, LogTriStateTrue);
-}
+inline FILE* log_disable_impl() { return log_handler1_impl(true, LogTriStateTrue); }
 
 // Enables logs at runtime.
 #define log_enable() log_enable_impl()
 
 // INTERNAL, DO NOT USE
-inline FILE *log_enable_impl()
-{
-    return log_handler1_impl(true, LogTriStateFalse);
-}
+inline FILE* log_enable_impl() { return log_handler1_impl(true, LogTriStateFalse); }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
 #define log_set_target(target) log_set_target_impl(target)
 
 // INTERNAL, DO NOT USE
-inline FILE *log_set_target_impl(const std::string & filename) { return log_handler1_impl(true, LogTriStateSame, filename); }
-inline FILE *log_set_target_impl(FILE *target) { return log_handler2_impl(true, LogTriStateSame, target); }
+inline FILE* log_set_target_impl(std::string const& filename)
+{
+    return log_handler1_impl(true, LogTriStateSame, filename);
+}
+
+inline FILE* log_set_target_impl(FILE* target)
+{
+    return log_handler2_impl(true, LogTriStateSame, target);
+}
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler() { return log_handler1_impl(); }
+inline FILE* log_handler() { return log_handler1_impl(); }
 
 inline void log_test()
 {
     log_disable();
     LOG("01 Hello World to nobody, because logs are disabled!\n")
     log_enable();
-    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
+    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n",
+        LOG_STRINGIZE(LOG_TARGET))
     LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
     log_set_target(stderr);
     LOG("04 Hello World to stderr!\n")
@@ -456,7 +474,8 @@ inline void log_test()
     log_set_target("llama.anotherlog.log");
     LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
     log_enable();
-    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
+    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output "
+        ")?\n")
     log_set_target("llama.yetanotherlog.log");
     LOG("13 Hello World this time in yet new file?\n")
     log_set_target(log_filename_generator("llama_autonamed", "log"));
@@ -473,22 +492,19 @@ inline void log_test()
 #endif
 }
 
-inline bool log_param_single_parse(const std::string & param)
+inline bool log_param_single_parse(std::string const& param)
 {
-    if ( param == "--log-test")
-    {
+    if (param == "--log-test") {
         log_test();
         return true;
     }
 
-    if ( param == "--log-disable")
-    {
+    if (param == "--log-disable") {
         log_disable();
         return true;
     }
 
-    if ( param == "--log-enable")
-    {
+    if (param == "--log-enable") {
         log_enable();
         return true;
     }
@@ -496,12 +512,11 @@ inline bool log_param_single_parse(const std::string & param)
     return false;
 }
 
-inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & param, const std::string & next = std::string())
+inline bool log_param_pair_parse(bool check_but_dont_parse, std::string const& param,
+                                 std::string const& next = std::string())
 {
-    if ( param == "--log-file")
-    {
-        if (!check_but_dont_parse)
-        {
+    if (param == "--log-file") {
+        if (!check_but_dont_parse) {
             log_set_target(log_filename_generator(next.empty() ? "unnamed" : next, "log"));
         }
 
@@ -522,23 +537,21 @@ inline void log_print_usage()
     printf("  --log-disable         Disable trace logs\n");
     printf("  --log-enable          Enable trace logs\n");
     printf("  --log-file            Specify a log filename (without extension)\n");
-    printf("                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+    printf(
+        "                        Log file will be tagged with unique ID and written as "
+        "\"<name>.<ID>.log\"\n"); /*  */
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)
 
 // INTERNAL, DO NOT USE
-inline void log_dump_cmdline_impl(int argc, char **argv)
+inline void log_dump_cmdline_impl(int argc, char** argv)
 {
     std::stringstream buf;
-    for (int i = 0; i < argc; ++i)
-    {
-        if (std::string(argv[i]).find(' ') != std::string::npos)
-        {
-            buf << " \"" << argv[i] <<"\"";
-        }
-        else
-        {
+    for (int i = 0; i < argc; ++i) {
+        if (std::string(argv[i]).find(' ') != std::string::npos) {
+            buf << " \"" << argv[i] << "\"";
+        } else {
             buf << " " << argv[i];
         }
     }
@@ -547,29 +560,19 @@ inline void log_dump_cmdline_impl(int argc, char **argv)
 
 #define log_tostr(var) log_var_to_string_impl(var).c_str()
 
-inline std::string log_var_to_string_impl(bool var)
-{
-    return var ? "true" : "false";
-}
+inline std::string log_var_to_string_impl(bool var) { return var ? "true" : "false"; }
 
-inline std::string log_var_to_string_impl(std::string var)
-{
-    return var;
-}
+inline std::string log_var_to_string_impl(std::string var) { return var; }
 
-inline std::string log_var_to_string_impl(const std::vector<int> & var)
+inline std::string log_var_to_string_impl(std::vector<int> const& var)
 {
     std::stringstream buf;
     buf << "[ ";
     bool first = true;
-    for (auto e : var)
-    {
-        if (first)
-        {
+    for (auto e: var) {
+        if (first) {
             first = false;
-        }
-        else
-        {
+        } else {
             buf << ", ";
         }
         buf << std::to_string(e);
@@ -579,65 +582,60 @@ inline std::string log_var_to_string_impl(const std::vector<int> & var)
     return buf.str();
 }
 
-#define LOG_TOKENS_TOSTR_PRETTY(ctx, tokens)                                 \
-    [&tokens, &ctx]()                                                        \
-    {                                                                        \
-        std::stringstream buf;                                               \
-        buf << "[ ";                                                         \
-                                                                             \
-        bool first = true;                                                   \
-        for (const auto &token : tokens)                                     \
-        {                                                                    \
-            if (!first)                                                      \
-                buf << ", ";                                                 \
-            else                                                             \
-                first = false;                                               \
-                                                                             \
-            auto detokenized = llama_token_to_piece(ctx, token);             \
-                                                                             \
-            detokenized.erase(                                               \
-                std::remove_if(                                              \
-                    detokenized.begin(),                                     \
-                    detokenized.end(),                                       \
-                    [](const unsigned char c) { return !std::isprint(c); }), \
-                detokenized.end());                                          \
-                                                                             \
-            buf                                                              \
-                << "'" << detokenized << "'"                                 \
-                << ":" << std::to_string(token);                             \
-        }                                                                    \
-        buf << " ]";                                                         \
-                                                                             \
-        return buf.str();                                                    \
-    }()                                                                      \
+#define LOG_TOKENS_TOSTR_PRETTY(ctx, tokens)                                            \
+    [&tokens, &ctx]() {                                                                 \
+        std::stringstream buf;                                                          \
+        buf << "[ ";                                                                    \
+                                                                                        \
+        bool first = true;                                                              \
+        for (const auto& token: tokens) {                                               \
+            if (!first)                                                                 \
+                buf << ", ";                                                            \
+            else                                                                        \
+                first = false;                                                          \
+                                                                                        \
+            auto detokenized = llama_token_to_piece(ctx, token);                        \
+                                                                                        \
+            detokenized.erase(                                                          \
+                std::remove_if(detokenized.begin(), detokenized.end(),                  \
+                               [](const unsigned char c) { return !std::isprint(c); }), \
+                detokenized.end());                                                     \
+                                                                                        \
+            buf << "'" << detokenized << "'"                                            \
+                << ":" << std::to_string(token);                                        \
+        }                                                                               \
+        buf << " ]";                                                                    \
+                                                                                        \
+        return buf.str();                                                               \
+    }()                                                                                 \
         .c_str()
 
 #ifdef LOG_DISABLE_LOGS
 
 #undef LOG
-#define LOG(...) // dummy stub
+#define LOG(...)  // dummy stub
 #undef LOGLN
-#define LOGLN(...) // dummy stub
+#define LOGLN(...)  // dummy stub
 
 #undef LOG_TEE
-#define LOG_TEE(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+#define LOG_TEE(...) fprintf(stderr, __VA_ARGS__);  // convert to normal fprintf
 
 #undef LOG_TEELN
-#define LOG_TEELN(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+#define LOG_TEELN(...) fprintf(stderr, __VA_ARGS__);  // convert to normal fprintf
 
 #undef LOG_DISABLE
-#define LOG_DISABLE() // dummy stub
+#define LOG_DISABLE()  // dummy stub
 
 #undef LOG_ENABLE
-#define LOG_ENABLE() // dummy stub
+#define LOG_ENABLE()  // dummy stub
 
 #undef LOG_ENABLE
-#define LOG_ENABLE() // dummy stub
+#define LOG_ENABLE()  // dummy stub
 
 #undef LOG_SET_TARGET
-#define LOG_SET_TARGET(...) // dummy stub
+#define LOG_SET_TARGET(...)  // dummy stub
 
 #undef LOG_DUMP_CMDLINE
-#define LOG_DUMP_CMDLINE(...) // dummy stub
+#define LOG_DUMP_CMDLINE(...)  // dummy stub
 
-#endif // LOG_DISABLE_LOGS
+#endif  // LOG_DISABLE_LOGS

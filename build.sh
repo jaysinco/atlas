@@ -86,7 +86,8 @@ function clean_build() {
 }
 
 function preprocess_code() {
-    find $core_source_folder -iname *.h -or -iname *.cpp | xargs clang-format -i \
+    find $core_source_folder -iname *.h -or -iname *.cpp \
+        -or -iname *.c | xargs clang-format -i \
     && find $core_source_folder -iname *.h -or -iname *.cpp | xargs \
         clang-tidy --quiet --warnings-as-errors="*" -p $core_build_folder
 }
