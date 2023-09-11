@@ -3,3 +3,5 @@
 /deps/*/out
 /deps/*/src
 /CMakeUserPresets.json
+
+*.gguf
