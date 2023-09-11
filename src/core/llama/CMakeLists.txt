@@ -12,11 +12,9 @@ add_executable(${MAIN}
     main.cpp
 )
 
-if (MSVC)
-    add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX2>)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>)
-    add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX>)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX>)
+if (WIN32)
+    target_compile_definitions(${MAIN} PUBLIC __AVX512VBMI__ __AVX512VNNI__)
+    target_compile_options(${MAIN} PUBLIC /arch:AVX /arch:AVX2 /arch:AVX512)
 else()
     target_compile_definitions(${MAIN} PUBLIC _GNU_SOURCE)
     target_compile_options(${MAIN} PUBLIC -mavx -mavx2 -mf16c -mfma)
