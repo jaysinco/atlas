@@ -420,7 +420,7 @@ struct LLM_TN
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key)                                           \
     {                                                                                          \
         const std::string skey(key);                                                           \
-        const int kid = gguf_find_key(ctx, skey.c_str());                                      \
+        int const kid = gguf_find_key(ctx, skey.c_str());                                      \
         if (kid >= 0) {                                                                        \
             enum gguf_type ktype = gguf_get_kv_type(ctx, kid);                                 \
             if (ktype != (type)) {                                                             \
@@ -3852,7 +3852,7 @@ static bool llama_grammar_match_partial_char(llama_grammar_element const* pos,
 // at a character range (terminal element)
 static void llama_grammar_advance_stack(
     std::vector<std::vector<llama_grammar_element>> const& rules,
-    std::vector<const llama_grammar_element*> const& stack,
+    std::vector<llama_grammar_element const*> const& stack,
     std::vector<std::vector<llama_grammar_element const*>>& new_stacks)
 {
     if (stack.empty()) {
@@ -3909,7 +3909,7 @@ static void llama_grammar_advance_stack(
 // positions
 static std::vector<std::vector<llama_grammar_element const*>> llama_grammar_accept(
     std::vector<std::vector<llama_grammar_element>> const& rules,
-    std::vector<std::vector<const llama_grammar_element*>> const& stacks, const uint32_t chr)
+    std::vector<std::vector<llama_grammar_element const*>> const& stacks, const uint32_t chr)
 {
     std::vector<std::vector<llama_grammar_element const*>> new_stacks;
 
@@ -3936,12 +3936,12 @@ static std::vector<std::vector<llama_grammar_element const*>> llama_grammar_acce
 
 static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates(
     std::vector<std::vector<llama_grammar_element>> const& rules,
-    std::vector<std::vector<const llama_grammar_element*>> const& stacks,
+    std::vector<std::vector<llama_grammar_element const*>> const& stacks,
     std::vector<llama_grammar_candidate> const& candidates);
 
 static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
     std::vector<std::vector<llama_grammar_element>> const& rules,
-    std::vector<const llama_grammar_element*> const& stack,
+    std::vector<llama_grammar_element const*> const& stack,
     std::vector<llama_grammar_candidate> const& candidates)
 {
     std::vector<llama_grammar_candidate> rejects;
@@ -3993,7 +3993,7 @@ static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_
 
 static std::vector<llama_grammar_candidate> llama_grammar_reject_candidates(
     std::vector<std::vector<llama_grammar_element>> const& rules,
-    std::vector<std::vector<const llama_grammar_element*>> const& stacks,
+    std::vector<std::vector<llama_grammar_element const*>> const& stacks,
     std::vector<llama_grammar_candidate> const& candidates)
 {
     GGML_ASSERT(!stacks.empty());  // REVIEW

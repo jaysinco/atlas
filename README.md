@@ -9,6 +9,7 @@
     ```
     flutter create --template=app --platforms=windows,linux --project-name=hello_flutter
     ```
+* llvm-14
 * linux (devos)
 * windows
     * visual studio 2019
