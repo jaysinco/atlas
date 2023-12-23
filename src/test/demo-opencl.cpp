@@ -2,7 +2,7 @@
 #include <CL/opencl.hpp>
 #include <fstream>
 #include <iostream>
-#include "utils/base.h"
+#include "toolkit/base.h"
 
 cl::Device getDefaultDevice()
 {
@@ -114,7 +114,8 @@ int main(int argc, char** argv)
 
     // gpu
     auto device = getDefaultDevice();
-    std::string src = *utils::readFile(utils::projectRoot() / "src/core/test/res/hello.cl");
+    std::string src;
+    utils::readFile(utils::projectRoot() / "src/core/test/res/hello.cl", src);
     cl::Context context({device});
     cl::Program program(context, {src});
 

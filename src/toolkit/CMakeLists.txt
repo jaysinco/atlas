@@ -15,6 +15,7 @@ exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse --abbrev-ref HEAD" OUTP
 target_compile_definitions(${MAIN} PRIVATE -D_GIT_BRANCH="${GIT_BRANCH}")
 
 target_link_libraries(${MAIN} PUBLIC
+    pthread
     boost
     spdlog
     fmt

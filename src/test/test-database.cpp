@@ -1,6 +1,6 @@
-#include "utils/logging.h"
-#include "utils/sqlite-helper.h"
-#include <catch2/catch.hpp>
+#include "toolkit/logging.h"
+#include "toolkit/sqlite-helper.h"
+#include <catch2/catch_all.hpp>
 
 TEST_CASE("database")
 {
