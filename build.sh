@@ -6,7 +6,7 @@ set -e
 
 do_clean=0
 do_arch=x86_64
-do_build_release=0
+do_build_debug=0
 do_preprocess=0
 
 while [[ $# -gt 0 ]]; do
@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
             echo "Build Options:"
             echo "  -c         clean before build"
             echo "  -a ARCH    target arch, default 'x86_64'"
-            echo "  -r         build release version, default 'debug'"
+            echo "  -d         build debug version"
             echo "  -p         preprocess code before build"
             echo "  -h         print command line options"
             echo
@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c) do_clean=1 && shift ;;
         -a) do_arch=$2 && shift && shift ;;
-        -r) do_build_release=1 && shift ;;
+        -d) do_build_debug=1 && shift ;;
         -p) do_preprocess=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
     esac
@@ -37,9 +37,9 @@ done
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 git_root="$(git rev-parse --show-toplevel)"
 
-build_type=Debug
-if [ $do_build_release -eq 1 ]; then
-    build_type=Release
+build_type=Release
+if [ $do_build_debug -eq 1 ]; then
+    build_type=Debug
 fi
 
 arch=`arch`
