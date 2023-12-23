@@ -3,7 +3,7 @@ set(MAIN ${CURRENT_DIR_NAME})
 
 xxd_add_resources(xxd_gen_cpp res/input.txt)
 add_executable(${MAIN} main.cpp ${xxd_gen_cpp})
-target_link_libraries(${MAIN} utils)
+target_link_libraries(${MAIN} toolkit pthread)
 
 add_executable(${MAIN}-autocomplete autocomplete.cpp)
-target_link_libraries(${MAIN}-autocomplete utils)
+target_link_libraries(${MAIN}-autocomplete toolkit)

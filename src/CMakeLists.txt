@@ -1,14 +1,3 @@
-if (WIN32)
-    file(COPY
-        DESTINATION ${MY_RUNTIME_DIR}
-    )
-elseif (UNIX)
-    file(COPY
-        DESTINATION ${MY_RUNTIME_DIR}
-        FOLLOW_SYMLINK_CHAIN
-    )
-endif()
-
 function(xxd_add_resources outfiles)
     set(options)
     set(oneValueArgs)
@@ -34,7 +23,9 @@ function(xxd_add_resources outfiles)
     set(${outfiles} ${${outfiles}} PARENT_SCOPE)
 endfunction()
 
-add_subdirectory(utils)
+include_directories(${CMAKE_CURRENT_LIST_DIR})
+
+add_subdirectory(thirdparty)
+add_subdirectory(toolkit)
 add_subdirectory(parser)
-add_subdirectory(llama)
-add_subdirectory(test)
+# add_subdirectory(test)

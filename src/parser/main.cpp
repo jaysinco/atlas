@@ -1,5 +1,5 @@
-#include "utils/args.h"
-#include "utils/encoding.h"
+#include "toolkit/args.h"
+#include "toolkit/encoding.h"
 #include <boost/phoenix/phoenix.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
@@ -47,7 +47,7 @@ struct ErrorHandler
         int ln_pos = std::distance(ln_start, err_pos);
         int line = boost::spirit::get_line(err_pos);
         ELOG("{}({},{}): error: {} expected\n{}\n{}^",
-             utils::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what,
+             utils::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what.tag,
              utils::ws2s(std::wstring(ln_start, ln_end)), std::string(ln_pos, ' '));
     }
 

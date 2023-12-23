@@ -2,7 +2,6 @@ get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 set(MAIN ${CURRENT_DIR_NAME})
 
 add_library(${MAIN}
-    error.cpp
     base.cpp
     encoding.cpp
     logging.cpp
@@ -16,11 +15,9 @@ exec_program("git" ${PROJECT_SOURCE_DIR} ARGS "rev-parse --abbrev-ref HEAD" OUTP
 target_compile_definitions(${MAIN} PRIVATE -D_GIT_BRANCH="${GIT_BRANCH}")
 
 target_link_libraries(${MAIN} PUBLIC
-    Boost::headers
-    Boost::program_options
-    spdlog::spdlog
-    nonstd::expected-lite
-    Iconv::Iconv
-    SQLite::SQLite3
-    $<IF:$<BOOL:${WIN32}>,stackwalker,>
+    boost
+    spdlog
+    fmt
+    libiconv
+    sqlite3
 )

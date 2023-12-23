@@ -8,11 +8,11 @@
 namespace utils
 {
 
-static Expected<spdlog::level::level_enum> level(LogLevel level)
+static spdlog::level::level_enum level(LogLevel level)
 {
     if (static_cast<int>(level) < 0 || level >= LogLevel::kTOTAL) {
         ELOG("invalid log level: {}", static_cast<int>(level));
-        return unexpected(MyErrCode::kInvalidArgument);
+        return spdlog::level::info;
     }
     return static_cast<spdlog::level::level_enum>(level);
 }
@@ -47,16 +47,8 @@ MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofil
     }
 
     auto logger = std::make_shared<spdlog::logger>(program, sinks.begin(), sinks.end());
-    auto loglevel = level(minloglevel);
-    if (!loglevel) {
-        return loglevel.error();
-    }
-    logger->set_level(*loglevel);
-    auto buflevel = level(logbuflevel);
-    if (!buflevel) {
-        return buflevel.error();
-    }
-    logger->flush_on(*buflevel);
+    logger->set_level(level(minloglevel));
+    logger->flush_on(level(logbuflevel));
     spdlog::set_default_logger(logger);
     spdlog::flush_every(std::chrono::seconds(logbufsecs));
 

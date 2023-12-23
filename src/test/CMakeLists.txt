@@ -5,23 +5,13 @@ add_executable(demo-crash demo-crash.cpp)
 target_link_libraries(demo-crash utils)
 
 add_executable(demo-https-server demo-https-server.cpp)
-target_link_libraries(demo-https-server utils uWebSockets)
+target_link_libraries(demo-https-server utils uwebsockets)
 
 add_executable(demo-https-client demo-https-client.cpp)
-target_link_libraries(demo-https-client utils cpr::cpr)
+target_link_libraries(demo-https-client utils libcpr)
 
 add_executable(demo-opencl demo-opencl.cpp)
-target_link_libraries(demo-opencl utils opencl-headers
-    $<IF:$<BOOL:${WIN32}>,
-        ${CMAKE_CURRENT_SOURCE_DIR}/res/OpenCL.lib,
-        /usr/lib/x86_64-linux-gnu/libOpenCL.so.1>
-)
-
-if (UNIX)
-    add_executable(demo-drm demo-drm.cpp)
-    target_include_directories(demo-drm PUBLIC /usr/include/libdrm)
-    target_link_libraries(demo-drm utils drm gbm EGL GLESv2)
-endif()
+target_link_libraries(demo-opencl utils opencl-clhpp)
 
 add_executable(${MAIN}
     main.cpp
@@ -30,5 +20,5 @@ add_executable(${MAIN}
 
 target_link_libraries(${MAIN}
     utils
-    Catch2::Catch2WithMain
+    catch2
 )

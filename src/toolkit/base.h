@@ -35,6 +35,6 @@ std::filesystem::path defaultLoggingDir();
 
 MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
-Expected<std::string> readFile(std::filesystem::path const& path);
+MyErrCode readFile(std::filesystem::path const& path, std::string& content);
 
 }  // namespace utils
