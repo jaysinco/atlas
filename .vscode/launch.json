@@ -5,10 +5,10 @@
             "name": "Cpp",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/debug/test",
+            "program": "${workspaceFolder}/bin/x86_64-debug/test",
             "args": [],
             "environment": [],
-            "cwd": "${workspaceFolder}/bin/debug",
+            "cwd": "${workspaceFolder}/bin/x86_64-debug",
             "stopAtEntry": false,
             "logging": {
                 "moduleLoad": true,

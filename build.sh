@@ -8,6 +8,7 @@ do_clean=0
 do_arch=x86_64
 do_build_debug=0
 do_preprocess=0
+do_zip=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -20,6 +21,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -a ARCH    target arch, default 'x86_64'"
             echo "  -d         build debug version"
             echo "  -p         preprocess code before build"
+            echo "  -z         zip binary after build"
             echo "  -h         print command line options"
             echo
             exit 0
@@ -28,6 +30,7 @@ while [[ $# -gt 0 ]]; do
         -a) do_arch=$2 && shift && shift ;;
         -d) do_build_debug=1 && shift ;;
         -p) do_preprocess=1 && shift ;;
+        -z) do_zip=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
     esac
 done
@@ -44,8 +47,9 @@ fi
 
 arch=`arch`
 source_folder=$git_root/src
-build_folder=$git_root/out/$do_arch-${build_type,,}
-binary_folder=$git_root/bin/$do_arch-${build_type,,}
+tuple_name=$do_arch-${build_type,,}
+build_folder=$git_root/out/$tuple_name
+binary_folder=$git_root/bin/$tuple_name
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$do_arch
 
 source $tc_toolchain_dir/env.sh
@@ -77,6 +81,14 @@ function cmake_build() {
     cmake --build . --parallel=`nproc`
 }
 
+function zip_binary() {
+    tar -czf \
+        $git_root/bin/$tuple_name.tar.gz \
+        -C $git_root/bin \
+        $tuple_name
+}
+
+
 if [ $do_clean -eq 1 ]; then
     clean_build
 fi \
@@ -86,5 +98,9 @@ if [ $do_preprocess -eq 1 ]; then
 fi \
 && \
 cmake_build \
+&& \
+if [ $do_zip -eq 1 ]; then
+    zip_binary
+fi \
 && \
 echo done!
