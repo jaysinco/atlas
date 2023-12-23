@@ -14,9 +14,6 @@
                 "moduleLoad": true,
                 "trace": false
             },
-            "windows": {
-                "type": "cppvsdbg",
-            },
             "linux": {
                 "MIMode": "gdb",
                 "setupCommands": [
@@ -28,12 +25,6 @@
                 ],
                 "miDebuggerPath": "/usr/bin/gdb"
             },
-        },
-        {
-            "name": "Flutter",
-            "type": "dart",
-            "request": "launch",
-            "program": "src/hello_flutter/lib/main.dart"
         },
     ]
 }

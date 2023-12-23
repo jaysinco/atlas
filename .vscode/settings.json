@@ -1,5 +1,5 @@
 {
     "files.watcherExclude": {
-        "{bin,out,deps}": true,
+        "{bin,out}": true,
     },
 }
