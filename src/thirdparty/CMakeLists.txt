@@ -1,3 +1,5 @@
+add_subdirectory(imgui)
+
 add_subdirectory(${TC_THIRDPARTY}/zlib zlib)
 add_subdirectory(${TC_THIRDPARTY}/openssl openssl)
 add_subdirectory(${TC_THIRDPARTY}/libuv libuv)
@@ -10,6 +12,7 @@ add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
+add_subdirectory(${TC_THIRDPARTY}/wayland wayland)
 
 file(COPY
     ${TC_INSTALL_DIR}/../lib/libstdc++.so.6

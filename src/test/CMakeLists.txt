@@ -1,6 +1,3 @@
-get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-set(MAIN ${CURRENT_DIR_NAME})
-
 add_executable(demo-crash demo-crash.cpp)
 target_link_libraries(demo-crash toolkit)
 
@@ -14,12 +11,12 @@ xxd_add_resources(demo_opencl_xxd_gen_cpp data/hello.cl)
 add_executable(demo-opencl demo-opencl.cpp ${demo_opencl_xxd_gen_cpp})
 target_link_libraries(demo-opencl toolkit opencl-clhpp)
 
-add_executable(${MAIN}
-    main.cpp
+add_executable(test
     test-database.cpp
+    main.cpp
 )
 
-target_link_libraries(${MAIN}
+target_link_libraries(test
     toolkit
     catch2
 )
