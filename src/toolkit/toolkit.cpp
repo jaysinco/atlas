@@ -1,4 +1,4 @@
-#include "base.h"
+#include "toolkit.h"
 #include "encoding.h"
 #include "logging.h"
 #include <stdlib.h>
@@ -24,7 +24,9 @@ std::filesystem::path currentExePath()
 
 std::string currentExeName() { return currentExePath().filename().string(); }
 
-std::filesystem::path defaultLoggingDir() { return currentExeDir() / "logs"; }
+std::filesystem::path getLoggingDir() { return currentExeDir() / "logs"; }
+
+std::filesystem::path getDataDir() { return currentExeDir() / "data"; }
 
 MyErrCode readFile(std::filesystem::path const& path, std::string& content)
 {

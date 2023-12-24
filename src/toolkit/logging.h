@@ -1,5 +1,5 @@
 #pragma once
-#include "base.h"
+#include "toolkit.h"
 #include <fmt/format.h>
 
 #define FSTR(...) (fmt::format(__VA_ARGS__))
@@ -39,8 +39,7 @@ enum class LogLevel : int
 MyErrCode initLogger(std::string const& program = currentExeName(), bool logtostderr = true,
                      bool logtofile = false, LogLevel minloglevel = LogLevel::kINFO,
                      LogLevel logbuflevel = LogLevel::kERROR, int logbufsecs = 30,
-                     std::filesystem::path const& logdir = defaultLoggingDir(),
-                     int maxlogsize = 100);
+                     std::filesystem::path const& logdir = getLoggingDir(), int maxlogsize = 100);
 
 void logPrint(LogLevel level, std::string_view content);
 void logPrint(LogLevel level, char const* filepath, int line, std::string_view content);

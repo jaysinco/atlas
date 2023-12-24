@@ -2,7 +2,7 @@
 #include <CL/opencl.hpp>
 #include <fstream>
 #include <iostream>
-#include "toolkit/base.h"
+#include "toolkit/toolkit.h"
 
 cl::Device getDefaultDevice()
 {
@@ -96,7 +96,7 @@ bool checkEqual(int const* c1, int const* c2, int const n)
     return true;
 }
 
-XXD_DECLARE_RES(RES_HELLO_CL)
+XXD_DECLARE_RES(DATA_HELLO_CL)
 
 int main(int argc, char** argv)
 {
@@ -116,7 +116,7 @@ int main(int argc, char** argv)
 
     // gpu
     auto device = getDefaultDevice();
-    std::string src(XXD_GET_RES(RES_HELLO_CL));
+    std::string src(XXD_GET_RES(DATA_HELLO_CL));
     cl::Context context({device});
     cl::Program program(context, {src});
 

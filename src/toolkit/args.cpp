@@ -96,8 +96,7 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
         CHECK_ERR_RET(initLogger(program_, get<bool>("logtostderr"), get<bool>("logtofile"),
                                  static_cast<LogLevel>(get<int>("minloglevel")),
                                  static_cast<LogLevel>(get<int>("logbuflevel")),
-                                 get<int>("logbufsecs"), defaultLoggingDir(),
-                                 get<int>("maxlogsize")));
+                                 get<int>("logbufsecs"), getLoggingDir(), get<int>("maxlogsize")));
     }
     return MyErrCode::kOk;
 }

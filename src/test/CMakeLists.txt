@@ -10,7 +10,7 @@ target_link_libraries(demo-https-server toolkit uwebsockets zlib openssl libuv)
 add_executable(demo-https-client demo-https-client.cpp)
 target_link_libraries(demo-https-client toolkit libcpr)
 
-xxd_add_resources(demo_opencl_xxd_gen_cpp res/hello.cl)
+xxd_add_resources(demo_opencl_xxd_gen_cpp data/hello.cl)
 add_executable(demo-opencl demo-opencl.cpp ${demo_opencl_xxd_gen_cpp})
 target_link_libraries(demo-opencl toolkit opencl-clhpp)
 
@@ -25,8 +25,8 @@ target_link_libraries(${MAIN}
 )
 
 file(COPY
-    res/cert.pem
-    res/key.pem
+    data/cert.pem
+    data/key.pem
 
-    DESTINATION ${MY_RUNTIME_DIR}/res
+    DESTINATION ${MY_RUNTIME_DIR}/data
 )

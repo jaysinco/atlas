@@ -30,7 +30,9 @@ ScopeExit<T> scopeExit(T&& t)
 std::string currentExeName();
 std::filesystem::path currentExeDir();
 std::filesystem::path currentExePath();
-std::filesystem::path defaultLoggingDir();
+std::filesystem::path getLoggingDir();
+std::filesystem::path getDataDir();
+
 MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
 MyErrCode readFile(std::filesystem::path const& path, std::string& content);
