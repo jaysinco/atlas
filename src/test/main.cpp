@@ -4,7 +4,7 @@
 
 int main(int argc, char** argv)
 {
-    utils::initLogger();
+    toolkit::initLogger();
     Catch::Session session;
     int return_code = session.applyCommandLine(argc, argv);
     if (return_code != 0) {

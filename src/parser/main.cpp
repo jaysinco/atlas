@@ -47,8 +47,8 @@ struct ErrorHandler
         int ln_pos = std::distance(ln_start, err_pos);
         int line = boost::spirit::get_line(err_pos);
         ELOG("{}({},{}): error: {} expected\n{}\n{}^",
-             utils::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what.tag,
-             utils::ws2s(std::wstring(ln_start, ln_end)), std::string(ln_pos, ' '));
+             toolkit::ws2s(source_file.filename().generic_wstring()), line, ln_pos + 1, what.tag,
+             toolkit::ws2s(std::wstring(ln_start, ln_end)), std::string(ln_pos, ' '));
     }
 
     std::filesystem::path source_file;
@@ -83,13 +83,13 @@ MyErrCode parsing()
 {
     using Iterator = boost::spirit::line_pos_iterator<std::wstring::const_iterator>;
     std::string_view raw = XXD_GET_RES(RES_INPUT_TXT);
-    std::wstring input = utils::s2ws(raw, utils::CodePage::kUTF8);
+    std::wstring input = toolkit::s2ws(raw, toolkit::CodePage::kUTF8);
     Iterator beg(input.begin());
     Iterator end(input.end());
     parser::Expression<Iterator> expr("RES_INPUT_TXT");
     ast::Employee attr;
     bool ok = qi::parse(beg, end, expr, attr);
-    ILOG("{} {}", ok, utils::ws2s(attr.surname));
+    ILOG("{} {}", ok, toolkit::ws2s(attr.surname));
     return MyErrCode::kOk;
 }
 

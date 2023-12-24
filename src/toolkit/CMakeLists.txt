@@ -6,6 +6,7 @@ add_library(${MAIN}
     encoding.cpp
     logging.cpp
     args.cpp
+    variant.cpp
     sqlite-helper.cpp
 )
 

@@ -10,7 +10,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace utils
+namespace toolkit
 {
 
 std::filesystem::path currentExeDir() { return currentExePath().parent_path(); }
@@ -60,4 +60,4 @@ MyErrCode installCrashHook()
     return MyErrCode::kOk;
 }
 
-}  // namespace utils
+}  // namespace toolkit

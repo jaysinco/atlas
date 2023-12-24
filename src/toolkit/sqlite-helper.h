@@ -1,41 +1,15 @@
 #pragma once
 #include "error.h"
-#include <string>
-#include <variant>
+#include "variant.h"
 #include <filesystem>
-#include <vector>
 
 class sqlite3;
 class sqlite3_stmt;
 
-namespace utils
+namespace toolkit
 {
 
-// CellType         C++               SQLite
-// ===========================================
-// String           std::string       TEXT
-// Integer          int64_t           INTEGER
-// Real             double            REAL
-// Boolean          bool              BOOLEAN
-// Date             int64_t           TIMESTAMP
-// Null             NullType          NULL
-
-struct NullType
-{
-};
-
-extern NullType g_null_v;
-
-enum class CellType
-{
-    kString,
-    kInteger,
-    kReal,
-    kBoolean,
-    kDate,
-};
-
-using CellValue = std::variant<std::string, int64_t, double, bool, NullType>;
+using CellValue = Variant;
 using RowValue = std::vector<CellValue>;
 using RowsValue = std::vector<RowValue>;
 
@@ -48,12 +22,11 @@ struct SQLUnit
 class SQLiteHelper
 {
 public:
-    SQLiteHelper(SQLiteHelper const&) = delete;
     static MyErrCode execSQLs(std::filesystem::path const& db_path, std::string const& sqls);
     static MyErrCode execSQLs(std::filesystem::path const& db_path,
                               std::vector<SQLUnit> const& sqls);
     static MyErrCode querySQL(std::filesystem::path const& db_path, SQLUnit const& sql,
-                              std::vector<CellType> const& types, RowsValue& rows);
+                              RowsValue& rows);
 
 private:
     class Stmt
@@ -66,10 +39,13 @@ private:
         MyErrCode bind(std::vector<CellValue> const& vals);
         MyErrCode step(bool& done);
         MyErrCode stepUtilDone();
-        MyErrCode column(int index, CellType const& type, CellValue& val);
+        int columnCount();
+        MyErrCode column(int index, CellValue& val);
         MyErrCode reset();
 
     private:
+        int bindCell(CellValue const& val, int index);
+
         sqlite3* db_ = nullptr;
         sqlite3_stmt* stmt_ = nullptr;
     };
@@ -85,4 +61,4 @@ private:
     sqlite3* db_ = nullptr;
 };
 
-}  // namespace utils
+}  // namespace toolkit

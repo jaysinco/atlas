@@ -8,7 +8,7 @@
 
 #define XXD_GET_RES(res) (std::string_view(reinterpret_cast<char*>(res), res##_LEN))
 
-namespace utils
+namespace toolkit
 {
 
 template <typename T>
@@ -35,4 +35,4 @@ MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
 MyErrCode readFile(std::filesystem::path const& path, std::string& content);
 
-}  // namespace utils
+}  // namespace toolkit

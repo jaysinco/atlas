@@ -4,8 +4,8 @@
 int main(int argc, char** argv)
 {
     INIT_LOG(argc, argv);
-    auto key_file = (utils::currentExeDir() / "res/key.pem").generic_string();
-    auto cert_file = (utils::currentExeDir() / "res/cert.pem").generic_string();
+    auto key_file = (toolkit::currentExeDir() / "res/key.pem").generic_string();
+    auto cert_file = (toolkit::currentExeDir() / "res/cert.pem").generic_string();
 
     uWS::SocketContextOptions opt;
     opt.key_file_name = key_file.c_str();

@@ -23,11 +23,11 @@ INSERT INTO "Users" VALUES ('admin',2,'admin');
 COMMIT;
 )";
 
-    auto db_path = utils::currentExeDir() / "sql.db";
-    auto db_guard = utils::scopeExit([&] {
+    auto db_path = toolkit::currentExeDir() / "sql.db";
+    auto db_guard = toolkit::scopeExit([&] {
         if (std::filesystem::exists(db_path)) {
             std::filesystem::remove(db_path);
         }
     });
-    REQUIRE(utils::SQLiteHelper::execSQLs(db_path, sqls) == MyErrCode::kOk);
+    REQUIRE(toolkit::SQLiteHelper::execSQLs(db_path, sqls) == MyErrCode::kOk);
 }

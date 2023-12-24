@@ -11,7 +11,7 @@ Checks: >
   bugprone-use-after-move,
   google-runtime-int,
   google-build-explicit-make-pair,
-  google-explicit-constructor,
+  # google-explicit-constructor,
   google-readability-casting,
   modernize-avoid-bind,
   modernize-concat-nested-namespaces,

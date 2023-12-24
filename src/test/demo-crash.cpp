@@ -17,7 +17,7 @@ void func1() { func2(); }
 
 int main(int argc, char** argv)
 {
-    utils::installCrashHook();
+    toolkit::installCrashHook();
     INIT_LOG(argc, argv);
     func1();
 }

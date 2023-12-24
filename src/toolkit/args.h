@@ -3,9 +3,9 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 
-#define INIT_LOG(argc, argv) (utils::Args(argc, argv).parse())
+#define INIT_LOG(argc, argv) (toolkit::Args(argc, argv).parse())
 
-namespace utils
+namespace toolkit
 {
 
 namespace po = boost::program_options;
@@ -61,4 +61,4 @@ private:
     std::map<std::string, SubCmd> subs_;
 };
 
-}  // namespace utils
+}  // namespace toolkit

@@ -1,52 +1,42 @@
 #include "sqlite-helper.h"
 #include "logging.h"
+#include "toolkit/error.h"
 #include <boost/algorithm/string.hpp>
 #include <sqlite3.h>
 #include <sstream>
 
-namespace utils
+namespace toolkit
 {
 
-NullType g_null_v;
+using fmt::enums::format_as;
 
-struct CellValueBindVisitor
+static std::string cellValueToSQL(CellValue const& val)
 {
-    int operator()(std::string const& v) const
-    {
-        return sqlite3_bind_text(stmt, index, v.c_str(), v.size(), SQLITE_TRANSIENT);
+    switch (val.getType()) {
+        case Variant::kVoid:
+            return "NULL";
+        case Variant::kBool:
+            return val.asBool() ? "TRUE" : "FALSE";
+        case Variant::kInt:
+        case Variant::kUint:
+            return std::to_string(val.asInt());
+        case Variant::kDouble:
+            return std::to_string(val.asDouble());
+        case Variant::kStr: {
+            std::ostringstream ss;
+            std::string copy(val.asStr());
+            boost::replace_all(copy, "'", "''");
+            ss << "'" << copy << "'";
+            return ss.str();
+        }
+        case Variant::kVec:
+        case Variant::kMap: {
+            return cellValueToSQL(val.toJsonStr());
+        }
+        default:
+            throw std::runtime_error(fmt::format("variant bad type: {}", val.getType()));
     }
-
-    int operator()(int64_t v) const { return sqlite3_bind_int64(stmt, index, v); }
-
-    int operator()(double v) const { return sqlite3_bind_double(stmt, index, v); }
-
-    int operator()(bool v) const { return sqlite3_bind_int(stmt, index, v); }
-
-    int operator()(NullType const& v) const { return sqlite3_bind_null(stmt, index); }
-
-    sqlite3_stmt* stmt;
-    int index;
-};
-
-struct CellValueToSQLVisitor
-{
-    std::string operator()(std::string const& v) const
-    {
-        std::ostringstream ss;
-        std::string copy(v);
-        boost::replace_all(copy, "'", "''");
-        ss << "'" << copy << "'";
-        return ss.str();
-    }
-
-    std::string operator()(int64_t v) const { return std::to_string(v); }
-
-    std::string operator()(double v) const { return std::to_string(v); }
-
-    std::string operator()(bool v) const { return v ? "TRUE" : "FALSE"; }
-
-    std::string operator()(NullType const& v) const { return "NULL"; }
-};
+}
 
 SQLiteHelper::Stmt::~Stmt()
 {
@@ -55,12 +45,37 @@ SQLiteHelper::Stmt::~Stmt()
     }
 }
 
+int SQLiteHelper::Stmt::bindCell(CellValue const& val, int index)
+{
+    switch (val.getType()) {
+        case Variant::kVoid:
+            return sqlite3_bind_null(stmt_, index);
+        case Variant::kBool:
+            return sqlite3_bind_int(stmt_, index, val.asBool());
+        case Variant::kInt:
+        case Variant::kUint:
+            return sqlite3_bind_int64(stmt_, index, val.asInt());
+        case Variant::kDouble:
+            return sqlite3_bind_double(stmt_, index, val.asDouble());
+        case Variant::kStr: {
+            auto& str = val.asStr();
+            return sqlite3_bind_text(stmt_, index, str.c_str(), str.size(), SQLITE_TRANSIENT);
+        }
+        case Variant::kVec:
+        case Variant::kMap: {
+            auto str = val.toJsonStr();
+            return sqlite3_bind_text(stmt_, index, str.c_str(), str.size(), SQLITE_TRANSIENT);
+        }
+        default:
+            throw std::runtime_error(fmt::format("variant bad type: {}", val.getType()));
+    }
+}
+
 MyErrCode SQLiteHelper::Stmt::bind(std::vector<CellValue> const& vals)
 {
     for (int i = 0; i < vals.size(); ++i) {
-        int code = std::visit(CellValueBindVisitor{this->stmt_, i + 1}, vals.at(i));
-        DLOG("[{}] bind value {} -> {}", code, i + 1,
-             std::visit(CellValueToSQLVisitor{}, vals.at(i)));
+        int code = bindCell(vals.at(i), i + 1);
+        DLOG("[{}] bind value {} -> {}", code, i + 1, cellValueToSQL(vals.at(i)));
         if (code != SQLITE_OK) {
             ELOG(sqlite3_errmsg(this->db_));
             return MyErrCode::kFailed;
@@ -94,28 +109,33 @@ MyErrCode SQLiteHelper::Stmt::stepUtilDone()
     return MyErrCode::kOk;
 }
 
-MyErrCode SQLiteHelper::Stmt::column(int index, CellType const& type, CellValue& val)
+int SQLiteHelper::Stmt::columnCount() { return sqlite3_column_count(this->stmt_); }
+
+MyErrCode SQLiteHelper::Stmt::column(int index, CellValue& val)
 {
-    if (index >= sqlite3_column_count(this->stmt_)) {
-        return MyErrCode::kOutOfRange;
+    int type = sqlite3_column_type(this->stmt_, index);
+    switch (type) {
+        case SQLITE_NULL:
+            val = {};
+            break;
+        case SQLITE_INTEGER:
+            val = static_cast<int64_t>(sqlite3_column_int64(this->stmt_, index));
+            break;
+        case SQLITE_FLOAT:
+            val = sqlite3_column_double(this->stmt_, index);
+            break;
+        case SQLITE_TEXT: {
+            auto begin = reinterpret_cast<char const*>(sqlite3_column_text(this->stmt_, index));
+            int size = sqlite3_column_bytes(this->stmt_, index);
+            val = std::string(begin, begin + size);
+            break;
+        }
+        case SQLITE_BLOB:
+            return MyErrCode::kUnimplemented;
+        default:
+            throw std::runtime_error(fmt::format("sqlite3 bad column type: {}", type));
     }
-    if (sqlite3_column_type(this->stmt_, index) == SQLITE_NULL) {
-        val = g_null_v;
-    } else if (type == CellType::kString) {
-        unsigned char const* begin = sqlite3_column_text(this->stmt_, index);
-        int size = sqlite3_column_bytes(this->stmt_, index);
-        val = std::string(begin, begin + size);
-    } else if (type == CellType::kInteger || type == CellType::kDate) {
-        val = static_cast<int64_t>(sqlite3_column_int64(this->stmt_, index));
-    } else if (type == CellType::kReal) {
-        val = sqlite3_column_double(this->stmt_, index);
-    } else if (type == CellType::kBoolean) {
-        val = static_cast<bool>(sqlite3_column_int(this->stmt_, index));
-    } else {
-        ELOG("unknow cell type: {}", static_cast<int>(type));
-        return MyErrCode::kUnknown;
-    }
-    DLOG("[{}] get column {} -> {}", 0, index, std::visit(CellValueToSQLVisitor{}, val));
+    DLOG("[{}] get column {} -> {}", 0, index, cellValueToSQL(val));
     return MyErrCode::kOk;
 }
 
@@ -205,7 +225,7 @@ MyErrCode SQLiteHelper::execSQLs(std::filesystem::path const& db_path,
 }
 
 MyErrCode SQLiteHelper::querySQL(std::filesystem::path const& db_path, SQLUnit const& sql,
-                                 std::vector<CellType> const& types, RowsValue& rows)
+                                 RowsValue& rows)
 {
     SQLiteHelper db;
     CHECK_ERR_RET(db.open(db_path.string()));
@@ -221,9 +241,9 @@ MyErrCode SQLiteHelper::querySQL(std::filesystem::path const& db_path, SQLUnit c
             break;
         }
         RowValue row;
-        for (int i = 0; i < types.size(); ++i) {
+        for (int i = 0; i < stmt.columnCount(); ++i) {
             CellValue val;
-            CHECK_ERR_RET(stmt.column(i, types.at(i), val));
+            CHECK_ERR_RET(stmt.column(i, val));
             row.push_back(std::move(val));
         }
         rows.push_back(std::move(row));
@@ -231,4 +251,4 @@ MyErrCode SQLiteHelper::querySQL(std::filesystem::path const& db_path, SQLUnit c
     return MyErrCode::kOk;
 }
 
-}  // namespace utils
+}  // namespace toolkit
