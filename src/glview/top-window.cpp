@@ -191,7 +191,7 @@ unsigned FrameWindow::CreateShader(char const* source, unsigned shader_type)
 
 void FrameWindow::InitGl()
 {
-    static char const* vert_shader_text = R"(#version 320 es
+    static char const* vert_shader_text = R"(#version 300 es
 precision mediump float;
 
 layout(location = 0) in vec3 aPos;
@@ -205,7 +205,7 @@ void main() {
 
 )";
 
-    static char const* frag_shader_text = R"(#version 320 es
+    static char const* frag_shader_text = R"(#version 300 es
 precision mediump float;
 
 in vec2 my_TexCoord;
