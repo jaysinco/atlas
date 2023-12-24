@@ -13,8 +13,6 @@
 namespace utils
 {
 
-std::filesystem::path projectRoot() { return currentExeDir().parent_path().parent_path(); }
-
 std::filesystem::path currentExeDir() { return currentExePath().parent_path(); }
 
 std::filesystem::path currentExePath()

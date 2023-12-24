@@ -1,8 +1,8 @@
 get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 set(MAIN ${CURRENT_DIR_NAME})
 
-xxd_add_resources(xxd_gen_cpp res/input.txt)
-add_executable(${MAIN} main.cpp ${xxd_gen_cpp})
+xxd_add_resources(parser_xxd_gen_cpp res/input.txt)
+add_executable(${MAIN} main.cpp ${parser_xxd_gen_cpp})
 target_link_libraries(${MAIN} toolkit)
 
 add_executable(${MAIN}-autocomplete autocomplete.cpp)

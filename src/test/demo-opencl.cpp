@@ -96,6 +96,8 @@ bool checkEqual(int const* c1, int const* c2, int const n)
     return true;
 }
 
+XXD_DECLARE_RES(RES_HELLO_CL)
+
 int main(int argc, char** argv)
 {
     int const count = 10;
@@ -114,8 +116,7 @@ int main(int argc, char** argv)
 
     // gpu
     auto device = getDefaultDevice();
-    std::string src;
-    utils::readFile(utils::projectRoot() / "src/core/test/res/hello.cl", src);
+    std::string src(XXD_GET_RES(RES_HELLO_CL));
     cl::Context context({device});
     cl::Program program(context, {src});
 
