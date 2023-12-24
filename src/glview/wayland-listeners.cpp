@@ -23,8 +23,6 @@ wl_seat_listener WaylandListeners::seat = {
 wl_registry_listener WaylandListeners::registry = {registry_handle_global,
                                                    registry_handle_global_remove};
 
-wl_callback_listener WaylandListeners::configure_cb = {configure_callback};
-
 wl_callback_listener WaylandListeners::frame_cb = {redraw};
 
 wl_pointer_listener WaylandListeners::pointer = {pointer_handle_enter, pointer_handle_leave,
@@ -46,6 +44,11 @@ void WaylandListeners::handle_xdg_surface_configure(void* data, struct xdg_surfa
                                         ctx.window_size.height);
     }
     xdg_surface_ack_configure(xdg_surface, serial);
+
+    ctx.wl.configured = 1;
+    if (ctx.wl.callback == NULL) {
+        redraw(data, NULL, 0);
+    }
 }
 
 void WaylandListeners::handle_xdg_toplevel_configure(void* data, struct xdg_toplevel* xdg_toplevel,
@@ -124,19 +127,6 @@ void WaylandListeners::registry_handle_global_remove(void* data, struct wl_regis
 {
 }
 
-void WaylandListeners::configure_callback(void* data, struct wl_callback* callback, uint32_t time)
-{
-    auto& ctx = DisplayContext::Instance();
-
-    wl_callback_destroy(callback);
-
-    ctx.wl.configured = 1;
-
-    if (ctx.wl.callback == NULL) {
-        redraw(data, NULL, time);
-    }
-}
-
 void WaylandListeners::redraw(void* data, wl_callback* callback, uint32_t time)
 {
     auto& ctx = DisplayContext::Instance();
@@ -159,6 +149,7 @@ void WaylandListeners::redraw(void* data, wl_callback* callback, uint32_t time)
     ImGui::NewFrame();
 
     ImeEditor::Draw();
+    ImGui::ShowDemoWindow();
 
     ImGui::Render();
     ImDrawData* raw_imgui_data = ImGui::GetDrawData();
@@ -366,7 +357,6 @@ void WaylandListeners::ime_handle_key(uint32_t key, bool down)
 void WaylandListeners::toggle_fullscreen(int fullscreen)
 {
     auto& ctx = DisplayContext::Instance();
-    struct wl_callback* callback;
 
     ctx.wl.fullscreen = fullscreen;
     ctx.wl.configured = 0;
@@ -376,9 +366,6 @@ void WaylandListeners::toggle_fullscreen(int fullscreen)
     } else {
         xdg_toplevel_unset_fullscreen(ctx.wl.xdg_top);
     }
-
-    callback = wl_display_sync(ctx.wl.display);
-    wl_callback_add_listener(callback, &configure_cb, nullptr);
 }
 
 void WaylandListeners::handle_xdg_wm_ping(void* data, struct xdg_wm_base* xdg_wm_base,

@@ -9,7 +9,6 @@ public:
     static xdg_toplevel_listener xdg_toplevel;
     static wl_seat_listener seat;
     static wl_registry_listener registry;
-    static wl_callback_listener configure_cb;
     static wl_callback_listener frame_cb;
     static wl_pointer_listener pointer;
     static wl_keyboard_listener keyboard;
@@ -37,9 +36,6 @@ public:
                                               uint32_t name);
     static void registry_handle_global(void* data, struct wl_registry* registry, uint32_t name,
                                        char const* interface, uint32_t version);
-
-    // configure_cb
-    static void configure_callback(void* data, struct wl_callback* callback, uint32_t time);
 
     // pointer
     static void pointer_handle_enter(void* data, struct wl_pointer* pointer, uint32_t serial,

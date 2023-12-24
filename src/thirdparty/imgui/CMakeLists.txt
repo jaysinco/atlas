@@ -10,6 +10,7 @@ add_library(imgui STATIC
 )
 
 target_link_libraries(imgui GLESv2 dl)
+target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_ES3)
 
 target_include_directories(imgui PUBLIC
     ${TC_INSTALL_DIR}/src

@@ -15,7 +15,7 @@ void FrameWindow::Init(int argc, char** argv)
     auto& ctx = DisplayContext::Instance();
 
     std::map<std::string, std::string> args = {
-        {"app-id", "endoscope_display"},
+        {"app-id", "glview"},
         {"display-id", "0"},
     };
     for (int i = 1; i < argc; ++i) {
@@ -309,14 +309,14 @@ void FrameWindow::InitImgui()
     ImGuiIO& io = ImGui::GetIO();
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
 
-    auto fontPath = (toolkit::getDataDir() / "FangZhengHeiTi.ttf").string();
-    io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr,
-                                 io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-    ImFontConfig font_config;
-    font_config.MergeMode = true;
-    io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, &font_config,
-                                 io.Fonts->GetGlyphRangesChineseFull());
-    io.Fonts->Build();
+    // auto fontPath = (toolkit::getDataDir() / "FangZhengHeiTi.ttf").string();
+    // io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr,
+    //                              io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    // ImFontConfig font_config;
+    // font_config.MergeMode = true;
+    // io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, &font_config,
+    //                              io.Fonts->GetGlyphRangesChineseFull());
+    // io.Fonts->Build();
 
     io.SetPlatformImeDataFn = set_platform_ime_data;
     io.IniFilename = nullptr;
@@ -339,6 +339,6 @@ void FrameWindow::Draw()
 {
     auto& ctx = DisplayContext::Instance();
 
-    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClearColor(0.0, 0.5, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 }
