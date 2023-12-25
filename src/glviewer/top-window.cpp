@@ -15,7 +15,7 @@ void FrameWindow::Init(int argc, char** argv)
     auto& ctx = DisplayContext::Instance();
 
     std::map<std::string, std::string> args = {
-        {"app-id", "glview"},
+        {"app-id", "glviewer"},
         {"display-id", "0"},
     };
     for (int i = 1; i < argc; ++i) {

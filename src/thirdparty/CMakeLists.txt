@@ -31,7 +31,6 @@ file(COPY
     ${TC_INSTALL_DIR}/lib/libffi.so.8
     ${TC_INSTALL_DIR}/lib/libwayland-client.so
     ${TC_INSTALL_DIR}/lib/libwayland-cursor.so
-    ${TC_INSTALL_DIR}/lib/libwayland-egl.so
 
     DESTINATION ${MY_RUNTIME_DIR}
     FOLLOW_SYMLINK_CHAIN
