@@ -309,9 +309,9 @@ void FrameWindow::InitImgui()
     ImGuiIO& io = ImGui::GetIO();
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
 
-    // auto fontPath = (toolkit::getDataDir() / "FangZhengHeiTi.ttf").string();
-    // io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr,
-    //                              io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    auto fontPath = (toolkit::getDataDir() / "FangZhengHeiTi.ttf").string();
+    io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr,
+                                 io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
     // ImFontConfig font_config;
     // font_config.MergeMode = true;
     // io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, &font_config,

@@ -24,6 +24,5 @@ target_link_libraries(test
 file(COPY
     data/cert.pem
     data/key.pem
-
     DESTINATION ${MY_RUNTIME_DIR}/data
 )

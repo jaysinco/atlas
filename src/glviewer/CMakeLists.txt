@@ -25,3 +25,8 @@ target_link_libraries(${TARGET_NAME}
 target_include_directories(imgui PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+file(COPY
+    data/FangZhengHeiTi.ttf
+    DESTINATION ${MY_RUNTIME_DIR}/data
+)
