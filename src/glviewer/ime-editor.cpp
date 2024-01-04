@@ -77,7 +77,7 @@ MyErrCode ImeEditor::Initialize()
     traits.user_data_dir = ime_dir.c_str();
     traits.staging_dir = staging_dir.c_str();
     traits.prebuilt_data_dir = staging_dir.c_str();
-    traits.min_log_level = 3;
+    traits.min_log_level = 2;
     _rime_api->setup(&traits);
 
     _rime_api->set_notification_handler(&ImeEditor::OnMessage, NULL);
