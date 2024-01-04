@@ -11,6 +11,7 @@ add_executable(${TARGET_NAME}
     wayland-listeners.cpp
     display-context.cpp
     top-window.cpp
+    left-panel.cpp
     ime-editor.cpp
     main.cpp
 )
@@ -19,6 +20,7 @@ target_link_libraries(${TARGET_NAME}
     toolkit
     imgui
     wayland
+    librime
     EGL
 )
 

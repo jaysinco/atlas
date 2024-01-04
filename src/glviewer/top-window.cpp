@@ -9,6 +9,7 @@
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 #include <boost/algorithm/string.hpp>
+#include "ime-editor.h"
 
 void FrameWindow::Init(int argc, char** argv)
 {
@@ -36,18 +37,22 @@ void FrameWindow::Init(int argc, char** argv)
     InitSurface(args.at("app-id"));
     InitGl();
     InitImgui();
+    ImeEditor::Initialize();
+    ImeEditor::CreateSession(ctx.ime.session);
 
     ctx.wl.cursor_surface = wl_compositor_create_surface(ctx.wl.compositor);
 }
 
 void FrameWindow::Destory()
 {
+    auto& ctx = DisplayContext::Instance();
+
+    ImeEditor::DestroySession(ctx.ime.session);
+    ImeEditor::Destory();
     DestoryImgui();
     DestoryGl();
     DestorySurface();
     DestoryEgl();
-
-    auto& ctx = DisplayContext::Instance();
 
     wl_surface_destroy(ctx.wl.cursor_surface);
     if (ctx.wl.cursor_theme) wl_cursor_theme_destroy(ctx.wl.cursor_theme);

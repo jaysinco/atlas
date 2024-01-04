@@ -6,6 +6,7 @@
 #include "keycode-converter.h"
 #include "top-window.h"
 #include "ime-editor.h"
+#include "left-panel.h"
 #include "imgui/imgui.h"
 #include "toolkit/logging.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
@@ -148,8 +149,8 @@ void WaylandListeners::redraw(void* data, wl_callback* callback, uint32_t time)
     io.DisplaySize = ImVec2((float)ctx.geometry.width, (float)ctx.geometry.height);
     ImGui::NewFrame();
 
+    LeftPanel::Draw();
     ImeEditor::Draw();
-    ImGui::ShowDemoWindow();
 
     ImGui::Render();
     ImDrawData* raw_imgui_data = ImGui::GetDrawData();
@@ -334,23 +335,16 @@ void WaylandListeners::ime_handle_key(uint32_t key, bool down)
             return;
         }
 
-        // EsImeProcessKeyX(ctx.ime.session, keysym, 0);
+        ImeEditor::ProcessKey(ctx.ime.session, keysym, 0);
+        ImeEditor::GetState(ctx.ime.session, ctx.ime.state);
 
-        // EsStringHndl state_json;
-        // EsImeGetStateX(ctx.ime.session, &state_json);
-        // toolkit::SVConvertFromJsonStr(*(std::string*)state_json, ctx.ime.state);
-        // EsStringFree(state_json);
-
-        // if (!ctx.ime.state.isComposing) {
-        //     EsStringHndl hs;
-        //     EsImeGetCommitX(ctx.ime.session, &hs);
-        //     std::string output = *(std::string*)hs;
-        //     EsStringFree(hs);
-
-        //     if (output.size() > 0) {
-        //         io.AddInputCharactersUTF8(output.c_str());
-        //     }
-        // }
+        if (!ctx.ime.state.isComposing) {
+            std::string output;
+            ImeEditor::GetCommit(ctx.ime.session, output);
+            if (output.size() > 0) {
+                io.AddInputCharactersUTF8(output.c_str());
+            }
+        }
     }
 }
 

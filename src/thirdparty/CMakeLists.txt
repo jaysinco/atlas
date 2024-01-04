@@ -13,6 +13,7 @@ add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
 add_subdirectory(${TC_THIRDPARTY}/wayland wayland)
+add_subdirectory(${TC_THIRDPARTY}/librime librime)
 
 file(COPY
     ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
@@ -31,6 +32,19 @@ file(COPY
     ${TC_INSTALL_DIR}/lib/libffi.so.8
     ${TC_INSTALL_DIR}/lib/libwayland-client.so
     ${TC_INSTALL_DIR}/lib/libwayland-cursor.so
+    ${TC_INSTALL_DIR}/lib/librime.so
+    ${TC_INSTALL_DIR}/lib/libboost_system.so
+    ${TC_INSTALL_DIR}/lib/libboost_regex.so
+    ${TC_INSTALL_DIR}/lib/libboost_filesystem.so
+    ${TC_INSTALL_DIR}/lib/libboost_atomic.so
+    ${TC_INSTALL_DIR}/lib/libglog.so
+    ${TC_INSTALL_DIR}/lib/libyaml-cpp.so
+    ${TC_INSTALL_DIR}/lib/libgflags.so
+    ${TC_INSTALL_DIR}/lib/libleveldb.so
+    ${TC_INSTALL_DIR}/lib/libmarisa.so.0
+    ${TC_INSTALL_DIR}/lib/libopencc.so
+    ${TC_INSTALL_DIR}/lib/libunwind.so.8
+    ${TC_INSTALL_DIR}/lib/liblzma.so
     ${TC_INSTALL_DIR}/bin/llama-cpp
     DESTINATION ${MY_RUNTIME_DIR}
     FOLLOW_SYMLINK_CHAIN
