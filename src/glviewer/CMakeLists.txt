@@ -29,6 +29,7 @@ target_include_directories(imgui PUBLIC
 )
 
 file(COPY
+    data/ime
     data/FangZhengHeiTi.ttf
     DESTINATION ${MY_RUNTIME_DIR}/data
 )

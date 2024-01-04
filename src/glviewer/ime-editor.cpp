@@ -66,7 +66,7 @@ MyErrCode ImeEditor::Initialize()
     _rime_api = rime_get_api();
 
     RIME_STRUCT(RimeTraits, traits);
-    auto rootdir = toolkit::currentExeDir();
+    auto rootdir = toolkit::getDataDir();
     std::string log_dir = toolkit::getLoggingDir();
     std::string ime_dir = (rootdir / "ime").string();
     std::string staging_dir = (rootdir / "ime/staging").string();
@@ -77,7 +77,7 @@ MyErrCode ImeEditor::Initialize()
     traits.user_data_dir = ime_dir.c_str();
     traits.staging_dir = staging_dir.c_str();
     traits.prebuilt_data_dir = staging_dir.c_str();
-    traits.min_log_level = 2;
+    traits.min_log_level = 3;
     _rime_api->setup(&traits);
 
     _rime_api->set_notification_handler(&ImeEditor::OnMessage, NULL);

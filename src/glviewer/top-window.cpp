@@ -317,11 +317,11 @@ void FrameWindow::InitImgui()
     auto fontPath = (toolkit::getDataDir() / "FangZhengHeiTi.ttf").string();
     io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr,
                                  io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
-    // ImFontConfig font_config;
-    // font_config.MergeMode = true;
-    // io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, &font_config,
-    //                              io.Fonts->GetGlyphRangesChineseFull());
-    // io.Fonts->Build();
+    ImFontConfig font_config;
+    font_config.MergeMode = true;
+    io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, &font_config,
+                                 io.Fonts->GetGlyphRangesChineseFull());
+    io.Fonts->Build();
 
     io.SetPlatformImeDataFn = set_platform_ime_data;
     io.IniFilename = nullptr;
