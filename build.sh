@@ -51,10 +51,10 @@ tuple_name=$do_arch-${build_type,,}
 build_folder=$git_root/out/$tuple_name
 binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
-tc_toolchain_dir=$git_root/../cpptools/toolchain/$do_arch
+tc_toolchain_dir=$git_root/../cpptools/toolchain/linux/$do_arch
 
 source $tc_toolchain_dir/env.sh
-export PATH="$PATH:$TC_ROOT_DIR/toolchain/$arch/$arch-unknown-linux-gnu/$arch-unknown-linux-gnu/sysroot/usr/bin"
+export PATH="$PATH:$TC_ROOT_DIR/toolchain/linux/$arch/$arch-unknown-linux-gnu/$arch-unknown-linux-gnu/sysroot/usr/bin"
 
 function clean_build() {
     rm -rf $git_root/out
