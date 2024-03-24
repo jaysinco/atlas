@@ -5,7 +5,7 @@ set -e
 # flags
 
 do_clean=0
-do_arch=x86_64
+do_arch=`arch`
 do_build_debug=0
 do_preprocess=0
 do_zip=0
@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
             echo
             echo "Build Options:"
             echo "  -c         clean before build"
-            echo "  -a ARCH    target arch, default 'x86_64'"
+            echo "  -a ARCH    target arch, default '$(arch)'"
             echo "  -d         build debug version"
             echo "  -p         preprocess code before build"
             echo "  -z         zip binary after build"
@@ -46,15 +46,19 @@ if [ $do_build_debug -eq 1 ]; then
 fi
 
 arch=`arch`
+case "$OSTYPE" in
+    linux*)   os=linux ;;
+    msys*)    os=windows ;;
+esac
+
 source_folder=$git_root/src
 tuple_name=$do_arch-${build_type,,}
 build_folder=$git_root/out/$tuple_name
 binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
-tc_toolchain_dir=$git_root/../cpptools/toolchain/linux/$do_arch
+tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
 
 source $tc_toolchain_dir/env.sh
-export PATH="$PATH:$TC_ROOT_DIR/toolchain/linux/$arch/$arch-unknown-linux-gnu/$arch-unknown-linux-gnu/sysroot/usr/bin"
 
 function clean_build() {
     rm -rf $git_root/out
@@ -77,6 +81,7 @@ function cmake_build() {
     cmake $git_root -G "Ninja" \
         -DCMAKE_TOOLCHAIN_FILE=$TC_CMAKE_TOOLCHAIN \
         -DCMAKE_BUILD_TYPE=$build_type \
+        -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreadedDLL" \
         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$binary_folder \
     && \
     cp $build_folder/compile_commands.json $build_folder/.. \

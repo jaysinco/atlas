@@ -1,5 +1,3 @@
-add_subdirectory(imgui)
-
 add_subdirectory(${TC_THIRDPARTY}/zlib zlib)
 add_subdirectory(${TC_THIRDPARTY}/openssl openssl)
 add_subdirectory(${TC_THIRDPARTY}/libuv libuv)
@@ -11,41 +9,63 @@ add_subdirectory(${TC_THIRDPARTY}/libiconv libiconv)
 add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
-add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
-add_subdirectory(${TC_THIRDPARTY}/wayland wayland)
-add_subdirectory(${TC_THIRDPARTY}/librime librime)
 
-file(COPY
-    ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
-    ${TC_INSTALL_DIR}/lib/libz.so
-    ${TC_INSTALL_DIR}/lib/libfmt.so
-    ${TC_INSTALL_DIR}/lib/libspdlog.so
-    ${TC_INSTALL_DIR}/lib/libCatch2.so
-    ${TC_INSTALL_DIR}/lib/libboost_program_options.so
-    ${TC_INSTALL_DIR}/lib/libcharset.so.1
-    ${TC_INSTALL_DIR}/lib/libiconv.so.2
-    ${TC_INSTALL_DIR}/lib/libsqlite3.so.0
-    ${TC_INSTALL_DIR}/lib/libssl.so
-    ${TC_INSTALL_DIR}/lib/libcrypto.so
-    ${TC_INSTALL_DIR}/lib/libcpr.so
-    ${TC_INSTALL_DIR}/lib/libuv.so
-    ${TC_INSTALL_DIR}/lib/libffi.so.8
-    ${TC_INSTALL_DIR}/lib/libwayland-client.so
-    ${TC_INSTALL_DIR}/lib/libwayland-cursor.so
-    ${TC_INSTALL_DIR}/lib/librime.so
-    ${TC_INSTALL_DIR}/lib/libboost_system.so
-    ${TC_INSTALL_DIR}/lib/libboost_regex.so
-    ${TC_INSTALL_DIR}/lib/libboost_filesystem.so
-    ${TC_INSTALL_DIR}/lib/libboost_atomic.so
-    ${TC_INSTALL_DIR}/lib/libglog.so
-    ${TC_INSTALL_DIR}/lib/libyaml-cpp.so
-    ${TC_INSTALL_DIR}/lib/libgflags.so
-    ${TC_INSTALL_DIR}/lib/libleveldb.so
-    ${TC_INSTALL_DIR}/lib/libmarisa.so.0
-    ${TC_INSTALL_DIR}/lib/libopencc.so
-    ${TC_INSTALL_DIR}/lib/libunwind.so.8
-    ${TC_INSTALL_DIR}/lib/liblzma.so
-    ${TC_INSTALL_DIR}/bin/llama-cpp
-    DESTINATION ${MY_RUNTIME_DIR}
-    FOLLOW_SYMLINK_CHAIN
-)
+if(UNIX)
+    add_subdirectory(imgui)
+    add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
+    add_subdirectory(${TC_THIRDPARTY}/wayland wayland)
+    add_subdirectory(${TC_THIRDPARTY}/librime librime)
+
+    file(COPY
+        ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
+        ${TC_INSTALL_DIR}/lib/libz.so
+        ${TC_INSTALL_DIR}/lib/libfmt.so
+        ${TC_INSTALL_DIR}/lib/libspdlog.so
+        ${TC_INSTALL_DIR}/lib/libCatch2.so
+        ${TC_INSTALL_DIR}/lib/libboost_program_options.so
+        ${TC_INSTALL_DIR}/lib/libcharset.so.1
+        ${TC_INSTALL_DIR}/lib/libiconv.so.2
+        ${TC_INSTALL_DIR}/lib/libsqlite3.so.0
+        ${TC_INSTALL_DIR}/lib/libssl.so
+        ${TC_INSTALL_DIR}/lib/libcrypto.so
+        ${TC_INSTALL_DIR}/lib/libcpr.so
+        ${TC_INSTALL_DIR}/lib/libuv.so
+        ${TC_INSTALL_DIR}/lib/libffi.so.8
+        ${TC_INSTALL_DIR}/lib/libwayland-client.so
+        ${TC_INSTALL_DIR}/lib/libwayland-cursor.so
+        ${TC_INSTALL_DIR}/lib/librime.so
+        ${TC_INSTALL_DIR}/lib/libboost_system.so
+        ${TC_INSTALL_DIR}/lib/libboost_regex.so
+        ${TC_INSTALL_DIR}/lib/libboost_filesystem.so
+        ${TC_INSTALL_DIR}/lib/libboost_atomic.so
+        ${TC_INSTALL_DIR}/lib/libglog.so
+        ${TC_INSTALL_DIR}/lib/libyaml-cpp.so
+        ${TC_INSTALL_DIR}/lib/libgflags.so
+        ${TC_INSTALL_DIR}/lib/libleveldb.so
+        ${TC_INSTALL_DIR}/lib/libmarisa.so.0
+        ${TC_INSTALL_DIR}/lib/libopencc.so
+        ${TC_INSTALL_DIR}/lib/libunwind.so.8
+        ${TC_INSTALL_DIR}/lib/liblzma.so
+        ${TC_INSTALL_DIR}/bin/llama-cpp
+        DESTINATION ${MY_RUNTIME_DIR}
+        FOLLOW_SYMLINK_CHAIN
+    )
+elseif(WIN32)
+    file(COPY
+        ${TC_INSTALL_DIR}/bin/zlib1.dll
+        ${TC_INSTALL_DIR}/bin/zstd.dll
+        ${TC_INSTALL_DIR}/bin/fmt.dll
+        ${TC_INSTALL_DIR}/bin/spdlog.dll
+        ${TC_INSTALL_DIR}/bin/Catch2.dll
+        ${TC_INSTALL_DIR}/bin/boost_program_options.dll
+        ${TC_INSTALL_DIR}/bin/charset-1.dll
+        ${TC_INSTALL_DIR}/bin/iconv-2.dll
+        ${TC_INSTALL_DIR}/bin/cpr.dll
+        ${TC_INSTALL_DIR}/bin/libcrypto-1_1-x64.dll
+        ${TC_INSTALL_DIR}/bin/libssl-1_1-x64.dll
+        ${TC_INSTALL_DIR}/bin/libcurl.dll
+        ${TC_INSTALL_DIR}/bin/uv.dll
+        ${TC_INSTALL_DIR}/bin/sqlite3.dll
+        DESTINATION ${MY_RUNTIME_DIR}
+    )
+endif()
