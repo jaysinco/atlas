@@ -10,12 +10,8 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 add_subdirectory(thirdparty)
 add_subdirectory(toolkit)
 add_subdirectory(parser)
+add_subdirectory(misc)
 add_subdirectory(test)
-add_subdirectory(chat-llama)
-
-if(UNIX)
-    add_subdirectory(glviewer)
-endif()
 
 find_package(CUDAToolkit)
 if(CUDAToolkit_FOUND)
