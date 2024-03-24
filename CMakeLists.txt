@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Atlas C CXX)
+project(Atlas C CXX CUDA)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -18,7 +18,7 @@ elseif(WIN32)
         _WIN32_WINNT=0x0602
         NOMINMAX
     )
-    add_compile_options(/utf-8 /permissive-)
+    add_compile_options(-utf-8 -permissive-)
 endif()
 
 add_subdirectory(src)

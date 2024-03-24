@@ -1,5 +1,19 @@
 CompileFlags:
   CompilationDatabase: out/
+  Add:
+    # - --cuda-path=/usr/local/cuda-11.4
+    # - -I/usr/local/cuda-11.4/include
+    # - -L/usr/local/cuda-11.4/lib64
+    - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4
+    - -IC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/include
+    - -LC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64
+  Remove:
+    - -arch=*
+    - -rdc=*
+    - --generate-code=*
+    - -forward-unknown-to-host-compiler
+    - -G
+    - -permissive*
 
 InlayHints:
   Enabled: No

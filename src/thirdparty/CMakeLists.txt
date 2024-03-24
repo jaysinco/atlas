@@ -66,6 +66,7 @@ elseif(WIN32)
         ${TC_INSTALL_DIR}/bin/libcurl.dll
         ${TC_INSTALL_DIR}/bin/uv.dll
         ${TC_INSTALL_DIR}/bin/sqlite3.dll
+        ${TC_INSTALL_DIR}/bin/llama-cpp.exe
         DESTINATION ${MY_RUNTIME_DIR}
     )
 endif()

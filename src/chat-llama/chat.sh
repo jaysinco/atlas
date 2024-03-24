@@ -38,5 +38,5 @@ $SCRIPT_DIR/llama-cpp $GEN_OPTIONS \
   --file ${PROMPT_FILE} \
   --reverse-prompt "${USER_NAME}:" \
   --in-prefix ' ' \
-  --log-disable \
+  --log-enable \
   "$@"
