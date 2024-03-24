@@ -13,6 +13,7 @@ if(UNIX)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
     add_link_options(-rdynamic)
 elseif(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
     add_compile_definitions(
         WINVER=0x0601
         _WIN32_WINNT=0x0602

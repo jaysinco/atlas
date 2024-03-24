@@ -81,7 +81,6 @@ function cmake_build() {
     cmake $git_root -G "Ninja" \
         -DCMAKE_TOOLCHAIN_FILE=$TC_CMAKE_TOOLCHAIN \
         -DCMAKE_BUILD_TYPE=$build_type \
-        -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreadedDLL" \
         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$binary_folder \
     && \
     cp $build_folder/compile_commands.json $build_folder/.. \
