@@ -75,8 +75,9 @@ function cmake_build() {
     if [ $TC_CROSS_COMPILE -eq 1 ]; then
         tc_opt="-DCMAKE_TOOLCHAIN_FILE=$TC_CMAKE_TOOLCHAIN"
     else
-        tc_compiler=$([ "$os" == "linux" ] && echo "gcc" || echo "cl")
-        tc_opt="-DCMAKE_C_COMPILER=$tc_compiler -DCMAKE_CXX_COMPILER=$tc_compiler"
+        tc_compiler_c=$([ "$os" == "linux" ] && echo "gcc" || echo "cl")
+        tc_compiler_cxx=$([ "$os" == "linux" ] && echo "g++" || echo "cl")
+        tc_opt="-DCMAKE_C_COMPILER=$tc_compiler_c -DCMAKE_CXX_COMPILER=$tc_compiler_cxx"
     fi \
     && \
     mkdir -p \
