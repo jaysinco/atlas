@@ -15,5 +15,6 @@ add_subdirectory(test)
 
 find_package(CUDAToolkit)
 if(CUDAToolkit_FOUND)
+    enable_language(CUDA)
     add_subdirectory(cuda-samples)
 endif()
