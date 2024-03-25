@@ -72,6 +72,13 @@ function preprocess_code() {
 }
 
 function cmake_build() {
+    if [ $TC_CROSS_COMPILE -eq 1 ]; then
+        tc_opt="-DCMAKE_TOOLCHAIN_FILE=$TC_CMAKE_TOOLCHAIN"
+    else
+        tc_compiler=$([ "$os" == "linux" ] && echo "gcc" || echo "cl")
+        tc_opt="-DCMAKE_C_COMPILER=$tc_compiler -DCMAKE_CXX_COMPILER=$tc_compiler"
+    fi \
+    && \
     mkdir -p \
         $build_folder \
         $log_folder \
@@ -79,9 +86,11 @@ function cmake_build() {
     pushd $build_folder \
     && \
     cmake $git_root -G "Ninja" \
-        -DCMAKE_TOOLCHAIN_FILE=$TC_CMAKE_TOOLCHAIN \
         -DCMAKE_BUILD_TYPE=$build_type \
         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$binary_folder \
+        $tc_opt \
+        -DTC_INSTALL_DIR=$TC_INSTALL_DIR \
+        -DTC_THIRDPARTY=$TC_THIRDPARTY \
     && \
     cp $build_folder/compile_commands.json $build_folder/.. \
     && \
