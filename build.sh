@@ -89,6 +89,7 @@ function cmake_build() {
         -DCMAKE_BUILD_TYPE=$build_type \
         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$binary_folder \
         $tc_opt \
+        -DTC_CROSS_COMPILE=$TC_CROSS_COMPILE \
         -DTC_INSTALL_DIR=$TC_INSTALL_DIR \
         -DTC_THIRDPARTY=$TC_THIRDPARTY \
     && \

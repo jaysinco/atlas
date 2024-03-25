@@ -15,7 +15,7 @@ if(UNIX)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
 
     file(COPY
-        ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
+        $<IF:$<BOOL:${TC_CROSS_COMPILE}>,${TC_INSTALL_DIR}/../lib/libstdc++.so.6,>
         ${TC_INSTALL_DIR}/lib/libz.so
         ${TC_INSTALL_DIR}/lib/libfmt.so
         ${TC_INSTALL_DIR}/lib/libspdlog.so
