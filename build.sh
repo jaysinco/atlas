@@ -100,10 +100,18 @@ function cmake_build() {
 }
 
 function zip_binary() {
-    tar -czf \
-        $git_root/bin/$tuple_name.tar.gz \
-        -C $git_root/bin \
-        $tuple_name
+    if [ "$os" == "linux" ]; then
+        tar -czf \
+            $git_root/bin/$tuple_name.tar.gz \
+            -C $git_root/bin \
+            $tuple_name
+    else
+        pushd $git_root/bin
+        zip -rq \
+            $git_root/bin/$tuple_name.zip \
+            $tuple_name
+        popd
+    fi
 }
 
 
