@@ -14,8 +14,7 @@ if(UNIX)
     add_subdirectory(imgui)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
 
-    file(COPY
-        $<IF:$<BOOL:${TC_CROSS_COMPILE}>,${TC_INSTALL_DIR}/../lib/libstdc++.so.6,>
+    set(COPY_FILE_LIST
         ${TC_INSTALL_DIR}/lib/libz.so
         ${TC_INSTALL_DIR}/lib/libfmt.so
         ${TC_INSTALL_DIR}/lib/libspdlog.so
@@ -29,6 +28,14 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libcpr.so
         ${TC_INSTALL_DIR}/lib/libuv.so
         ${TC_INSTALL_DIR}/lib/libunwind.so.8
+    )
+
+    if(TC_CROSS_COMPILE)
+        list(APPEND COPY_FILE_LIST ${TC_INSTALL_DIR}/../lib/libstdc++.so.6)
+    endif()
+
+    file(COPY
+        ${COPY_FILE_LIST}
         DESTINATION ${MY_RUNTIME_DIR}
         FOLLOW_SYMLINK_CHAIN
     )
