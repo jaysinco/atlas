@@ -32,6 +32,7 @@ std::filesystem::path currentExeDir();
 std::filesystem::path currentExePath();
 std::filesystem::path getLoggingDir();
 std::filesystem::path getDataDir();
+std::filesystem::path getTempDir();
 
 MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);

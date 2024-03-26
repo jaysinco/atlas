@@ -2,7 +2,8 @@
 #include "./common.cuh"
 #include <cuda_runtime.h>
 #include <iostream>
-#include "stb_image_write.h"
+#include <opencv2/imgcodecs.hpp>
+#include "toolkit/toolkit.h"
 
 class vec3
 {
@@ -226,9 +227,9 @@ __global__ void render(uint8_t* fb, int max_x, int max_y, vec3 lower_left_corner
     ray r(origin, lower_left_corner + u * horizontal + v * vertical);
     vec3 c = color(r);
     int offset = j * max_x * 3 + i * 3;
-    fb[offset + 0] = 255.99 * c.r();
+    fb[offset + 2] = 255.99 * c.r();
     fb[offset + 1] = 255.99 * c.g();
-    fb[offset + 2] = 255.99 * c.b();
+    fb[offset + 0] = 255.99 * c.b();
 }
 
 int ray_tracing(int argc, char** argv)
@@ -263,7 +264,8 @@ int ray_tracing(int argc, char** argv)
     std::cerr << "took " << timer_seconds << " seconds.\n";
 
     // Output FB as Image
-    stbi_write_jpg("ray_tracing.jpg", nx, ny, 3, fb, 100);
+    cv::Mat img(ny, nx, CV_8UC3, fb);
+    cv::imwrite(toolkit::getTempDir() / "ray_tracing.jpg", img);
     CHECK(cudaFree(fb));
 
     return 0;

@@ -56,13 +56,14 @@ tuple_name=$do_arch-${build_type,,}
 build_folder=$git_root/out/$tuple_name
 binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
+temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
 
 source $tc_toolchain_dir/env.sh
 
 function clean_build() {
-    rm -rf $git_root/out
-    rm -rf $git_root/bin
+    rm -rf $build_folder
+    rm -rf $binary_folder
 }
 
 function preprocess_code() {
@@ -83,6 +84,7 @@ function cmake_build() {
     mkdir -p \
         $build_folder \
         $log_folder \
+        $temp_folder \
     && \
     pushd $build_folder \
     && \

@@ -39,6 +39,8 @@ std::filesystem::path getLoggingDir() { return currentExeDir() / "logs"; }
 
 std::filesystem::path getDataDir() { return currentExeDir() / "data"; }
 
+std::filesystem::path getTempDir() { return currentExeDir() / "temp"; }
+
 MyErrCode readFile(std::filesystem::path const& path, std::string& content)
 {
     std::ifstream in_file(path);

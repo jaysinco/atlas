@@ -9,6 +9,7 @@ add_subdirectory(${TC_THIRDPARTY}/libiconv libiconv)
 add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
+add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
 
 if(UNIX)
     add_subdirectory(imgui)
@@ -28,6 +29,8 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libcpr.so
         ${TC_INSTALL_DIR}/lib/libuv.so
         ${TC_INSTALL_DIR}/lib/libunwind.so.8
+        ${TC_INSTALL_DIR}/lib/libopencv_core.so
+        ${TC_INSTALL_DIR}/lib/libopencv_imgcodecs.so
     )
 
     if(TC_CROSS_COMPILE)
@@ -55,6 +58,8 @@ elseif(WIN32)
         ${TC_INSTALL_DIR}/bin/libcurl.dll
         ${TC_INSTALL_DIR}/bin/uv.dll
         ${TC_INSTALL_DIR}/bin/sqlite3.dll
+        ${TC_INSTALL_DIR}/bin/opencv_core481.dll
+        ${TC_INSTALL_DIR}/bin/opencv_imgcodecs481.dll
         DESTINATION ${MY_RUNTIME_DIR}
     )
 endif()

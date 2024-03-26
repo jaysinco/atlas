@@ -1,7 +1,8 @@
 #include "./fwd.cuh"
 #include "./common.cuh"
 #include <cuda_runtime.h>
-#include "stb_image_write.h"
+#include <opencv2/imgcodecs.hpp>
+#include "toolkit/toolkit.h"
 
 struct myComplex
 {
@@ -91,7 +92,8 @@ int julia_set(int argc, char** argv)
 
     uint8_t* pixels = new uint8_t[pixels_size];
     fill_julia_set(image_width, image_height, pixels);
-    stbi_write_jpg("julia_set.jpg", image_width, image_height, channel_num, pixels, 100);
+    cv::Mat img(image_height, image_width, CV_8UC3, pixels);
+    cv::imwrite(toolkit::getTempDir() / "julia_set.jpg", img);
     delete[] pixels;
 
     return 0;

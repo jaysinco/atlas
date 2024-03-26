@@ -15,15 +15,17 @@ add_executable(cuda-samples
     nested_hello_world.cu
     global_variable.cu
     test_cufft.cu
-    # julia_set.cu
+    julia_set.cu
     dot_product.cu
-    # ray_tracing.cu
+    ray_tracing.cu
     txi_gaussian.cu
 )
 
 target_link_libraries(cuda-samples PUBLIC
     CUDA::cudart_static
     CUDA::cufft
+    toolkit
+    opencv
 )
 
 add_executable(deviceQuery
