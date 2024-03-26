@@ -31,6 +31,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libunwind.so.8
         ${TC_INSTALL_DIR}/lib/libopencv_core.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgcodecs.so
+        ${TC_INSTALL_DIR}/lib/libopencv_imgproc.so
     )
 
     if(TC_CROSS_COMPILE)

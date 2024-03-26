@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cpp",
+            "name": "C++: Launch",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/x86_64-debug/test",
@@ -26,5 +26,11 @@
                 "miDebuggerPath": "/usr/bin/gdb"
             },
         },
+        {
+            "name": "CUDA C++: Launch",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/aarch64-debug/cuda-samples"
+        }
     ]
 }

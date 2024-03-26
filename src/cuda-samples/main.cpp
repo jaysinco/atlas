@@ -1,7 +1,10 @@
 #include "fwd.cuh"
+#include "toolkit/args.h"
 
 int main(int argc, char** argv)
 {
+    INIT_LOG(argc, argv);
+
     // hello_world(argc, argv);
     // check_device(argc, argv);
     // sum_matrix(argc, argv);
@@ -13,5 +16,6 @@ int main(int argc, char** argv)
     // dot_product(argc, argv);
     // ray_tracing(argc, argv);
     txi_gaussian(argc, argv);
+
     return 0;
 }
