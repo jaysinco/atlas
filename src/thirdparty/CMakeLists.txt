@@ -61,6 +61,13 @@ elseif(WIN32)
         ${TC_INSTALL_DIR}/bin/sqlite3.dll
         ${TC_INSTALL_DIR}/bin/opencv_core481.dll
         ${TC_INSTALL_DIR}/bin/opencv_imgcodecs481.dll
+        ${TC_INSTALL_DIR}/bin/opencv_imgproc481.dll
+        ${TC_INSTALL_DIR}/bin/jpeg8.dll
+        ${TC_INSTALL_DIR}/bin/libwebp.dll
+        ${TC_INSTALL_DIR}/bin/tiff.dll
+        ${TC_INSTALL_DIR}/bin/libpng16.dll
+        ${TC_INSTALL_DIR}/bin/openjp2.dll
+        ${TC_INSTALL_DIR}/bin/libsharpyuv.dll
         DESTINATION ${MY_RUNTIME_DIR}
     )
 endif()

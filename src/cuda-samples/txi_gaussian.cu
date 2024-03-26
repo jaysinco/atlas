@@ -89,7 +89,7 @@ int txi_gaussian(int argc, char** argv)
     auto fpath = toolkit::getTempDir() / "hdr.jpg";
 
     // read image
-    cv::Mat img = cv::imread(fpath, cv::IMREAD_COLOR);
+    cv::Mat img = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img.data == nullptr) {
         ELOG("failed to load image file: {}", fpath.string());
         return 1;
@@ -144,7 +144,7 @@ int txi_gaussian(int argc, char** argv)
     TIMER_END(total, "total")
 
     auto outfile = FSTR("{}-txi_gaussian{}", fpath.stem().string(), fpath.extension().string());
-    cv::imwrite(toolkit::getTempDir() / outfile, mat_img_out);
+    cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
     // free
     CHECK(cudaFree(d_img_in));

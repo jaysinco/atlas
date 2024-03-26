@@ -29,7 +29,7 @@ public:
 
     inline __host__ __device__ float b() const { return e[2]; }
 
-    inline __host__ __device__ const vec3& operator+() const { return *this; }
+    inline __host__ __device__ vec3 const& operator+() const { return *this; }
 
     inline __host__ __device__ vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
 
@@ -265,7 +265,7 @@ int ray_tracing(int argc, char** argv)
 
     // Output FB as Image
     cv::Mat img(ny, nx, CV_8UC3, fb);
-    cv::imwrite(toolkit::getTempDir() / "ray_tracing.jpg", img);
+    cv::imwrite((toolkit::getTempDir() / "ray_tracing.jpg").string(), img);
     CHECK(cudaFree(fb));
 
     return 0;

@@ -93,7 +93,7 @@ int julia_set(int argc, char** argv)
     uint8_t* pixels = new uint8_t[pixels_size];
     fill_julia_set(image_width, image_height, pixels);
     cv::Mat img(image_height, image_width, CV_8UC3, pixels);
-    cv::imwrite(toolkit::getTempDir() / "julia_set.jpg", img);
+    cv::imwrite((toolkit::getTempDir() / "julia_set.jpg").string(), img);
     delete[] pixels;
 
     return 0;
