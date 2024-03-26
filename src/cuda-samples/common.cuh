@@ -21,6 +21,14 @@
         }                                                                              \
     }
 
+#define TIMER_BEGIN(x) auto timer_##x = std::chrono::system_clock::now();
+#define TIMER_END(x, desc)                                                                        \
+    ILOG("{}, elapsed={:.1f}ms", (desc),                                                          \
+         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - \
+                                                               timer_##x)                         \
+                 .count() /                                                                       \
+             1000.);
+
 inline double seconds()
 {
     auto now = std::chrono::system_clock::now();

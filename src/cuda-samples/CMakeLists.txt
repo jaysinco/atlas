@@ -35,3 +35,8 @@ add_executable(deviceQuery
 target_link_libraries(deviceQuery PUBLIC
     CUDA::cudart_static
 )
+
+file(COPY
+    data/hdr.jpg
+    DESTINATION ${MY_RUNTIME_DIR}/temp
+)

@@ -1,9 +1,7 @@
-* text=auto 
+* text=auto
 *.h text
 *.cpp text
 *.sln text eol=crlf
 *.sh text eol=lf
-*.png binary
-*.jpg binary
 *.py linguist-detectable=false
 *.ttf filter=lfs diff=lfs merge=lfs -text

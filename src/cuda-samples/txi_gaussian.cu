@@ -86,7 +86,7 @@ int txi_gaussian(int argc, char** argv)
     float complex_k = 1.0;
     int output_mode = 1;
     int win_size = radius * 2 + 1;
-    auto fpath = toolkit::getTempDir() / "hdr1.bmp";
+    auto fpath = toolkit::getTempDir() / "hdr.jpg";
 
     // read image
     cv::Mat img = cv::imread(fpath, cv::IMREAD_COLOR);
@@ -111,6 +111,8 @@ int txi_gaussian(int argc, char** argv)
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
     CHECK(cudaMalloc(&d_img_out, image_size * 4 * sizeof(uint8_t)));
 
+    TIMER_BEGIN(total)
+
     // copy data in
     CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_size * 4 * sizeof(uint8_t),
                      cudaMemcpyHostToDevice));
@@ -120,6 +122,7 @@ int txi_gaussian(int argc, char** argv)
                      cudaMemcpyHostToDevice));
 
     // process
+    TIMER_BEGIN(ker_run)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
@@ -131,12 +134,17 @@ int txi_gaussian(int argc, char** argv)
     CHECK(cudaGetLastError());
 
     CHECK(cudaDeviceSynchronize());
+    TIMER_END(ker_run, "kernel run")
 
     // copy data out
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4);
     CHECK(cudaMemcpy(mat_img_out.data, d_img_out, image_size * 4 * sizeof(uint8_t),
                      cudaMemcpyDeviceToHost));
-    cv::imwrite(toolkit::getTempDir() / ("out_" + fpath.filename().string()), mat_img_out);
+
+    TIMER_END(total, "total")
+
+    auto outfile = FSTR("{}-txi_gaussian{}", fpath.stem().string(), fpath.extension().string());
+    cv::imwrite(toolkit::getTempDir() / outfile, mat_img_out);
 
     // free
     CHECK(cudaFree(d_img_in));
