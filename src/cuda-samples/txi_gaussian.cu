@@ -87,7 +87,7 @@ int txi_gaussian(int argc, char** argv)
 {
     // parameter
     float sigma = 100;
-    int radius = 5;
+    int radius = 8;
     float enhance_k = 1.5;
     float complex_k = 1.0;
     int output_mode = 1;
@@ -117,15 +117,12 @@ int txi_gaussian(int argc, char** argv)
 
     // buffer alloc
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-
     CHECK(cudaMalloc(&d_img_in, image_byte_len));
     CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
     CHECK(cudaMalloc(&d_img_out, image_byte_len));
 
     // image convert
-
     cv::Mat mat_img_in;
-
     cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
 
     CHECK(cudaDeviceSynchronize());
@@ -161,6 +158,7 @@ int txi_gaussian(int argc, char** argv)
 
     // copy data out
     std::vector<uint8_t> vec_img_out(image_byte_len);
+    memset(vec_img_out.data(), 0, image_byte_len);
     TIMER_BEGIN(copy_data_out)
     CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
