@@ -32,6 +32,14 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libopencv_core.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgcodecs.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgproc.so
+        ${TC_INSTALL_DIR}/lib/libjpeg.so
+        ${TC_INSTALL_DIR}/lib/libwebp.so
+        ${TC_INSTALL_DIR}/lib/libpng16.so
+        ${TC_INSTALL_DIR}/lib/libtiff.so
+        ${TC_INSTALL_DIR}/lib/libopenjp2.so
+        ${TC_INSTALL_DIR}/lib/libsharpyuv.so
+        ${TC_INSTALL_DIR}/lib/liblzma.so
+        ${TC_INSTALL_DIR}/lib/libzstd.so
     )
 
     if(TC_CROSS_COMPILE)

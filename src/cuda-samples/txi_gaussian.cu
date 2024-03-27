@@ -69,6 +69,14 @@ __global__ void conv_y(uint8_t* img_in, float* img_raw, float* ker, uint8_t* img
     img_out[(w_img * h * 4) + w * 4 + 3] = 255;
 }
 
+__global__ void warm_up_gpu()
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    float ia, ib;
+    ia = ib = 0.0f;
+    ib += ia + tid;
+}
+
 std::vector<float> GetGaussianKernel(int n, double sigmax)
 {
     auto gauss = cv::getGaussianKernel(n, sigmax, CV_32F);
@@ -99,6 +107,7 @@ int txi_gaussian(int argc, char** argv)
     int image_width = mat_img_in.cols;
     int image_height = mat_img_in.rows;
     int image_size = image_width * image_height;
+    int image_byte_len = image_size * 4 * sizeof(uint8_t);
 
     // buffer alloc
     uint8_t* d_img_in;
@@ -106,23 +115,30 @@ int txi_gaussian(int argc, char** argv)
     float* d_img_raw;
     uint8_t* d_img_out;
 
-    CHECK(cudaMalloc(&d_img_in, image_size * 4 * sizeof(uint8_t)));
+    CHECK(cudaMalloc(&d_img_in, image_byte_len));
     CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-    CHECK(cudaMalloc(&d_img_out, image_size * 4 * sizeof(uint8_t)));
+    CHECK(cudaMalloc(&d_img_out, image_byte_len));
 
-    TIMER_BEGIN(total)
+    // warm up
+    warm_up_gpu<<<10 * 1024 * 1024, 1024>>>();
+    CHECK(cudaDeviceSynchronize());
 
     // copy data in
-    CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_size * 4 * sizeof(uint8_t),
-                     cudaMemcpyHostToDevice));
+    TIMER_BEGIN(total)
+
+    TIMER_BEGIN(copy_data_in)
+    CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
+    TIMER_END(copy_data_in, fmt::format("host to device {} bytes", image_byte_len))
 
     std::vector<float> gaussian_kernel = GetGaussianKernel(win_size, sigma);
     CHECK(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
                      cudaMemcpyHostToDevice));
 
     // process
-    TIMER_BEGIN(ker_run)
+    CHECK(cudaDeviceSynchronize());
+
+    TIMER_BEGIN(kernel_run)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
@@ -134,12 +150,13 @@ int txi_gaussian(int argc, char** argv)
     CHECK(cudaGetLastError());
 
     CHECK(cudaDeviceSynchronize());
-    TIMER_END(ker_run, "kernel run")
+    TIMER_END(kernel_run, fmt::format("kernel run on {}x{}", image_width, image_height))
 
     // copy data out
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4);
-    CHECK(cudaMemcpy(mat_img_out.data, d_img_out, image_size * 4 * sizeof(uint8_t),
-                     cudaMemcpyDeviceToHost));
+    TIMER_BEGIN(copy_data_out)
+    CHECK(cudaMemcpy(mat_img_out.data, d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
+    TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
 
     TIMER_END(total, "total")
 
