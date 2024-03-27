@@ -77,12 +77,10 @@ __global__ void warm_up_gpu()
     ib += ia + tid;
 }
 
-std::vector<float> GetGaussianKernel(int n, double sigmax)
+void GetGaussianKernel(int n, double sigmax, float* data)
 {
     auto gauss = cv::getGaussianKernel(n, sigmax, CV_32F);
-    std::vector<float> buf(n);
-    std::memcpy(buf.data(), gauss.ptr<float>(), n * sizeof(float));
-    return std::move(buf);
+    std::memcpy(data, gauss.ptr<float>(), n * sizeof(float));
 }
 
 int txi_gaussian(int argc, char** argv)
@@ -96,42 +94,51 @@ int txi_gaussian(int argc, char** argv)
     int win_size = radius * 2 + 1;
     auto fpath = toolkit::getTempDir() / "hdr.jpg";
 
+    uint8_t* d_img_in;
+    float* d_ker;
+    float* d_img_raw;
+    uint8_t* d_img_out;
+
     // read image
     cv::Mat img = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img.data == nullptr) {
         ELOG("failed to load image file: {}", fpath.string());
         return 1;
     }
-    cv::Mat mat_img_in;
-    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
-    int image_width = mat_img_in.cols;
-    int image_height = mat_img_in.rows;
+
+    int image_width = img.cols;
+    int image_height = img.rows;
     int image_size = image_width * image_height;
     int image_byte_len = image_size * 4 * sizeof(uint8_t);
-
-    // buffer alloc
-    uint8_t* d_img_in;
-    float* d_ker;
-    float* d_img_raw;
-    uint8_t* d_img_out;
-
-    CHECK(cudaMalloc(&d_img_in, image_byte_len));
-    CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
-    CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-    CHECK(cudaMalloc(&d_img_out, image_byte_len));
 
     // warm up
     warm_up_gpu<<<10 * 1024 * 1024, 1024>>>();
     CHECK(cudaDeviceSynchronize());
 
-    // copy data in
+    // buffer alloc
+    CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
+
+    CHECK(cudaMalloc(&d_img_in, image_byte_len));
+    CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
+    CHECK(cudaMalloc(&d_img_out, image_byte_len));
+
+    // image convert
+
+    cv::Mat mat_img_in;
+
+    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
+
+    CHECK(cudaDeviceSynchronize());
     TIMER_BEGIN(total)
+
+    // copy data in
 
     TIMER_BEGIN(copy_data_in)
     CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
     TIMER_END(copy_data_in, fmt::format("host to device {} bytes", image_byte_len))
 
-    std::vector<float> gaussian_kernel = GetGaussianKernel(win_size, sigma);
+    std::vector<float> gaussian_kernel(win_size);
+    GetGaussianKernel(win_size, sigma, gaussian_kernel.data());
     CHECK(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
                      cudaMemcpyHostToDevice));
 
@@ -153,13 +160,15 @@ int txi_gaussian(int argc, char** argv)
     TIMER_END(kernel_run, fmt::format("kernel run on {}x{}", image_width, image_height))
 
     // copy data out
-    cv::Mat mat_img_out(image_height, image_width, CV_8UC4);
+    std::vector<uint8_t> vec_img_out(image_byte_len);
     TIMER_BEGIN(copy_data_out)
-    CHECK(cudaMemcpy(mat_img_out.data, d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
 
     TIMER_END(total, "total")
 
+    // write image
+    cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
     auto outfile = FSTR("{}-txi_gaussian{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
