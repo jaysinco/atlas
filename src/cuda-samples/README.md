@@ -26,5 +26,6 @@ output_mode = 'texture'
 
 | SOC | GPU | OS | ARCH | API | Image Size (bytes) | Kernel Run (ms) | Host To Device Copy (ms) | Device To Host Copy (ms) |
 | --- | --- | -- | ---- | --- | ------------------ | --------------- | ------------------------ | ------------------------ |
-| RK3588 | Mali-G610 MP4 | Linux | aarch64 | OpenCL | 8294400 | 34.2 | 3.3 | 2.7 |
-| Jetson AGX Orin 64GB | Ampere GPU | Linux | aarch64 | CUDA | 8294400 | 4.4 | 1.3 | 2.2 |
+| RK3588 | Mali-G610 MP4 | Linux | aarch64 | OpenCL 2.1 | 8294400 | 34.2 | 3.3 | 2.7 |
+| Jetson AGX Orin 64GB | Ampere GPU | Linux | aarch64 | CUDA 11.4 | 8294400 | 4.4 | 1.3 | 2.2 |
+| / | RTX 3050 Laptop | Windows | x86_64 | CUDA 11.4 | 8294400 | 1.9 | 1.4 | 1.7 |
