@@ -7,7 +7,7 @@
 #include <opencv2/ximgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
-#define USE_MANAGERD_MEMORY 1
+#define USE_MANAGERD_MEMORY 0
 
 namespace cg = cooperative_groups;
 
@@ -95,8 +95,8 @@ int txi_gaussian(int argc, char** argv)
     int output_mode = 1;
     int win_size = radius * 2 + 1;
     auto fpath = toolkit::getTempDir() / "hdr.jpg";
-    int target_image_width = 3840;   // 1920 2560 3840
-    int target_image_height = 2160;  // 1080 1440 2160
+    int target_image_width = 1920;   // 1920 2560 3840
+    int target_image_height = 1080;  // 1080 1440 2160
 
     uint8_t* d_img_in;
     float* d_ker;
@@ -124,9 +124,9 @@ int txi_gaussian(int argc, char** argv)
     // buffer alloc
 #if USE_MANAGERD_MEMORY
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-    CHECK(cudaMallocManaged(&d_img_in, image_byte_len));
-    CHECK(cudaMallocManaged(&d_ker, win_size * sizeof(float)));
-    CHECK(cudaMallocManaged(&d_img_out, image_byte_len));
+    CHECK(cudaMallocManaged(&d_img_in, image_byte_len, cudaMemAttachHost));
+    CHECK(cudaMallocManaged(&d_ker, win_size * sizeof(float), cudaMemAttachHost));
+    CHECK(cudaMallocManaged(&d_img_out, image_byte_len, cudaMemAttachGlobal));
 #else
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
     CHECK(cudaMalloc(&d_img_in, image_byte_len));
@@ -139,11 +139,11 @@ int txi_gaussian(int argc, char** argv)
 // image convert
 #if USE_MANAGERD_MEMORY
     cv::Mat mat_img_in(image_height, image_width, CV_8UC4, d_img_in);
-    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
 #else
     cv::Mat mat_img_in;
-    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
 #endif
+
+    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
 
     // copy data in
 #if !USE_MANAGERD_MEMORY
@@ -164,6 +164,11 @@ int txi_gaussian(int argc, char** argv)
     // process
     CHECK(cudaDeviceSynchronize());
 
+#if USE_MANAGERD_MEMORY
+    // CHECK(cudaStreamAttachMemAsync(nullptr, d_img_in, 0, cudaMemAttachGlobal));
+    // CHECK(cudaStreamAttachMemAsync(nullptr, d_ker, 0, cudaMemAttachGlobal));
+#endif
+
     TIMER_BEGIN(kernel_run)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
@@ -181,7 +186,6 @@ int txi_gaussian(int argc, char** argv)
     // copy data out
 #if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
-    // memset(vec_img_out.data(), 0, image_byte_len);
     TIMER_BEGIN(copy_data_out)
     CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
@@ -189,6 +193,8 @@ int txi_gaussian(int argc, char** argv)
 
     // write image
 #if USE_MANAGERD_MEMORY
+    // CHECK(cudaStreamAttachMemAsync(nullptr, d_img_out, 0, cudaMemAttachHost));
+    // CHECK(cudaDeviceSynchronize());
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, d_img_out);
 #else
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
