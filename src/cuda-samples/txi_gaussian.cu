@@ -7,6 +7,8 @@
 #include <opencv2/ximgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
+#define USE_MANAGERD_MEMORY 1
+
 namespace cg = cooperative_groups;
 
 __device__ float clamp(float x, float a, float b) { return max(a, min(b, x)); }
@@ -120,28 +122,44 @@ int txi_gaussian(int argc, char** argv)
     CHECK(cudaDeviceSynchronize());
 
     // buffer alloc
+#if USE_MANAGERD_MEMORY
+    CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
+    CHECK(cudaMallocManaged(&d_img_in, image_byte_len));
+    CHECK(cudaMallocManaged(&d_ker, win_size * sizeof(float)));
+    CHECK(cudaMallocManaged(&d_img_out, image_byte_len));
+#else
     CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
     CHECK(cudaMalloc(&d_img_in, image_byte_len));
     CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
     CHECK(cudaMalloc(&d_img_out, image_byte_len));
+#endif
 
-    // image convert
-    cv::Mat mat_img_in;
-    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
-
-    CHECK(cudaDeviceSynchronize());
     TIMER_BEGIN(total)
 
-    // copy data in
+// image convert
+#if USE_MANAGERD_MEMORY
+    cv::Mat mat_img_in(image_height, image_width, CV_8UC4, d_img_in);
+    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
+#else
+    cv::Mat mat_img_in;
+    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
+#endif
 
+    // copy data in
+#if !USE_MANAGERD_MEMORY
     TIMER_BEGIN(copy_data_in)
     CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
     TIMER_END(copy_data_in, fmt::format("host to device {} bytes", image_byte_len))
+#endif
 
+#if USE_MANAGERD_MEMORY
+    GetGaussianKernel(win_size, sigma, d_ker);
+#else
     std::vector<float> gaussian_kernel(win_size);
     GetGaussianKernel(win_size, sigma, gaussian_kernel.data());
     CHECK(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
                      cudaMemcpyHostToDevice));
+#endif
 
     // process
     CHECK(cudaDeviceSynchronize());
@@ -161,18 +179,24 @@ int txi_gaussian(int argc, char** argv)
     TIMER_END(kernel_run, fmt::format("kernel run on {}x{}", image_width, image_height))
 
     // copy data out
+#if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
-    memset(vec_img_out.data(), 0, image_byte_len);
+    // memset(vec_img_out.data(), 0, image_byte_len);
     TIMER_BEGIN(copy_data_out)
     CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
-
-    TIMER_END(total, "total")
+#endif
 
     // write image
+#if USE_MANAGERD_MEMORY
+    cv::Mat mat_img_out(image_height, image_width, CV_8UC4, d_img_out);
+#else
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
+#endif
     auto outfile = FSTR("{}-txi_gaussian{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
+
+    TIMER_END(total, "total")
 
     // free
     CHECK(cudaFree(d_img_in));
