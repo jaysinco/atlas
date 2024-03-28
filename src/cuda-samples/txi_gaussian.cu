@@ -93,6 +93,8 @@ int txi_gaussian(int argc, char** argv)
     int output_mode = 1;
     int win_size = radius * 2 + 1;
     auto fpath = toolkit::getTempDir() / "hdr.jpg";
+    int target_image_width = 3840;   // 1920 2560 3840
+    int target_image_height = 2160;  // 1080 1440 2160
 
     uint8_t* d_img_in;
     float* d_ker;
@@ -100,11 +102,13 @@ int txi_gaussian(int argc, char** argv)
     uint8_t* d_img_out;
 
     // read image
-    cv::Mat img = cv::imread(fpath.string(), cv::IMREAD_COLOR);
-    if (img.data == nullptr) {
+    cv::Mat img_file = cv::imread(fpath.string(), cv::IMREAD_COLOR);
+    if (img_file.data == nullptr) {
         ELOG("failed to load image file: {}", fpath.string());
         return 1;
     }
+    cv::Mat img;
+    cv::resize(img_file, img, cv::Size(target_image_width, target_image_height));
 
     int image_width = img.cols;
     int image_height = img.rows;
