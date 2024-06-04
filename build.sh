@@ -5,7 +5,7 @@ set -e
 # flags
 
 do_clean=0
-do_arch=`arch`
+do_arch=`uname -m`
 do_build_debug=0
 do_preprocess=0
 do_zip=0
@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
             echo
             echo "Build Options:"
             echo "  -c         clean before build"
-            echo "  -a ARCH    target arch, default '$(arch)'"
+            echo "  -a ARCH    target arch, default '$(uname -m)'"
             echo "  -d         build debug version"
             echo "  -p         preprocess code before build"
             echo "  -z         zip binary after build"
@@ -45,7 +45,7 @@ if [ $do_build_debug -eq 1 ]; then
     build_type=Debug
 fi
 
-arch=`arch`
+arch=`uname -m`
 case "$OSTYPE" in
     linux*)   os=linux ;;
     msys*)    os=windows ;;
