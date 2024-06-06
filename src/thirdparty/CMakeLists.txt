@@ -40,6 +40,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libsharpyuv.so
         ${TC_INSTALL_DIR}/lib/liblzma.so
         ${TC_INSTALL_DIR}/lib/libzstd.so
+        ${TC_INSTALL_DIR}/lib/libcurl.so
     )
 
     if(TC_CROSS_COMPILE)

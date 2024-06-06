@@ -11,7 +11,7 @@ set(MY_RUNTIME_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 if(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-    add_link_options(-rdynamic)
+    add_link_options("-rdynamic" "-Wl,--disable-new-dtags")
 elseif(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
     add_compile_definitions(
