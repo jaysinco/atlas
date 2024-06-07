@@ -1,4 +1,3 @@
-#include "./fwd.cuh"
 #include "./common.cuh"
 #include "toolkit/logging.h"
 #include <cuda_runtime.h>
@@ -71,14 +70,6 @@ __global__ void conv_y(uint8_t* img_in, float* img_raw, float* ker, uint8_t* img
     img_out[(w_img * h * 4) + w * 4 + 3] = 255;
 }
 
-__global__ void warm_up_gpu()
-{
-    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    float ia, ib;
-    ia = ib = 0.0f;
-    ib += ia + tid;
-}
-
 void GetGaussianKernel(int n, double sigmax, float* data)
 {
     auto gauss = cv::getGaussianKernel(n, sigmax, CV_32F);
@@ -118,8 +109,7 @@ int txi_gaussian(int argc, char** argv)
     int image_byte_len = image_size * 4 * sizeof(uint8_t);
 
     // warm up
-    warm_up_gpu<<<10 * 1024 * 1024, 1024>>>();
-    CHECK(cudaDeviceSynchronize());
+    warmUpGpu();
 
     // buffer alloc
 #if USE_MANAGERD_MEMORY

@@ -1,4 +1,3 @@
-#include "./fwd.cuh"
 #include "./common.cuh"
 #include <iostream>
 #include <cuda.h>
@@ -49,11 +48,26 @@ int test_cufft(int argc, char** argv)
     // Transfer inputs into device memory
     CHECK(cudaMemcpy(dComplex, complex, sizeof(cufftComplex) * ns, cudaMemcpyHostToDevice));
 
+    // warm up
+    warmUpGpu();
+
     // Execute a complex-to-complex 1D FFT
-    TIMER_BEGIN(fft2)
+    cudaEvent_t start, stop;
+    CHECK(cudaEventCreate(&start));
+    CHECK(cudaEventCreate(&stop));
+    CHECK(cudaEventRecord(start, 0));
+
     CHECK_CUFFT(cufftExecC2C(plan, dComplex, dComplex, CUFFT_FORWARD));
-    CHECK(cudaDeviceSynchronize());
-    TIMER_END(fft2, fmt::format("fft2 {}x{}", nx, ny))
+
+    CHECK(cudaEventRecord(stop, 0));
+    CHECK(cudaEventSynchronize(stop););
+
+    float time_ms;
+    CHECK(cudaEventElapsedTime(&time_ms, start, stop));
+    CHECK(cudaEventDestroy(start));
+    CHECK(cudaEventDestroy(stop));
+
+    ILOG("fft2 {}x{}: {:.3f}ms", nx, ny, time_ms);
 
     // Retrieve the results into host memory
     CHECK(cudaMemcpy(complex, dComplex, sizeof(cufftComplex) * ns, cudaMemcpyDeviceToHost));

@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include "toolkit/logging.h"
+#include "./fwd.h"
 
 #define CHECK(call)                                                           \
     {                                                                         \
@@ -28,9 +29,5 @@
                  .count() /                                                                       \
              1000.);
 
-inline double seconds()
-{
-    auto now = std::chrono::system_clock::now();
-    auto micro = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch());
-    return micro.count() * 1e-6;
-}
+double seconds();
+void warmUpGpu();

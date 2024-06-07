@@ -1,4 +1,4 @@
-#include "fwd.cuh"
+#include "./fwd.h"
 #include "toolkit/args.h"
 
 int main(int argc, char** argv)

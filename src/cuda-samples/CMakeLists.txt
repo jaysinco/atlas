@@ -7,6 +7,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 add_executable(cuda-samples
+    common.cu
     main.cpp
     hello_world.cu
     check_device.cu

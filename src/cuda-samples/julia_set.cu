@@ -1,4 +1,3 @@
-#include "./fwd.cuh"
 #include "./common.cuh"
 #include <cuda_runtime.h>
 #include <opencv2/imgcodecs.hpp>
