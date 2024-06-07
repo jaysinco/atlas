@@ -1,100 +1,67 @@
 #include "./fwd.cuh"
 #include "./common.cuh"
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
 #include <cuda.h>
 #include <cufft.h>
 
 #define MY_PI 3.14159265358979323846
 
-/*
- * An example usage of the cuFFT library. This example performs a 1D forward
- * FFT.
- */
-
-int nprints = 30;
-
-/*
- * Create N fake samplings along the function cos(x). These samplings will be
- * stored as single-precision floating-point values.
- */
-void generate_fake_samples(int N, float** out)
+void print_2d(char const* header, cufftComplex* cs, int nx, int ny)
 {
-    int i;
-    float* result = (float*)malloc(sizeof(float) * N);
-    double delta = MY_PI / 20.0;
-
-    for (i = 0; i < N; i++) {
-        result[i] = cos(i * delta);
+    std::cout << header << std::endl;
+    for (int x = 0; x < nx; ++x) {
+        for (int y = 0; y < ny; ++y) {
+            cufftComplex& it = cs[y + x * ny];
+            std::cout << it.x << "+" << it.y << "i"
+                      << " ";
+        }
+        std::cout << "\n";
     }
-
-    *out = result;
-}
-
-/*
- * Convert a real-valued vector r of length Nto a complex-valued vector.
- */
-void real_to_complex(float* r, cufftComplex** complx, int N)
-{
-    int i;
-    (*complx) = (cufftComplex*)malloc(sizeof(cufftComplex) * N);
-
-    for (i = 0; i < N; i++) {
-        (*complx)[i].x = r[i];
-        (*complx)[i].y = 0;
-    }
+    std::cout << std::endl;
 }
 
 int test_cufft(int argc, char** argv)
 {
-    int i;
-    int N = 2048;
-    float* samples;
-    cufftHandle plan = 0;
-    cufftComplex *dComplexSamples, *complexSamples, *complexFreq;
-
-    // Input Generation
-    generate_fake_samples(N, &samples);
-    real_to_complex(samples, &complexSamples, N);
-    complexFreq = (cufftComplex*)malloc(sizeof(cufftComplex) * N);
-    printf("Initial Samples:\n");
-
-    for (i = 0; i < nprints; i++) {
-        printf("  %2.4f\n", samples[i]);
-    }
-
-    printf("  ...\n");
-
-    // Setup the cuFFT plan
-    CHECK_CUFFT(cufftPlan1d(&plan, N, CUFFT_C2C, 1));
+    int nx = 1920;
+    int ny = 1080;
+    int ns = nx * ny;
+    cufftComplex *dComplex, *complex;
 
     // Allocate device memory
-    CHECK(cudaMalloc((void**)&dComplexSamples, sizeof(cufftComplex) * N));
+    complex = static_cast<cufftComplex*>(malloc(sizeof(cufftComplex) * ns));
+    CHECK(cudaMalloc(&dComplex, sizeof(cufftComplex) * ns));
+
+    // Input Generation
+    for (int x = 0; x < nx; ++x) {
+        for (int y = 0; y < ny; ++y) {
+            cufftComplex c;
+            c.x = x + y;
+            c.y = 0;
+            complex[y + x * ny] = c;
+        }
+    }
+    // print_2d("=== INPUT ===", complex, nx, ny);
+
+    // Setup the cuFFT plan
+    cufftHandle plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&plan, nx, ny, CUFFT_C2C));
 
     // Transfer inputs into device memory
-    CHECK(cudaMemcpy(dComplexSamples, complexSamples, sizeof(cufftComplex) * N,
-                     cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(dComplex, complex, sizeof(cufftComplex) * ns, cudaMemcpyHostToDevice));
 
     // Execute a complex-to-complex 1D FFT
-    CHECK_CUFFT(cufftExecC2C(plan, dComplexSamples, dComplexSamples, CUFFT_FORWARD));
+    TIMER_BEGIN(fft2)
+    CHECK_CUFFT(cufftExecC2C(plan, dComplex, dComplex, CUFFT_FORWARD));
+    CHECK(cudaDeviceSynchronize());
+    TIMER_END(fft2, fmt::format("fft2 {}x{}", nx, ny))
 
     // Retrieve the results into host memory
-    CHECK(
-        cudaMemcpy(complexFreq, dComplexSamples, sizeof(cufftComplex) * N, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(complex, dComplex, sizeof(cufftComplex) * ns, cudaMemcpyDeviceToHost));
 
-    printf("Fourier Coefficients:\n");
+    // print_2d("=== OUTPUT ===", complex, nx, ny);
 
-    for (i = 0; i < nprints; i++) {
-        printf("  %d: (%2.4f, %2.4f)\n", i + 1, complexFreq[i].x, complexFreq[i].y);
-    }
-
-    printf("  ...\n");
-
-    free(samples);
-    free(complexSamples);
-    free(complexFreq);
-
-    CHECK(cudaFree(dComplexSamples));
+    free(complex);
+    CHECK(cudaFree(dComplex));
     CHECK_CUFFT(cufftDestroy(plan));
 
     return 0;
