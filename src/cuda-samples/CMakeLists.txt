@@ -46,5 +46,6 @@ target_link_libraries(deviceQuery PUBLIC
 file(COPY
     data/hdr.jpg
     data/mnist.onnx
+    data/mnist-input
     DESTINATION ${MY_RUNTIME_DIR}/data
 )
