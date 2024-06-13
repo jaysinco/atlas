@@ -14,4 +14,4 @@ int dot_product(int argc, char** argv);
 int ray_tracing(int argc, char** argv);
 int txi_gaussian(int argc, char** argv);
 int txi_guided(int argc, char** argv);
-int test_tensorrt(int argc, char** argv);
+int trt_mnist(int argc, char** argv);

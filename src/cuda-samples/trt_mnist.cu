@@ -247,7 +247,7 @@ int infer(MyLogger& logger, nvinfer1::IHostMemory* plan)
     return 0;
 }
 
-int test_tensorrt(int argc, char** argv)
+int trt_mnist(int argc, char** argv)
 {
     MyLogger logger;
     nvinfer1::IHostMemory* plan;

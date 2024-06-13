@@ -23,7 +23,7 @@ add_executable(cuda-samples
     ray_tracing.cu
     txi_gaussian.cu
     txi_guided.cu
-    $<IF:$<BOOL:${TensorRT_FOUND}>,test_tensorrt.cu,>
+    $<IF:$<BOOL:${TensorRT_FOUND}>,trt_mnist.cu,>
 )
 
 target_link_libraries(cuda-samples PUBLIC
