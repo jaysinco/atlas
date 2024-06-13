@@ -1,5 +1,7 @@
 #include "./common.cuh"
 
+__device__ float clamp(float x, float a, float b) { return max(a, min(b, x)); }
+
 double seconds()
 {
     auto now = std::chrono::system_clock::now();

@@ -29,5 +29,7 @@
                  .count() /                                                                       \
              1000.);
 
+__device__ float clamp(float x, float a, float b);
+
 double seconds();
 void warmUpGpu();

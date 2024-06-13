@@ -10,8 +10,6 @@
 
 namespace cg = cooperative_groups;
 
-__device__ float clamp(float x, float a, float b) { return max(a, min(b, x)); }
-
 __global__ void conv_x(uint8_t* img_in, float* ker, float* img_raw, int w_img, int h_img, int n_ker)
 {
     int w = blockDim.x * blockIdx.x + threadIdx.x;

@@ -20,6 +20,7 @@ add_executable(cuda-samples
     dot_product.cu
     ray_tracing.cu
     txi_gaussian.cu
+    txi_guided.cu
 )
 
 target_link_libraries(cuda-samples PUBLIC
