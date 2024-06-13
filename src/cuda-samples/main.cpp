@@ -16,7 +16,7 @@ int main(int argc, char** argv)
     // dot_product(argc, argv);
     // ray_tracing(argc, argv);
     // txi_gaussian(argc, argv);
-    txi_guided(argc, argv);
-
+    // txi_guided(argc, argv);
+    test_tensorrt(argc, argv);
     return 0;
 }

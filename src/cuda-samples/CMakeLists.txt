@@ -2,6 +2,8 @@ set(CMAKE_CUDA_ARCHITECTURES 86)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION TRUE)
 
+find_package(TensorRT)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
 endif()
@@ -21,6 +23,7 @@ add_executable(cuda-samples
     ray_tracing.cu
     txi_gaussian.cu
     txi_guided.cu
+    $<IF:$<BOOL:${TensorRT_FOUND}>,test_tensorrt.cu,>
 )
 
 target_link_libraries(cuda-samples PUBLIC
@@ -28,6 +31,8 @@ target_link_libraries(cuda-samples PUBLIC
     CUDA::cufft
     toolkit
     opencv
+    $<IF:$<BOOL:${TensorRT_FOUND}>,trt::nvinfer,>
+    $<IF:$<BOOL:${TensorRT_FOUND}>,trt::nvonnxparser,>
 )
 
 add_executable(deviceQuery
@@ -40,5 +45,6 @@ target_link_libraries(deviceQuery PUBLIC
 
 file(COPY
     data/hdr.jpg
-    DESTINATION ${MY_RUNTIME_DIR}/temp
+    data/mnist.onnx
+    DESTINATION ${MY_RUNTIME_DIR}/data
 )

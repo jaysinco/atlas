@@ -83,7 +83,7 @@ int txi_gaussian(int argc, char** argv)
     float complex_k = 1.0;
     int output_mode = 1;
     int win_size = radius * 2 + 1;
-    auto fpath = toolkit::getTempDir() / "hdr.jpg";
+    auto fpath = toolkit::getDataDir() / "hdr.jpg";
     int target_image_width = 1920;   // 1920 2560 3840
     int target_image_height = 1080;  // 1080 1440 2160
 
