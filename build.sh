@@ -7,6 +7,7 @@ set -e
 do_clean=0
 do_arch=`uname -m`
 do_build_debug=0
+do_build_driver=0
 do_preprocess=0
 do_zip=0
 
@@ -20,6 +21,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -c         clean before build"
             echo "  -a ARCH    target arch, default '$(uname -m)'"
             echo "  -d         build debug version"
+            echo "  -k         build linux driver"
             echo "  -p         preprocess code before build"
             echo "  -z         zip binary after build"
             echo "  -h         print command line options"
@@ -29,6 +31,7 @@ while [[ $# -gt 0 ]]; do
         -c) do_clean=1 && shift ;;
         -a) do_arch=$2 && shift && shift ;;
         -d) do_build_debug=1 && shift ;;
+        -k) do_build_driver=1 && shift ;;
         -p) do_preprocess=1 && shift ;;
         -z) do_zip=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
@@ -140,7 +143,9 @@ fi \
 && \
 cmake_build \
 && \
-linux_driver_build \
+if [ $do_build_driver -eq 1 ]; then
+    linux_driver_build
+fi \
 && \
 if [ $do_zip -eq 1 ]; then
     zip_binary
