@@ -58,12 +58,14 @@ binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
 temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
+driver_src_folder=$source_folder/linux-drivers
 
 source $tc_toolchain_dir/env.sh
 
 function clean_build() {
     rm -rf $build_folder
     rm -rf $binary_folder
+    make -C $driver_src_folder clean
 }
 
 function preprocess_code() {
@@ -101,6 +103,12 @@ function cmake_build() {
     cmake --build . --parallel=`nproc`
 }
 
+function linux_driver_build() {
+    if [ "$os" == "linux" -a $TC_CROSS_COMPILE -eq 0 ]; then
+        bear -- make -C $driver_src_folder
+    fi
+}
+
 function zip_binary() {
     if [ "$os" == "linux" ]; then
         tar -czf \
@@ -126,6 +134,8 @@ if [ $do_preprocess -eq 1 ]; then
 fi \
 && \
 cmake_build \
+&& \
+linux_driver_build \
 && \
 if [ $do_zip -eq 1 ]; then
     zip_binary
