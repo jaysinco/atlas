@@ -105,7 +105,11 @@ function cmake_build() {
 
 function linux_driver_build() {
     if [ "$os" == "linux" -a $TC_CROSS_COMPILE -eq 0 ]; then
-        bear -- make -C $driver_src_folder
+        bear \
+            --output $build_folder/../compile_commands.json \
+            --append \
+            -- \
+            make -C $driver_src_folder
     fi
 }
 
