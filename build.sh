@@ -65,7 +65,6 @@ source $tc_toolchain_dir/env.sh
 function clean_build() {
     rm -rf $build_folder
     rm -rf $binary_folder
-    make -C $driver_src_folder clean
 }
 
 function preprocess_code() {
@@ -109,7 +108,9 @@ function linux_driver_build() {
             --output $build_folder/../compile_commands.json \
             --append \
             -- \
-            make -C $driver_src_folder
+            make -C $driver_src_folder \
+        && \
+        mv $driver_src_folder/*.ko $binary_folder/
     fi
 }
 
