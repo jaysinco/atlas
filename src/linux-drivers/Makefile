@@ -1,5 +1,6 @@
 ifneq ($(KERNELRELEASE),)
 	obj-m += hello.o
+	ccflags-y := -std=gnu99 -Wno-declaration-after-statement
 else
 	KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 	PWD := $(shell pwd)

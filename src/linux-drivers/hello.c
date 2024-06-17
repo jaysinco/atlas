@@ -17,13 +17,13 @@ struct my_dev
 int nr_devs = 1;
 int my_major;
 int my_minor = 0;
+struct class* my_class;
 struct my_dev* my_devices;
 
 loff_t mySeek(struct file* filp, loff_t off, int whence)
 {
-    struct scull_dev* dev = filp->private_data;
+    // struct scull_dev* dev = filp->private_data;
     loff_t newpos;
-
     switch (whence) {
         case 0: /* SEEK_SET */
             newpos = off;
@@ -58,8 +58,7 @@ ssize_t myWrite(struct file* filp, char __user const* buf, size_t count, loff_t*
 
 int myOpen(struct inode* inode, struct file* filp)
 {
-    struct my_dev* dev;
-    dev = container_of(inode->i_cdev, struct my_dev, cdev);
+    struct my_dev* dev = container_of(inode->i_cdev, struct my_dev, cdev);
     filp->private_data = dev;
     return 0;
 }
@@ -75,30 +74,32 @@ struct file_operations my_fops = {
     .release = myRelease,
 };
 
-static void addDev(struct my_dev* dev, int major, int minor, int index)
+static void addDev(struct my_dev* dev, struct class* cls, int major, int minor, int index)
 {
-    int err, devno = MKDEV(major, minor + index);
-
+    int devno = MKDEV(major, minor + index);
     cdev_init(&dev->cdev, &my_fops);
     dev->cdev.owner = THIS_MODULE;
-    err = cdev_add(&dev->cdev, devno, 1);
+    int err = cdev_add(&dev->cdev, devno, 1);
     if (err) {
         printk(KERN_ERR "hello: failed to add device %d:%d\n", index, err);
         return;
+    }
+    if (cls) {
+        struct device* d = device_create(cls, NULL, devno, NULL, "hello%d", index);
+        if (d == NULL) {
+            printk(KERN_WARNING "failed to create device\n");
+        }
     }
     printk(KERN_INFO "hello: add device %d:%d\n", major, minor + index);
 }
 
 static int __init myInit(void)
 {
-    int i;
-    int err;
-    dev_t dev;
-
     printk(KERN_INFO "hello: Hello, world\n");
     printk(KERN_INFO "hello: The process is \"%s\" (pid %i)\n", current->comm, current->pid);
 
-    err = alloc_chrdev_region(&dev, my_minor, nr_devs, "hello");
+    dev_t dev;
+    int err = alloc_chrdev_region(&dev, my_minor, nr_devs, "hello");
     my_major = MAJOR(dev);
     if (err < 0) {
         printk(KERN_ERR "hello: faild to get major %d\n", my_major);
@@ -107,13 +108,17 @@ static int __init myInit(void)
 
     my_devices = kmalloc(nr_devs * sizeof(struct my_dev), GFP_KERNEL);
     if (!my_devices) {
-        err = -ENOMEM;
-        return err;
+        return -ENOMEM;
     }
     memset(my_devices, 0, nr_devs * sizeof(struct my_dev));
 
-    for (i = 0; i < nr_devs; i++) {
-        addDev(&my_devices[i], my_major, my_minor, i);
+    my_class = class_create(THIS_MODULE, "hello_dev");
+    if (my_class == NULL) {
+        printk(KERN_WARNING "failed to create class\n");
+    }
+
+    for (int i = 0; i < nr_devs; i++) {
+        addDev(&my_devices[i], my_class, my_major, my_minor, i);
     }
 
     return 0;
@@ -121,17 +126,20 @@ static int __init myInit(void)
 
 static void __exit myExit(void)
 {
-    int i;
-    dev_t devno;
-
     if (my_devices) {
-        for (i = 0; i < nr_devs; i++) {
+        for (int i = 0; i < nr_devs; i++) {
+            if (my_class) {
+                device_destroy(my_class, my_devices[i].cdev.dev);
+            }
             cdev_del(&my_devices[i].cdev);
         }
         kfree(my_devices);
     }
+    if (my_class) {
+        class_destroy(my_class);
+    }
 
-    devno = MKDEV(my_major, my_minor);
+    dev_t devno = MKDEV(my_major, my_minor);
     unregister_chrdev_region(devno, nr_devs);
 
     printk(KERN_INFO "hello: Goodbye, world\n");

@@ -15,8 +15,4 @@ device="hello"
 mode="666"
 
 sudo insmod $binary_folder/$module.ko
-
-major=$(awk "\$2==\"$module\" {print \$1}" /proc/devices)
-sudo rm -f /dev/${device}0
-sudo mknod /dev/${device}0 c $major 0
 sudo chmod $mode /dev/${device}0
