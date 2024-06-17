@@ -17,14 +17,15 @@ CompileFlags:
     - -mrecord-mcount
     - -fconserve-stack
     - -fno-allow-store-data-races
-    - -mfunction-return=thunk-extern
+    - -mfunction-return=*
     - -mindirect-branch-cs-prefix
     - -mindirect-branch-register
-    - -mindirect-branch=thunk-extern
+    - -mindirect-branch=*
     - -mskip-rax-setup
-    - -mpreferred-stack-boundary=3
+    - -mpreferred-stack-boundary=*
     - -mno-fp-ret-in-387
-    - -ftrivial-auto-var-init=zero
+    - -ftrivial-auto-var-init=*
+    - -fmin-function-alignment=*
 
 InlayHints:
   Enabled: No
