@@ -34,7 +34,7 @@ loff_t mySeek(struct file* filp, loff_t off, int whence)
         case 2: /* SEEK_END */
             newpos = off;
             break;
-        default: /* can't happen */
+        default:
             return -EINVAL;
     }
     if (newpos < 0) {
@@ -46,13 +46,13 @@ loff_t mySeek(struct file* filp, loff_t off, int whence)
 
 ssize_t myRead(struct file* filp, char __user* buf, size_t count, loff_t* f_pos)
 {
-    printk(KERN_INFO "read device %zu\n", count);
+    printk(KERN_INFO "hello: read device %zu\n", count);
     return -EPERM;
 }
 
 ssize_t myWrite(struct file* filp, char __user const* buf, size_t count, loff_t* f_pos)
 {
-    printk(KERN_INFO "write device %zu\n", count);
+    printk(KERN_INFO "hello: write device %zu\n", count);
     return -EPERM;
 }
 
@@ -83,10 +83,10 @@ static void addDev(struct my_dev* dev, int major, int minor, int index)
     dev->cdev.owner = THIS_MODULE;
     err = cdev_add(&dev->cdev, devno, 1);
     if (err) {
-        printk(KERN_ERR "failed to add device %d:%d\n", index, err);
+        printk(KERN_ERR "hello: failed to add device %d:%d\n", index, err);
         return;
     }
-    printk(KERN_INFO "add device %d:%d\n", major, minor + index);
+    printk(KERN_INFO "hello: add device %d:%d\n", major, minor + index);
 }
 
 static int __init myInit(void)
@@ -95,13 +95,13 @@ static int __init myInit(void)
     int err;
     dev_t dev;
 
-    printk(KERN_INFO "Hello, world\n");
-    printk(KERN_INFO "The process is \"%s\" (pid %i)\n", current->comm, current->pid);
+    printk(KERN_INFO "hello: Hello, world\n");
+    printk(KERN_INFO "hello: The process is \"%s\" (pid %i)\n", current->comm, current->pid);
 
     err = alloc_chrdev_region(&dev, my_minor, nr_devs, "hello");
     my_major = MAJOR(dev);
     if (err < 0) {
-        printk(KERN_ERR "faild to get major %d\n", my_major);
+        printk(KERN_ERR "hello: faild to get major %d\n", my_major);
         return err;
     }
 
@@ -134,7 +134,7 @@ static void __exit myExit(void)
     devno = MKDEV(my_major, my_minor);
     unregister_chrdev_region(devno, nr_devs);
 
-    printk(KERN_INFO "Goodbye, world\n");
+    printk(KERN_INFO "hello: Goodbye, world\n");
 }
 
 module_init(myInit);
