@@ -34,6 +34,7 @@ public:
     Variant(bool val);
     Variant(int val);
     Variant(int64_t val);
+    Variant(uint32_t val);
     Variant(uint64_t val);
     Variant(double val);
     Variant(char const* val);

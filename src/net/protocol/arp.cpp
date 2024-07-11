@@ -55,7 +55,7 @@ Variant Arp::toVariant() const
 
 Protocol::Type Arp::type() const
 {
-    return (d_.op == 1 || d_.op == 2) ? kARP : (d_.op == 3 || d_.op == 4) ? kRARP : kUnknow;
+    return (d_.op == 1 || d_.op == 2) ? kARP : (d_.op == 3 || d_.op == 4) ? kRARP : kUnknown;
 }
 
 Protocol::Type Arp::succType() const { return kEmpty; }

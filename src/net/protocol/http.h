@@ -1,10 +1,13 @@
 #pragma once
 #include "protocol.h"
 
-class http: public protocol
+namespace net
+{
+
+class Http: public Protocol
 {
 public:
-    struct detail
+    struct Detail
     {
         std::string op;                             // Request or Response
         std::string ver;                            // Protocol version
@@ -16,24 +19,21 @@ public:
         std::string body;                           // Content body
     };
 
-    http() = default;
+    Http() = default;
 
-    http(uint8_t const* const start, uint8_t const*& end, protocol const* prev = nullptr);
+    ~Http() override = default;
+    MyErrCode encode(std::vector<uint8_t>& bytes) const override;
+    MyErrCode decode(uint8_t const* const start, uint8_t const*& end,
+                     Protocol const* prev) override;
+    Variant toVariant() const override;
+    Type type() const override;
+    Type succType() const override;
+    bool linkTo(Protocol const& rhs) const override;
 
-    virtual ~http() = default;
-
-    virtual void to_bytes(std::vector<uint8_t>& bytes) const override;
-
-    virtual json to_json() const override;
-
-    virtual std::string type() const override;
-
-    virtual std::string succ_type() const override;
-
-    virtual bool link_to(protocol const& rhs) const override;
-
-    detail const& get_detail() const;
+    Detail const& getDetail() const;
 
 private:
-    detail d{};
+    Detail d_{};
 };
+
+}  // namespace net

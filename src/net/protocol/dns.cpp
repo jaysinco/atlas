@@ -138,7 +138,7 @@ Variant Dns::toVariant() const
             r["domain"] = rr.domain;
             r["query-type"] = rr.type;
             r["query-class"] = rr.cls;
-            r["ttl"] = static_cast<uint64_t>(rr.ttl);
+            r["ttl"] = rr.ttl;
             r["data-size"] = rr.dlen;
             if (rr.type == 1) {  // A
                 r["data"] = reinterpret_cast<const Ip4*>(rr.data.data())->toStr();

@@ -1,6 +1,9 @@
 #include "icmp.h"
 
-std::map<uint8_t, std::pair<std::string, std::map<uint8_t, std::string>>> icmp::type_dict = {
+namespace net
+{
+
+std::map<uint8_t, std::pair<std::string, std::map<uint8_t, std::string>>> Icmp::type_dict = {
     {
         0,
         {"ping-reply", {}},
@@ -82,108 +85,112 @@ std::map<uint8_t, std::pair<std::string, std::map<uint8_t, std::string>>> icmp::
     },
 };
 
-icmp::icmp(uint8_t const* const start, uint8_t const*& end, protocol const* prev)
+Icmp::Icmp(std::string const& ping_echo)
 {
-    d = ntoh(*reinterpret_cast<detail const*>(start));
-    auto ip = dynamic_cast<ipv4 const*>(prev);
-    extra.raw = std::string(start + sizeof(detail), start + ip->payload_size());
-    if (icmp_type() == "error") {
-        uint8_t const* pend = end;
-        extra.eip = ipv4(start + sizeof(detail), pend);
-        std::memcpy(&extra.buf, pend, 8);
-    }
+    d_.type = 8;
+    d_.code = 0;
+    d_.u.s.id = randUint16();
+    d_.u.s.sn = randUint16();
+    extra_.raw = ping_echo;
 }
 
-icmp::icmp(std::string const& ping_echo)
+MyErrCode Icmp::encode(std::vector<uint8_t>& bytes) const
 {
-    d.type = 8;
-    d.code = 0;
-    d.u.s.id = rand_ushort();
-    d.u.s.sn = rand_ushort();
-    extra.raw = ping_echo;
-}
-
-void icmp::to_bytes(std::vector<uint8_t>& bytes) const
-{
-    auto dt = hton(d);
-    size_t tlen = sizeof(detail) + extra.raw.size();
+    auto dt = hton(d_);
+    size_t tlen = sizeof(Detail) + extra_.raw.size();
     uint8_t* buf = new uint8_t[tlen];
-    std::memcpy(buf, &dt, sizeof(detail));
-    std::memcpy(buf + sizeof(detail), extra.raw.data(), extra.raw.size());
-    dt.crc = calc_checksum(buf, tlen);
-    const_cast<icmp&>(*this).d.crc = dt.crc;
-    std::memcpy(buf, &dt, sizeof(detail));
+    std::memcpy(buf, &dt, sizeof(Detail));
+    std::memcpy(buf + sizeof(Detail), extra_.raw.data(), extra_.raw.size());
+    dt.crc = calcChecksum(buf, tlen);
+    const_cast<Icmp&>(*this).d_.crc = dt.crc;
+    std::memcpy(buf, &dt, sizeof(Detail));
     bytes.insert(bytes.cbegin(), buf, buf + tlen);
     delete[] buf;
+    return MyErrCode::kOk;
 }
 
-json icmp::to_json() const
+MyErrCode Icmp::decode(uint8_t const* const start, uint8_t const*& end, Protocol const* prev)
 {
-    json j;
+    d_ = ntoh(*reinterpret_cast<Detail const*>(start));
+    auto ip = dynamic_cast<Ipv4 const*>(prev);
+    extra_.raw = std::string(start + sizeof(Detail), start + ip->payloadSize());
+    if (icmpType() == "error") {
+        uint8_t const* pend = end;
+        CHECK_ERR_RET(extra_.eip.decode(start + sizeof(Detail), pend, nullptr));
+        std::memcpy(&extra_.buf, pend, 8);
+    }
+    return MyErrCode::kOk;
+}
+
+Variant Icmp::toVariant() const
+{
+    Variant j;
     j["type"] = type();
-    std::string tp = icmp_type();
+    std::string tp = icmpType();
     j["icmp-type"] = tp;
-    if (type_dict.count(d.type) > 0) {
-        auto& code_dict = type_dict.at(d.type).second;
-        if (code_dict.count(d.code) > 0) {
-            j["desc"] = code_dict.at(d.code);
+    if (type_dict.count(d_.type) > 0) {
+        auto& code_dict = type_dict.at(d_.type).second;
+        if (code_dict.count(d_.code) > 0) {
+            j["desc"] = code_dict.at(d_.code);
         }
     }
-    j["id"] = d.u.s.id;
-    j["serial-no"] = d.u.s.sn;
-    size_t tlen = sizeof(detail) + extra.raw.size();
+    j["id"] = d_.u.s.id;
+    j["serial-no"] = d_.u.s.sn;
+    size_t tlen = sizeof(Detail) + extra_.raw.size();
     uint8_t* buf = new uint8_t[tlen];
-    auto dt = hton(d);
-    std::memcpy(buf, &dt, sizeof(detail));
-    std::memcpy(buf + sizeof(detail), extra.raw.data(), extra.raw.size());
-    j["checksum"] = calc_checksum(buf, tlen);
+    auto dt = hton(d_);
+    std::memcpy(buf, &dt, sizeof(Detail));
+    std::memcpy(buf + sizeof(Detail), extra_.raw.data(), extra_.raw.size());
+    j["checksum"] = calcChecksum(buf, tlen);
     delete[] buf;
 
     if (tp == "ping-reply" || tp == "ping-ask") {
-        j["echo"] = extra.raw;
+        j["echo"] = extra_.raw;
     }
     if (tp == "error") {
-        json ep;
-        ep["ipv4"] = extra.eip.to_json();
-        auto error_type = extra.eip.succ_type();
-        if (error_type == Protocol_Type_TCP || error_type == Protocol_Type_UDP) {
-            ep["source-port"] = ntohs(*reinterpret_cast<uint16_t const*>(&extra.buf[0]));
+        Variant ep;
+        ep["ipv4"] = extra_.eip.toVariant();
+        auto error_type = extra_.eip.succType();
+        if (error_type == kTCP || error_type == kUDP) {
+            ep["source-port"] = ntohs(*reinterpret_cast<uint16_t const*>(&extra_.buf[0]));
             ep["dest-port"] =
-                ntohs(*reinterpret_cast<uint16_t const*>(&extra.buf[0] + sizeof(uint16_t)));
+                ntohs(*reinterpret_cast<uint16_t const*>(&extra_.buf[0] + sizeof(uint16_t)));
         }
         j["error-header"] = ep;
     }
     return j;
 }
 
-std::string icmp::type() const { return Protocol_Type_ICMP; }
+Protocol::Type Icmp::type() const { return kICMP; }
 
-std::string icmp::succ_type() const { return Protocol_Type_Void; }
+Protocol::Type Icmp::succType() const { return kEmpty; }
 
-bool icmp::link_to(protocol const& rhs) const
+bool Icmp::linkTo(Protocol const& rhs) const
 {
     if (type() == rhs.type()) {
-        auto p = dynamic_cast<icmp const&>(rhs);
-        return d.u.s.id == p.d.u.s.id && d.u.s.sn == p.d.u.s.sn;
+        auto p = dynamic_cast<Icmp const&>(rhs);
+        return d_.u.s.id == p.d_.u.s.id && d_.u.s.sn == p.d_.u.s.sn;
     }
     return false;
 }
 
-icmp::detail const& icmp::get_detail() const { return d; }
+Icmp::Detail const& Icmp::getDetail() const { return d_; }
 
-icmp::extra_detail const& icmp::get_extra() const { return extra; }
+Icmp::ExtraDetail const& Icmp::getExtra() const { return extra_; }
 
-std::string icmp::icmp_type() const
+std::string Icmp::icmpType() const
 {
-    return type_dict.count(d.type) > 0 ? type_dict.at(d.type).first : Protocol_Type_Unknow(d.type);
+    return type_dict.count(d_.type) > 0 ? type_dict.at(d_.type).first : "unknown";
 }
 
-icmp::detail icmp::ntoh(detail const& d, bool reverse)
+Icmp::Detail Icmp::ntoh(Detail const& d, bool reverse)
 {
-    detail dt = d;
+    Detail dt = d;
     ntohx(dt.u.s.id, !reverse, s);
     ntohx(dt.u.s.sn, !reverse, s);
     return dt;
 }
 
-icmp::detail icmp::hton(detail const& d) { return ntoh(d, true); }
+Icmp::Detail Icmp::hton(Detail const& d) { return ntoh(d, true); }
+
+}  // namespace net

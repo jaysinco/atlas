@@ -27,8 +27,8 @@ std::string Protocol::typeToStr(Type type)
     switch (type) {
         case kEmpty:
             return "empty";
-        case kUnknow:
-            return "unknow";
+        case kUnknown:
+            return "unknown";
         case kEthernet:
             return "ethernet";
         case kIPv4:
@@ -97,7 +97,7 @@ Protocol::Type Protocol::guessProtocolByPort(uint16_t port, Type type)
             return type_dict.at(port);
         }
     }
-    return kUnknow;
+    return kUnknown;
 }
 
 }  // namespace net

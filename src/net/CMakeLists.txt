@@ -6,12 +6,12 @@ add_library(${TARGET_NAME} STATIC
     protocol/protocol.cpp
     protocol/ethernet.cpp
     protocol/arp.cpp
-    # protocol/ipv4.cpp
-    # protocol/icmp.cpp
-    # protocol/udp.cpp
-    # protocol/tcp.cpp
+    protocol/ipv4.cpp
+    protocol/icmp.cpp
+    protocol/udp.cpp
+    protocol/tcp.cpp
     protocol/dns.cpp
-    # protocol/http.cpp
+    protocol/http.cpp
     # transport/adaptor.cpp
     # transport/port-table.cpp
     # transport/packet.cpp

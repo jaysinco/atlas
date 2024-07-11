@@ -16,7 +16,7 @@ public:
     enum Type
     {
         kEmpty,
-        kUnknow,
+        kUnknown,
         kEthernet,
         kIPv4,
         kIPv6,

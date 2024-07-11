@@ -1,10 +1,14 @@
 #pragma once
 #include "protocol.h"
+#include "addr.h"
 
-class tcp: public protocol
+namespace net
+{
+
+class Tcp: public Protocol
 {
 public:
-    struct detail
+    struct Detail
     {
         uint16_t sport;     // Source port
         uint16_t dport;     // Destination port
@@ -16,45 +20,40 @@ public:
         uint16_t urp;       // Urgent pointer
     };
 
-    struct extra_detail
+    struct ExtraDetail
     {
         uint16_t len;  // Datagram length, >= 20
         uint16_t crc;  // Computed checksum
     };
 
-    struct pseudo_header
+    struct PseudoHeader
     {
-        ip4 sip;           // IPv4 Source address
-        ip4 dip;           // IPv4 Destination address
+        Ip4 sip;           // IPv4 Source address
+        Ip4 dip;           // IPv4 Destination address
         uint8_t zero_pad;  // Zero
         uint8_t type;      // IPv4 type
         uint16_t len;      // TCP Datagram length
     };
 
-    tcp() = default;
+    Tcp() = default;
 
-    tcp(uint8_t const* const start, uint8_t const*& end, protocol const* prev);
+    ~Tcp() override = default;
+    MyErrCode encode(std::vector<uint8_t>& bytes) const override;
+    MyErrCode decode(uint8_t const* const start, uint8_t const*& end,
+                     Protocol const* prev) override;
+    Variant toVariant() const override;
+    Type type() const override;
+    Type succType() const override;
+    bool linkTo(Protocol const& rhs) const override;
 
-    virtual ~tcp() = default;
-
-    virtual void to_bytes(std::vector<uint8_t>& bytes) const override;
-
-    virtual json to_json() const override;
-
-    virtual std::string type() const override;
-
-    virtual std::string succ_type() const override;
-
-    virtual bool link_to(protocol const& rhs) const override;
-
-    detail const& get_detail() const;
+    Detail const& getDetail() const;
 
 private:
-    detail d{0};
+    Detail d_{0};
+    ExtraDetail extra_;
 
-    extra_detail extra;
-
-    static detail ntoh(detail const& d, bool reverse = false);
-
-    static detail hton(detail const& d);
+    static Detail ntoh(Detail const& d, bool reverse = false);
+    static Detail hton(Detail const& d);
 };
+
+}  // namespace net

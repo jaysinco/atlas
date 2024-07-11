@@ -23,6 +23,8 @@ Variant::Variant(int64_t val)
     }
 }
 
+Variant::Variant(uint32_t val): Variant(static_cast<uint64_t>(val)) {}
+
 Variant::Variant(uint64_t val): type_(kUint), val_(val) {}
 
 Variant::Variant(double val): type_(kDouble), val_(val) {}

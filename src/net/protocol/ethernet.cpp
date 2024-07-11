@@ -22,7 +22,7 @@ Ethernet::Ethernet(Mac const& smac, Mac const& dmac, Type type)
         }
     }
     if (!found) {
-        MY_THROW("unknow ethernet type: {}", type);
+        MY_THROW("unknown ethernet type: {}", type);
     }
     d_.dmac = dmac;
     d_.smac = smac;
@@ -60,7 +60,7 @@ Protocol::Type Ethernet::succType() const
     if (type_dict.count(d_.type) != 0) {
         return type_dict[d_.type];
     }
-    return kUnknow;
+    return kUnknown;
 }
 
 bool Ethernet::linkTo(Protocol const& rhs) const
