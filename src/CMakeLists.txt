@@ -13,6 +13,10 @@ add_subdirectory(parser)
 add_subdirectory(misc)
 add_subdirectory(test)
 
+if(UNIX)
+    add_subdirectory(net)
+endif()
+
 if(NOT TC_CROSS_COMPILE)
     find_package(CUDAToolkit)
     if(CUDAToolkit_FOUND)
