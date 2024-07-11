@@ -1,78 +1,104 @@
 #include "adaptor.h"
-#include <iphlpapi.h>
+#include <algorithm>
 #include <mutex>
+#include "toolkit/logging.h"
+#include <sys/types.h>
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <pcap.h>
 
-json adaptor::to_json() const
+namespace net
 {
-    json j;
+
+toolkit::Variant Adaptor::toVariant() const
+{
+    toolkit::Variant j;
     j["name"] = name;
     j["desc"] = desc;
-    j["mac"] = mac_.to_str();
-    j["ip"] = ip.to_str();
-    j["mask"] = mask.to_str();
-    j["gateway"] = gateway.to_str();
+    j["mac"] = mac.toStr();
+    j["ip"] = ip.toStr();
+    j["mask"] = mask.toStr();
+    j["gateway"] = gateway.toStr();
     return j;
 }
 
-adaptor const& adaptor::fit(ip4 const& hint)
+Adaptor const& Adaptor::fit(Ip4 const& hint)
 {
-    auto it = std::find_if(all().begin(), all().end(), [&](adaptor const& apt) {
-        return apt.mask != ip4::zeros && apt.gateway != ip4::zeros &&
-               (hint != ip4::zeros ? apt.ip.is_local(hint, apt.mask) : true);
+    auto it = std::find_if(all().begin(), all().end(), [&](Adaptor const& apt) {
+        return apt.mask != Ip4::kZeros && apt.gateway != Ip4::kZeros &&
+               (hint != Ip4::kZeros ? apt.ip.isLocal(hint, apt.mask) : true);
     });
     if (it == all().end()) {
-        throw std::runtime_error("no local adapter match {}"_format(hint.to_str()));
+        MY_THROW("no local adapter match {}", hint.toStr());
     }
     return *it;
 }
 
-bool adaptor::is_native(ip4 const& ip)
+bool Adaptor::isNative(Ip4 const& ip)
 {
     return std::find_if(all().begin(), all().end(),
-                        [&](adaptor const& apt) { return ip == apt.ip; }) != all().end();
+                        [&](Adaptor const& apt) { return ip == apt.ip; }) != all().end();
 }
 
-std::vector<adaptor> const& adaptor::all()
+std::vector<Adaptor> const& Adaptor::all()
 {
     static std::once_flag flag;
-    static std::vector<adaptor> adapters;
+    static std::vector<Adaptor> adapters;
+
     std::call_once(flag, [&] {
-        uint64_t buflen = sizeof(IP_ADAPTER_INFO);
-        auto plist = reinterpret_cast<IP_ADAPTER_INFO*>(malloc(sizeof(IP_ADAPTER_INFO)));
-        std::shared_ptr<void> plist_guard(nullptr, [&](void*) { free(plist); });
-        if (GetAdaptersInfo(plist, &buflen) == ERROR_BUFFER_OVERFLOW) {
-            plist = reinterpret_cast<IP_ADAPTER_INFO*>(malloc(buflen));
-            if (GetAdaptersInfo(plist, &buflen) != NO_ERROR) {
-                throw std::runtime_error("failed to get adapters info");
-            }
+        // struct ifaddrs* ifap;
+        // if (getifaddrs(&ifap) == -1) {
+        //     MY_THROW("failed to getifaddrs: {}", strerror(errno));
+        // }
+        // auto ifap_guard = toolkit::scopeExit([&] { freeifaddrs(ifap); });
+        // for (ifaddrs* ifa = ifap; ifa != nullptr; ifa = ifa->ifa_next) {
+        //     if (ifa->ifa_addr == nullptr) {
+        //         continue;
+        //     }
+        //     if (!(ifa->ifa_flags & IFF_UP) || (ifa->ifa_flags & IFF_LOOPBACK)) {
+        //         continue;
+        //     }
+        //     Adaptor apt;
+        //     apt.name = ifa->ifa_name;
+        //     if (ifa->ifa_addr->sa_family == AF_INET) {
+        //         apt.ip = reinterpret_cast<sockaddr_in*>(ifa->ifa_addr)->sin_addr;
+        //     }
+        //     if (ifa->ifa_addr->sa_family == AF_PACKET) {
+        //         struct sockaddr_ll* sa_ll = (struct sockaddr_ll*)ifa->ifa_addr;
+        //         std::stringstream mac_str;
+        //         for (int i = 0; i < sa_ll->sll_halen; ++i) {
+        //             mac_str << std::hex << std::setw(2) << std::setfill('0')
+        //                     << (unsigned int)sa_ll->sll_addr[i];
+        //             if (i < sa_ll->sll_halen - 1) mac_str << ":";
+        //         }
+        //         info.mac = mac_str.str();
+        //     }
+        // }
+
+        pcap_if_t* alldevs;
+        char errbuf[PCAP_ERRBUF_SIZE] = {0};
+        if (pcap_findalldevs(&alldevs, errbuf) != 0) {
+            MY_THROW("failed to find all devs: {}", errbuf);
         }
-        PIP_ADAPTER_INFO pinfo = plist;
-        while (pinfo) {
-            adaptor apt;
-            ip4 ip(pinfo->IpAddressList.IpAddress.String);
-            ip4 mask(pinfo->IpAddressList.IpMask.String);
-            ip4 gateway(pinfo->GatewayList.IpAddress.String);
-            if (ip != ip4::zeros) {
-                apt.name = std::string("\\Device\\NPF_") + pinfo->AdapterName;
-                apt.desc = pinfo->Description;
-                apt.ip = ip;
-                apt.mask = mask;
-                apt.gateway = gateway;
-                if (pinfo->AddressLength != sizeof(mac)) {
-                    LOG(WARNING) << "wrong mac length: {}"_format(pinfo->AddressLength);
-                } else {
-                    auto c = reinterpret_cast<uint8_t*>(&apt.mac_);
-                    for (unsigned i = 0; i < pinfo->AddressLength; ++i) {
-                        c[i] = pinfo->Address[i];
-                    }
-                }
-                adapters.push_back(apt);
+        auto alldevs_guard = toolkit::scopeExit([&] { pcap_freealldevs(alldevs); });
+        for (pcap_if_t* d = alldevs; d != nullptr; d = d->next) {
+            if (d->addresses == nullptr) {
+                continue;
             }
-            pinfo = pinfo->Next;
-        }
-        if (adapters.size() <= 0) {
-            throw std::runtime_error("failed to find any suitable adapter");
+            if (!(d->flags & PCAP_IF_UP) || (d->flags & PCAP_IF_LOOPBACK)) {
+                continue;
+            }
+            Adaptor apt;
+            apt.name = d->name;
+            apt.desc = d->description;
+            if (d->addresses->addr->sa_family == AF_INET) {
+                apt.ip = reinterpret_cast<sockaddr_in*>(ifa->ifa_addr)->sin_addr;
+            }
         }
     });
+
     return adapters;
 }
+
+}  // namespace net

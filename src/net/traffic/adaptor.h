@@ -1,21 +1,41 @@
 #pragma once
-#include "protocol/type.h"
+#include "protocol/addr.h"
+#include "toolkit/variant.h"
 
-struct adaptor
+namespace net
+{
+
+struct Adaptor
 {
     std::string name;
     std::string desc;
-    ip4 ip;
-    ip4 mask;
-    ip4 gateway;
-    mac mac_;
+    Ip4 ip;
+    Ip4 mask;
+    Ip4 gateway;
+    Mac mac;
 
+    toolkit::Variant toVariant() const;
+
+    static Adaptor const& fit(Ip4 const& hint = Ip4::kZeros);
+    static bool isNative(Ip4 const& ip);
+    static std::vector<Adaptor> const& all();
+};
+
+}  // namespace net
+
+template <>
+class fmt::formatter<net::Adaptor>
+{
 public:
-    json to_json() const;
+    template <typename Context>
+    constexpr auto parse(Context& ctx)
+    {
+        return ctx.begin();
+    }
 
-    static const adaptor &fit(const ip4 &hint = ip4::zeros);
-
-    static bool is_native(const ip4 &ip);
-
-    static const std::vector<adaptor> &all();
+    template <typename Context>
+    constexpr auto format(net::Adaptor const& apt, Context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", apt.toVariant().toJsonStr());
+    }
 };

@@ -12,11 +12,12 @@ add_library(${TARGET_NAME} STATIC
     protocol/tcp.cpp
     protocol/dns.cpp
     protocol/http.cpp
-    # transport/adaptor.cpp
-    # transport/port-table.cpp
-    # transport/packet.cpp
-    # transport/transport.cpp
+    traffic/adaptor.cpp
+    # traffic/port-table.cpp
+    # traffic/packet.cpp
+    # traffic/transport.cpp
 )
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} toolkit)
 
 # add_executable(lsdev ${CMAKE_SOURCE_DIR}/src/tools/lsdev.cpp)

@@ -99,10 +99,10 @@ MyErrCode Ip4::fromDomain(std::string const& s, Ip4* ip)
         ELOG("failed to get ip4 from domain: {}", s);
         return MyErrCode::kFailed;
     }
+    auto first_addr_guard = toolkit::scopeExit([&] { freeaddrinfo(first_addr); });
     if (ip) {
         *ip = reinterpret_cast<sockaddr_in*>(first_addr->ai_addr)->sin_addr;
     }
-    freeaddrinfo(first_addr);
     return MyErrCode::kOk;
 }
 
