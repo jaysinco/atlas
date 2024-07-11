@@ -1,13 +1,15 @@
-#include "transport/adaptor.h"
+#include "traffic/adaptor.h"
+#include "toolkit/args.h"
+#include "toolkit/variant.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char** argv)
 {
-    NT_TRY
+    MY_TRY
     INIT_LOG(argc, argv);
-    json j;
-    for (const auto &apt : adaptor::all()) {
-        j.push_back(apt.to_json());
+    toolkit::Variant::Vec j;
+    for (auto const& apt: net::Adaptor::all()) {
+        j.push_back(apt.toVariant());
     }
-    LOG(INFO) << j.dump(3);
-    NT_CATCH
+    ILOG("{}", toolkit::Variant(j).toJsonStr(3));
+    MY_CATCH
 }

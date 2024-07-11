@@ -108,7 +108,7 @@ public:
 
     // export
     nlohmann::json toJson() const;
-    std::string toJsonStr() const;
+    std::string toJsonStr(int indent = -1, char indent_char = ' ') const;
 
     // import
     static Variant fromJson(nlohmann::json const& js);

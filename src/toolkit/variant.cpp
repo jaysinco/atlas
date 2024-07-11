@@ -246,7 +246,10 @@ void Variant::erase(std::string const& k)
     m.erase(it);
 }
 
-std::string Variant::toJsonStr() const { return toJson().dump(); }
+std::string Variant::toJsonStr(int indent, char indent_char) const
+{
+    return toJson().dump(indent, indent_char);
+}
 
 nlohmann::json Variant::toJson() const
 {

@@ -18,10 +18,10 @@ add_library(${TARGET_NAME} STATIC
     # traffic/transport.cpp
 )
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${TARGET_NAME} toolkit)
+target_link_libraries(${TARGET_NAME} toolkit pcap)
 
-# add_executable(lsdev ${CMAKE_SOURCE_DIR}/src/tools/lsdev.cpp)
-# target_link_libraries(lsdev ${TARGET_NAME})
+add_executable(lsdev cli/lsdev.cpp)
+target_link_libraries(lsdev ${TARGET_NAME})
 
 # add_executable(arp ${CMAKE_SOURCE_DIR}/src/tools/arp.cpp)
 # target_link_libraries(arp ${TARGET_NAME})

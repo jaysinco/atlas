@@ -7,6 +7,7 @@ namespace net
 
 struct Adaptor
 {
+public:
     std::string name;
     std::string desc;
     Ip4 ip;
@@ -19,6 +20,10 @@ struct Adaptor
     static Adaptor const& fit(Ip4 const& hint = Ip4::kZeros);
     static bool isNative(Ip4 const& ip);
     static std::vector<Adaptor> const& all();
+
+private:
+    static MyErrCode getMacAddr(std::string const& if_name, Mac& mac);
+    static MyErrCode getGateway(std::string const& if_name, Ip4& ip);
 };
 
 }  // namespace net
