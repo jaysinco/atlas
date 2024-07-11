@@ -4,26 +4,65 @@
 namespace net
 {
 
-std::map<std::string, std::map<uint16_t, std::string>> protocol::port_dict = {
-    {Protocol_Type_UDP,
-     {{22, Protocol_Type_SSH},
-      {23, Protocol_Type_TELNET},
-      {53, Protocol_Type_DNS},
-      {80, Protocol_Type_HTTP}}},
-    {Protocol_Type_TCP,
-     {{22, Protocol_Type_SSH},
-      {23, Protocol_Type_TELNET},
-      {53, Protocol_Type_DNS},
-      {80, Protocol_Type_HTTP},
-      {443, Protocol_Type_HTTPS},
-      {3389, Protocol_Type_RDP}}}};
+std::map<Protocol::Type, std::map<uint16_t, Protocol::Type>> Protocol::protocol_ports = {
+    {Protocol::kUDP,
+     {
+         {22, Protocol::kSSH},
+         {23, Protocol::kTELNET},
+         {53, Protocol::kDNS},
+         {80, Protocol::kHTTP},
+     }},
+    {Protocol::kTCP,
+     {
+         {22, Protocol::kSSH},
+         {23, Protocol::kTELNET},
+         {53, Protocol::kDNS},
+         {80, Protocol::kHTTP},
+         {443, Protocol::kHTTPS},
+         {3389, Protocol::kRDP},
+     }}};
 
-bool protocol::is_specific(std::string const& type)
+std::string Protocol::typeToStr(Type type)
 {
-    return type != Protocol_Type_Void && type.find("unknow") == std::string::npos;
+    switch (type) {
+        case kEmpty:
+            return "empty";
+        case kUnknow:
+            return "unknow";
+        case kEthernet:
+            return "ethernet";
+        case kIPv4:
+            return "ipv4";
+        case kIPv6:
+            return "ipv6";
+        case kARP:
+            return "arp";
+        case kRARP:
+            return "rarp";
+        case kICMP:
+            return "icmp";
+        case kTCP:
+            return "tcp";
+        case kUDP:
+            return "udp";
+        case kDNS:
+            return "dns";
+        case kHTTP:
+            return "http";
+        case kHTTPS:
+            return "https";
+        case kSSH:
+            return "ssh";
+        case kTELNET:
+            return "telnet";
+        case kRDP:
+            return "rdp";
+        default:
+            return "invalid";
+    }
 }
 
-uint16_t protocol::calc_checksum(void const* data, size_t tlen)
+uint16_t Protocol::calcChecksum(void const* data, size_t tlen)
 {
     uint32_t sum = 0;
     auto buf = static_cast<uint16_t const*>(data);
@@ -42,7 +81,7 @@ uint16_t protocol::calc_checksum(void const* data, size_t tlen)
     return (static_cast<uint16_t>(sum) ^ 0xffff);
 }
 
-uint16_t protocol::rand_ushort()
+uint16_t Protocol::randUint16()
 {
     static std::random_device rd;
     static std::default_random_engine engine(rd());
@@ -50,15 +89,15 @@ uint16_t protocol::rand_ushort()
     return dist(engine);
 }
 
-std::string protocol::guess_protocol_by_port(uint16_t port, std::string const& type)
+Protocol::Type Protocol::guessProtocolByPort(uint16_t port, Type type)
 {
-    if (port_dict.count(type) > 0) {
-        auto& type_dict = port_dict.at(type);
+    if (protocol_ports.count(type) > 0) {
+        auto& type_dict = protocol_ports.at(type);
         if (type_dict.count(port) > 0) {
             return type_dict.at(port);
         }
     }
-    return Protocol_Type_Unknow(-1);
+    return kUnknow;
 }
 
 }  // namespace net

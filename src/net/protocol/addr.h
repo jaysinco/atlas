@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "toolkit/error.h"
 #include <netinet/in.h>
+#include <fmt/core.h>
 
 namespace net
 {
@@ -47,3 +48,37 @@ struct Ip4
 };
 
 }  // namespace net
+
+template <>
+class fmt::formatter<net::Mac>
+{
+public:
+    template <typename Context>
+    constexpr auto parse(Context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename Context>
+    constexpr auto format(net::Mac const& mac, Context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", mac.toStr());
+    }
+};
+
+template <>
+class fmt::formatter<net::Ip4>
+{
+public:
+    template <typename Context>
+    constexpr auto parse(Context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename Context>
+    constexpr auto format(net::Ip4 const& ip4, Context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", ip4.toStr());
+    }
+};

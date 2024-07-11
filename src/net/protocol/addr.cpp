@@ -1,4 +1,4 @@
-#include "type.h"
+#include "addr.h"
 #include <fmt/format.h>
 #include <sstream>
 #include <arpa/inet.h>
@@ -38,7 +38,7 @@ Ip4::Ip4(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4): b1(c1), b2(c2), b3(c3)
 Ip4::Ip4(std::string const& s)
 {
     if (fromDottedDec(s, this) != MyErrCode::kOk) {
-        throw std::runtime_error(fmt::format("invalid ip4: {}", s));
+        MY_THROW("invalid ip4: {}", s);
     }
 }
 

@@ -26,7 +26,7 @@ ipv4::ipv4(ip4 const& sip, ip4 const& dip, uint8_t ttl, std::string const& type,
         }
     }
     if (!found) {
-        throw std::runtime_error("unknow ipv4 type: {}"_format(type));
+        MY_THROW("unknow ipv4 type: {}"_format(type));
     }
     d.ver_hl = (4 << 4) | (sizeof(detail) / 4);
     d.id = rand_ushort();

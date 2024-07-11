@@ -1,78 +1,86 @@
 #include "ethernet.h"
+#include "toolkit/logging.h"
 
-std::map<uint16_t, std::string> ethernet::type_dict = {
-    {0x0800, Protocol_Type_IPv4},
-    {0x86dd, Protocol_Type_IPv6},
-    {0x0806, Protocol_Type_ARP},
-    {0x8035, Protocol_Type_RARP},
+namespace net
+{
+
+std::map<uint16_t, Protocol::Type> Ethernet::type_dict = {
+    {0x0800, kIPv4},
+    {0x86dd, kIPv6},
+    {0x0806, kARP},
+    {0x8035, kRARP},
 };
 
-ethernet::ethernet(uint8_t const* const start, uint8_t const*& end, protocol const* prev)
-{
-    d = ntoh(*reinterpret_cast<detail const*>(start));
-    end = start + sizeof(detail);
-}
-
-ethernet::ethernet(mac const& smac, mac const& dmac, std::string const& type)
+Ethernet::Ethernet(Mac const& smac, Mac const& dmac, Type type)
 {
     bool found = false;
-    for (auto it = type_dict.cbegin(); it != type_dict.cend(); ++it) {
-        if (it->second == type) {
+    for (auto it: type_dict) {
+        if (it.second == type) {
             found = true;
-            d.type = it->first;
+            d_.type = it.first;
             break;
         }
     }
     if (!found) {
-        throw std::runtime_error("unknow ethernet type: {}"_format(type));
+        MY_THROW("unknow ethernet type: {}", type);
     }
-    d.dmac = dmac;
-    d.smac = smac;
+    d_.dmac = dmac;
+    d_.smac = smac;
 }
 
-void ethernet::to_bytes(std::vector<uint8_t>& bytes) const
+MyErrCode Ethernet::encode(std::vector<uint8_t>& bytes) const
 {
-    auto dt = hton(d);
+    auto dt = hton(d_);
     auto it = reinterpret_cast<uint8_t const*>(&dt);
-    bytes.insert(bytes.cbegin(), it, it + sizeof(detail));
+    bytes.insert(bytes.cbegin(), it, it + sizeof(Detail));
+    return MyErrCode::kOk;
 }
 
-json ethernet::to_json() const
+MyErrCode Ethernet::decode(uint8_t const* const start, uint8_t const*& end, Protocol const* prev)
 {
-    json j;
-    j["type"] = type();
-    j["ethernet-type"] = succ_type();
-    j["source-mac"] = d.smac.to_str();
-    j["dest-mac"] = d.dmac.to_str();
+    d_ = ntoh(*reinterpret_cast<Detail const*>(start));
+    end = start + sizeof(Detail);
+    return MyErrCode::kOk;
+}
+
+Variant Ethernet::toVariant() const
+{
+    Variant j;
+    j["type"] = TOSTR(type());
+    j["ethernet-type"] = TOSTR(succType());
+    j["source-mac"] = d_.smac.toStr();
+    j["dest-mac"] = d_.dmac.toStr();
     return j;
 }
 
-std::string ethernet::type() const { return Protocol_Type_Ethernet; }
+Protocol::Type Ethernet::type() const { return kEthernet; }
 
-std::string ethernet::succ_type() const
+Protocol::Type Ethernet::succType() const
 {
-    if (type_dict.count(d.type) != 0) {
-        return type_dict[d.type];
+    if (type_dict.count(d_.type) != 0) {
+        return type_dict[d_.type];
     }
-    return Protocol_Type_Unknow(d.type);
+    return kUnknow;
 }
 
-bool ethernet::link_to(protocol const& rhs) const
+bool Ethernet::linkTo(Protocol const& rhs) const
 {
     if (type() == rhs.type()) {
-        auto p = dynamic_cast<ethernet const&>(rhs);
-        return p.d.dmac == mac::broadcast || d.smac == p.d.dmac;
+        auto p = dynamic_cast<Ethernet const&>(rhs);
+        return p.d_.dmac == Mac::kBroadcast || d_.smac == p.d_.dmac;
     }
     return false;
 }
 
-ethernet::detail const& ethernet::get_detail() const { return d; }
+Ethernet::Detail const& Ethernet::getDetail() const { return d_; }
 
-ethernet::detail ethernet::ntoh(detail const& d, bool reverse)
+Ethernet::Detail Ethernet::ntoh(Detail const& d, bool reverse)
 {
-    detail dt = d;
+    Detail dt = d;
     ntohx(dt.type, !reverse, s);
     return dt;
 }
 
-ethernet::detail ethernet::hton(detail const& d) { return ntoh(d, true); }
+Ethernet::Detail Ethernet::hton(Detail const& d) { return ntoh(d, true); }
+
+}  // namespace net

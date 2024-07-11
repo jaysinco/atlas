@@ -50,10 +50,7 @@ http::http(uint8_t const* const start, uint8_t const*& end, protocol const* prev
     d.body = std::string(nl_start, end);
 }
 
-void http::to_bytes(std::vector<uint8_t>& bytes) const
-{
-    throw std::runtime_error("unimplemented method");
-}
+void http::to_bytes(std::vector<uint8_t>& bytes) const { MY_THROW("unimplemented method"); }
 
 json http::to_json() const
 {
@@ -84,6 +81,6 @@ std::string http::type() const { return Protocol_Type_HTTP; }
 
 std::string http::succ_type() const { return Protocol_Type_Void; }
 
-bool http::link_to(protocol const& rhs) const { throw std::runtime_error("unimplemented method"); }
+bool http::link_to(protocol const& rhs) const { MY_THROW("unimplemented method"); }
 
 http::detail const& http::get_detail() const { return d; }

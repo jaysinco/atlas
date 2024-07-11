@@ -20,10 +20,7 @@ udp::udp(uint8_t const* const start, uint8_t const*& end, protocol const* prev)
     delete[] buf;
 }
 
-void udp::to_bytes(std::vector<uint8_t>& bytes) const
-{
-    throw std::runtime_error("unimplemented method");
-}
+void udp::to_bytes(std::vector<uint8_t>& bytes) const { MY_THROW("unimplemented method"); }
 
 json udp::to_json() const
 {

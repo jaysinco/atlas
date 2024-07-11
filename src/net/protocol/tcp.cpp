@@ -22,10 +22,7 @@ tcp::tcp(uint8_t const* const start, uint8_t const*& end, protocol const* prev)
     delete[] buf;
 }
 
-void tcp::to_bytes(std::vector<uint8_t>& bytes) const
-{
-    throw std::runtime_error("unimplemented method");
-}
+void tcp::to_bytes(std::vector<uint8_t>& bytes) const { MY_THROW("unimplemented method"); }
 
 json tcp::to_json() const
 {

@@ -1,63 +1,104 @@
 #pragma once
 #include "toolkit/variant.h"
-
-#define Protocol_Type_Void "void"
-#define Protocol_Type_Unknow(n) (n < 0 ? "unknow" : "unknow({:#x})"_format(n))
-#define Protocol_Type_Ethernet "ethernet"
-#define Protocol_Type_IPv4 "ipv4"
-#define Protocol_Type_IPv6 "ipv6"
-#define Protocol_Type_ARP "arp"
-#define Protocol_Type_RARP "rarp"
-#define Protocol_Type_ICMP "icmp"
-#define Protocol_Type_TCP "tcp"
-#define Protocol_Type_UDP "udp"
-#define Protocol_Type_DNS "dns"
-#define Protocol_Type_HTTP "http"
-#define Protocol_Type_HTTPS "https"
-#define Protocol_Type_SSH "ssh"
-#define Protocol_Type_TELNET "telnet"
-#define Protocol_Type_RDP "rdp"
+#include "toolkit/error.h"
+#include <fmt/core.h>
 
 #define ntohx(field, reverse, suffix) field = ((reverse) ? ntoh##suffix : hton##suffix)(field);
 
 namespace net
 {
 
+using Variant = toolkit::Variant;
+
 class Protocol
 {
 public:
-    // Destructor should be virtual
+    enum Type
+    {
+        kEmpty,
+        kUnknow,
+        kEthernet,
+        kIPv4,
+        kIPv6,
+        kARP,
+        kRARP,
+        kICMP,
+        kTCP,
+        kUDP,
+        kDNS,
+        kHTTP,
+        kHTTPS,
+        kSSH,
+        kTELNET,
+        kRDP,
+    };
+
+    // destructor should be virtual
     virtual ~Protocol() = default;
 
-    // Serialize current protocol layer and insert in front of `bytes`, which contains
-    // raw packet bytes serialized from higher layer.
-    virtual void to_bytes(std::vector<uint8_t>& bytes) const = 0;
+    // serialize current protocol layer
+    virtual MyErrCode encode(std::vector<uint8_t>& bytes) const = 0;
 
-    // Encode protocol detail as json
-    virtual toolkit::Variant to_json() const = 0;
+    // deserialize current protocol layer
+    virtual MyErrCode decode(uint8_t const* const start, uint8_t const*& end,
+                             Protocol const* prev = nullptr) = 0;
 
-    // Self protocol type
-    virtual std::string type() const = 0;
+    // convert protocol detail to variant
+    virtual Variant toVariant() const = 0;
 
-    // Successor protocol type that follows
-    virtual std::string succ_type() const = 0;
+    // protocol type
+    virtual Type type() const = 0;
 
-    // Whether rhs is the response to this
-    virtual bool link_to(protocol const& rhs) const = 0;
+    // successor protocol type that follows
+    virtual Type succType() const = 0;
 
-    // Whether protocol type is specific
-    static bool is_specific(std::string const& type);
+    // whether rhs is the response to this
+    virtual bool linkTo(Protocol const& rhs) const = 0;
+
+public:
+    static std::string typeToStr(Type type);
 
 protected:
-    static uint16_t calc_checksum(void const* data, size_t tlen);
-
-    static uint16_t rand_ushort();
-
-    static std::string guess_protocol_by_port(uint16_t port,
-                                              std::string const& type = Protocol_Type_TCP);
+    static uint16_t randUint16();
+    static uint16_t calcChecksum(void const* data, size_t tlen);
+    static Type guessProtocolByPort(uint16_t port, Type type = kTCP);
 
 private:
-    static std::map<std::string, std::map<uint16_t, std::string>> port_dict;
+    static std::map<Type, std::map<uint16_t, Type>> protocol_ports;
 };
 
 }  // namespace net
+
+template <>
+class fmt::formatter<net::Protocol>
+{
+public:
+    template <typename Context>
+    constexpr auto parse(Context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename Context>
+    constexpr auto format(net::Protocol const& protocol, Context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", protocol.toVariant().toJsonStr());
+    }
+};
+
+template <>
+class fmt::formatter<net::Protocol::Type>
+{
+public:
+    template <typename Context>
+    constexpr auto parse(Context& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template <typename Context>
+    constexpr auto format(net::Protocol::Type type, Context& ctx) const
+    {
+        return format_to(ctx.out(), "{}", net::Protocol::typeToStr(type));
+    }
+};

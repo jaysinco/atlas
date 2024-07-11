@@ -1,10 +1,13 @@
 #pragma once
 #include "protocol.h"
 
-class dns: public protocol
+namespace net
+{
+
+class Dns: public Protocol
 {
 public:
-    struct detail
+    struct Detail
     {
         uint16_t id;     // Identification
         uint16_t flags;  // Flags
@@ -14,14 +17,14 @@ public:
         uint16_t ern;    // Extra resource record number
     };
 
-    struct query_detail
+    struct QueryDetail
     {
         std::string domain;  // Query domain
         uint16_t type;       // Query type
         uint16_t cls;        // Query class
     };
 
-    struct res_detail
+    struct ResDetail
     {
         std::string domain;  // Domain
         uint16_t type;       // Query type
@@ -31,47 +34,39 @@ public:
         std::string data;    // Resource data
     };
 
-    struct extra_detail
+    struct ExtraDetail
     {
-        std::vector<query_detail> query;  // Query
-        std::vector<res_detail> reply;    // Reply
-        std::vector<res_detail> auth;     // Auth
-        std::vector<res_detail> extra;    // Extra
+        std::vector<QueryDetail> query;  // Query
+        std::vector<ResDetail> reply;    // Reply
+        std::vector<ResDetail> auth;     // Auth
+        std::vector<ResDetail> extra;    // Extra
     };
 
-    dns() = default;
+    Dns() = default;
+    Dns(std::string const& query_domain);
 
-    dns(uint8_t const* const start, uint8_t const*& end, protocol const* prev = nullptr);
+    ~Dns() override = default;
+    MyErrCode encode(std::vector<uint8_t>& bytes) const override;
+    MyErrCode decode(uint8_t const* const start, uint8_t const*& end,
+                     Protocol const* prev) override;
+    Variant toVariant() const override;
+    Type type() const override;
+    Type succType() const override;
+    bool linkTo(Protocol const& rhs) const override;
 
-    dns(std::string const& query_domain);
-
-    virtual ~dns() = default;
-
-    virtual void to_bytes(std::vector<uint8_t>& bytes) const override;
-
-    virtual json to_json() const override;
-
-    virtual std::string type() const override;
-
-    virtual std::string succ_type() const override;
-
-    virtual bool link_to(protocol const& rhs) const override;
-
-    detail const& get_detail() const;
-
-    extra_detail const& get_extra() const;
+    Detail const& getDetail() const;
+    ExtraDetail const& getExtra() const;
 
 private:
-    detail d{0};
+    Detail d_{0};
+    ExtraDetail extra_;
 
-    extra_detail extra;
+    static std::string encodeDomain(std::string const& domain);
+    static std::string decodeDomain(uint8_t const* const pstart, uint8_t const* const pend,
+                                    uint8_t const*& it);
 
-    static std::string encode_domain(std::string const& domain);
-
-    static std::string decode_domain(uint8_t const* const pstart, uint8_t const* const pend,
-                                     uint8_t const*& it);
-
-    static detail ntoh(detail const& d, bool reverse = false);
-
-    static detail hton(detail const& d);
+    static Detail ntoh(Detail const& d, bool reverse = false);
+    static Detail hton(Detail const& d);
 };
+
+}  // namespace net

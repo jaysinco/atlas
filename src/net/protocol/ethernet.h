@@ -1,43 +1,40 @@
 #pragma once
 #include "protocol.h"
 #include <map>
+#include "addr.h"
 
-class ethernet: public protocol
+namespace net
+{
+
+class Ethernet: public Protocol
 {
 public:
-    struct detail
+    struct Detail
     {
-        mac dmac;       // Destination address
-        mac smac;       // Source address
+        Mac dmac;       // Destination address
+        Mac smac;       // Source address
         uint16_t type;  // Ethernet type
     };
 
-    ethernet() = default;
+    Ethernet() = default;
+    Ethernet(Mac const& smac, Mac const& dmac, Type type);
 
-    ethernet(uint8_t const* const start, uint8_t const*& end, protocol const* prev = nullptr);
+    ~Ethernet() override = default;
+    MyErrCode encode(std::vector<uint8_t>& bytes) const override;
+    MyErrCode decode(uint8_t const* const start, uint8_t const*& end,
+                     Protocol const* prev) override;
+    Variant toVariant() const override;
+    Type type() const override;
+    Type succType() const override;
+    bool linkTo(Protocol const& rhs) const override;
 
-    ethernet(mac const& smac, mac const& dmac, std::string const& type);
-
-    virtual ~ethernet() = default;
-
-    virtual void to_bytes(std::vector<uint8_t>& bytes) const override;
-
-    virtual json to_json() const override;
-
-    virtual std::string type() const override;
-
-    virtual std::string succ_type() const override;
-
-    virtual bool link_to(protocol const& rhs) const override;
-
-    detail const& get_detail() const;
+    Detail const& getDetail() const;
 
 private:
-    detail d{0};
-
-    static std::map<uint16_t, std::string> type_dict;
-
-    static detail ntoh(detail const& d, bool reverse = false);
-
-    static detail hton(detail const& d);
+    Detail d_{0};
+    static std::map<uint16_t, Type> type_dict;
+    static Detail ntoh(Detail const& d, bool reverse = false);
+    static Detail hton(Detail const& d);
 };
+
+}  // namespace net
