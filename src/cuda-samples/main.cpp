@@ -3,7 +3,8 @@
 
 int main(int argc, char** argv)
 {
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
 
     // hello_world(argc, argv);
     // check_device(argc, argv);

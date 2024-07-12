@@ -1,5 +1,4 @@
 #include "addr.h"
-#include <fmt/format.h>
 #include <sstream>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -23,9 +22,9 @@ std::string Mac::toStr() const
 {
     auto c = reinterpret_cast<uint8_t const*>(this);
     std::ostringstream ss;
-    ss << fmt::format("{:02x}", c[0]);
+    ss << FSTR("{:02x}", c[0]);
     for (int i = 1; i < 6; ++i) {
-        ss << fmt::format("-{:02x}", c[i]);
+        ss << FSTR("-{:02x}", c[i]);
     }
     return ss.str();
 }

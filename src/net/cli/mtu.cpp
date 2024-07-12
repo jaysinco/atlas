@@ -2,10 +2,11 @@
 
 DEFINE_int32(max, 1500, "high bound for mtu");
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     NT_TRY
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     if (argc < 2) {
         LOG(ERROR) << "empty target name, please input ip or host name";
         return -1;
@@ -25,9 +26,9 @@ int main(int argc, char *argv[])
     }
     LOG(INFO) << "Ping {}"_format(ip_desc.str());
 
-    auto &apt = adaptor::fit(ip4::zeros);
-    pcap_t *handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void *) { pcap_close(handle); });
+    auto& apt = adaptor::fit(ip4::zeros);
+    pcap_t* handle = transport::open_adaptor(apt);
+    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
     int nbytes = transport::calc_mtu(handle, apt, target_ip, FLAGS_max, true);
     LOG(INFO) << "MTU={}"_format(nbytes);
     NT_CATCH

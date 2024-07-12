@@ -1,7 +1,7 @@
 #pragma once
 #include "toolkit/variant.h"
 #include "toolkit/error.h"
-#include <fmt/core.h>
+#include "toolkit/format.h"
 
 #define ntohx(field, reverse, suffix) field = ((reverse) ? ntoh##suffix : hton##suffix)(field);
 
@@ -72,36 +72,5 @@ private:
 
 }  // namespace net
 
-template <>
-class fmt::formatter<net::Protocol>
-{
-public:
-    template <typename Context>
-    constexpr auto parse(Context& ctx)
-    {
-        return ctx.begin();
-    }
-
-    template <typename Context>
-    constexpr auto format(net::Protocol const& protocol, Context& ctx) const
-    {
-        return format_to(ctx.out(), "{}", protocol.toVariant().toJsonStr());
-    }
-};
-
-template <>
-class fmt::formatter<net::Protocol::Type>
-{
-public:
-    template <typename Context>
-    constexpr auto parse(Context& ctx)
-    {
-        return ctx.begin();
-    }
-
-    template <typename Context>
-    constexpr auto format(net::Protocol::Type type, Context& ctx) const
-    {
-        return format_to(ctx.out(), "{}", net::Protocol::typeToStr(type));
-    }
-};
+DEFINE_FORMATTER(net::Protocol, item.toVariant().toJsonStr());
+DEFINE_FORMATTER(net::Protocol::Type, net::Protocol::typeToStr(item));

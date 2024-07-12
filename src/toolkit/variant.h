@@ -4,9 +4,9 @@
 #include <vector>
 #include <map>
 #include <type_traits>
-#include <stdexcept>
 #include <any>
 #include <nlohmann/json_fwd.hpp>
+#include "format.h"
 
 namespace toolkit
 {
@@ -81,7 +81,7 @@ public:
     {
         auto& str = asStr();
         if (N < str.size()) {
-            throw std::runtime_error("char buffer too small");
+            MY_THROW("char buffer too small");
         }
         memcpy(val, str.data(), str.size());
     }

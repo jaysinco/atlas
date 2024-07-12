@@ -2,10 +2,11 @@
 
 DEFINE_string(ip, "8.8.8.8", "dns server ip");
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     NT_TRY
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     if (argc < 2) {
         LOG(ERROR) << "empty domain name, please input domain name";
         return -1;

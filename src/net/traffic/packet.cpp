@@ -8,7 +8,6 @@
 #include "protocol/tcp.h"
 #include "protocol/dns.h"
 #include "protocol/http.h"
-#include <fmt/chrono.h>
 #include <algorithm>
 
 namespace net

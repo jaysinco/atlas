@@ -1,16 +1,17 @@
 #pragma once
 #include "toolkit.h"
-#include <fmt/format.h>
+#include "format.h"
 
-#define FSTR(...) (toolkit::format(__VA_ARGS__))
-#define TOSTR(v) (FSTR("{}", v))
-#define CURR_FILENAME (std::filesystem::path(__FILE__).filename().string())
-#define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, ##__VA_ARGS__))
-#define MY_THROW(...) throw std::runtime_error(LOG_FSTR(__VA_ARGS__))
 #define MY_TRY try {
-#define MY_CATCH \
-    }            \
-    catch (std::exception const& err) { ELOG("[exception] {}", err.what()); }
+#define MY_CATCH_FUNC(x)                    \
+    }                                       \
+    catch (std::exception const& err)       \
+    {                                       \
+        ELOG("[exception] {}", err.what()); \
+        x;                                  \
+    }
+#define MY_CATCH MY_CATCH_FUNC()
+#define MY_CATCH_RET MY_CATCH_FUNC(return MyErrCode::kException)
 
 #define LOG_FUNC(level, ...) toolkit::logPrint(level, FSTR(__VA_ARGS__))
 #define LOG_FUNC_DETAILED(level, ...) \
@@ -24,16 +25,6 @@
 
 namespace toolkit
 {
-
-template <typename... Ts>
-std::string format(Ts&&... args)
-{
-    if constexpr (sizeof...(Ts) == 1) {
-        return std::string(std::forward<Ts>(args)...);
-    } else {
-        return fmt::format(std::forward<Ts>(args)...);
-    }
-}
 
 enum class LogLevel : int
 {

@@ -2,10 +2,11 @@
 #include "protocol/ipv4.h"
 #include <iostream>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     NT_TRY
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     if (argc < 2) {
         LOG(ERROR) << "empty target name, please input ip or host name";
         return -1;
@@ -25,9 +26,9 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "\nPing " << ip_desc.str() << ":" << std::endl;
-    auto &apt = adaptor::fit(ip4::zeros);
-    pcap_t *handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void *) { pcap_close(handle); });
+    auto& apt = adaptor::fit(ip4::zeros);
+    pcap_t* handle = transport::open_adaptor(apt);
+    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
     constexpr int total_cnt = 4;
     int recv_cnt = 0;
     long sum_cost = 0;
@@ -47,8 +48,8 @@ int main(int argc, char *argv[])
             min_cost = std::min(min_cost, cost_ms);
             max_cost = std::max(max_cost, cost_ms);
             sum_cost += cost_ms;
-            auto &prot = *reply.get_detail().layers.at(1);
-            int ttl = dynamic_cast<const ipv4 &>(prot).get_detail().ttl;
+            auto& prot = *reply.get_detail().layers.at(1);
+            int ttl = dynamic_cast<ipv4 const&>(prot).get_detail().ttl;
             std::cout << "time=" << cost_ms << "ms"
                       << " ttl=" << ttl << std::endl;
         } else {

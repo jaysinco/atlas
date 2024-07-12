@@ -10,19 +10,20 @@ std::atomic<bool> end_attack = false;
 
 void on_interrupt(int) { end_attack = true; }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     NT_TRY
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     if (argc < 2 && !FLAGS_attack) {
         LOG(ERROR) << "empty ipv4 address, please input ip";
         return -1;
     }
 
     ip4 ip = argc >= 2 ? ip4(argv[1]) : ip4::zeros;
-    auto &apt = adaptor::fit(ip);
-    pcap_t *handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void *) { pcap_close(handle); });
+    auto& apt = adaptor::fit(ip);
+    pcap_t* handle = transport::open_adaptor(apt);
+    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
 
     if (!FLAGS_attack) {
         mac mac_;

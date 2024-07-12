@@ -8,8 +8,6 @@
 namespace toolkit
 {
 
-using fmt::enums::format_as;
-
 static std::string cellValueToSQL(CellValue const& val)
 {
     switch (val.getType()) {
@@ -34,7 +32,7 @@ static std::string cellValueToSQL(CellValue const& val)
             return cellValueToSQL(val.toJsonStr());
         }
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", val.getType()));
+            MY_THROW("variant bad type: {}", val.getType());
     }
 }
 
@@ -67,7 +65,7 @@ int SQLiteHelper::Stmt::bindCell(CellValue const& val, int index)
             return sqlite3_bind_text(stmt_, index, str.c_str(), str.size(), SQLITE_TRANSIENT);
         }
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", val.getType()));
+            MY_THROW("variant bad type: {}", val.getType());
     }
 }
 
@@ -133,7 +131,7 @@ MyErrCode SQLiteHelper::Stmt::column(int index, CellValue& val)
         case SQLITE_BLOB:
             return MyErrCode::kUnimplemented;
         default:
-            throw std::runtime_error(fmt::format("sqlite3 bad column type: {}", type));
+            MY_THROW("sqlite3 bad column type: {}", type);
     }
     DLOG("[{}] get column {} -> {}", 0, index, cellValueToSQL(val));
     return MyErrCode::kOk;

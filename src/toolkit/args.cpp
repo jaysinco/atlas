@@ -1,4 +1,5 @@
 #include "args.h"
+#include "logging.h"
 #define HELP_MESSAGE "shows help message and exits"
 
 namespace toolkit

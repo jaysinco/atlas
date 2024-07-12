@@ -1,4 +1,5 @@
 #include "toolkit/args.h"
+#include "toolkit/logging.h"
 
 void func5()
 {
@@ -18,6 +19,7 @@ void func1() { func2(); }
 int main(int argc, char** argv)
 {
     toolkit::installCrashHook();
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     func1();
 }

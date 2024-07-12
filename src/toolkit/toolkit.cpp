@@ -1,7 +1,5 @@
 #include "toolkit.h"
-#include "encoding.h"
 #include "logging.h"
-#include <stdlib.h>
 #include <signal.h>
 #ifdef __linux__
 #include <unistd.h>

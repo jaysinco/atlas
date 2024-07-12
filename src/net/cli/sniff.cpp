@@ -1,7 +1,7 @@
 #include "widgets/sniff-frame.h"
 #include <wx/app.h>
 
-class App : public wxApp
+class App: public wxApp
 {
 public:
     virtual bool OnInit() override;
@@ -12,9 +12,10 @@ wxIMPLEMENT_APP(App);
 
 bool App::OnInit()
 {
-    char **argv_ = argv;
-    GUI_INIT_LOG(argc, argv_);
-    SniffFrame *frame = new SniffFrame;
+    char** argv_ = argv;
+    toolkit::Args args(argc, argv);
+    args.parse();
+    SniffFrame* frame = new SniffFrame;
     frame->Show(true);
     return true;
 }

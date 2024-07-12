@@ -1,9 +1,8 @@
 #pragma once
-#include "logging.h"
+#include "error.h"
+#include "format.h"
 #include <boost/program_options.hpp>
 #include <iostream>
-
-#define INIT_LOG(argc, argv) (toolkit::Args(argc, argv).parse())
 
 namespace toolkit
 {

@@ -1,6 +1,5 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 210
 #include <CL/opencl.hpp>
-#include <fstream>
 #include <iostream>
 #include "toolkit/toolkit.h"
 

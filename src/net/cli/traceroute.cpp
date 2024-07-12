@@ -3,10 +3,11 @@
 #include <iostream>
 #include <iomanip>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     NT_TRY
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     if (argc < 2) {
         LOG(ERROR) << "empty target name, please input ip or host name";
         return -1;
@@ -26,9 +27,9 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "\nRoute traced to " << ip_desc.str() << "\n" << std::endl;
-    auto &apt = adaptor::fit(ip4::zeros);
-    pcap_t *handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void *) { pcap_close(handle); });
+    auto& apt = adaptor::fit(ip4::zeros);
+    pcap_t* handle = transport::open_adaptor(apt);
+    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
     int ttl = 0;
     constexpr int epoch_cnt = 3;
     while (true) {
@@ -42,7 +43,7 @@ int main(int argc, char *argv[])
             long cost_ms;
             if (transport::ping(handle, apt, target_ip, reply, cost_ms, ttl, "greatjaysinco")) {
                 if (reply.is_error()) {
-                    auto &ih = dynamic_cast<const ipv4 &>(*reply.get_detail().layers.at(1));
+                    auto& ih = dynamic_cast<ipv4 const&>(*reply.get_detail().layers.at(1));
                     router_ip = ih.get_detail().sip;
                     std::cout << cost_ms << "ms" << std::flush;
                 } else {

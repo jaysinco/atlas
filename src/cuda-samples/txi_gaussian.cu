@@ -137,7 +137,7 @@ int txi_gaussian(int argc, char** argv)
 #if !USE_MANAGERD_MEMORY
     TIMER_BEGIN(copy_data_in)
     CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    TIMER_END(copy_data_in, fmt::format("host to device {} bytes", image_byte_len))
+    TIMER_END(copy_data_in, FSTR("host to device {} bytes", image_byte_len))
 #endif
 
 #if USE_MANAGERD_MEMORY
@@ -169,14 +169,14 @@ int txi_gaussian(int argc, char** argv)
     CHECK(cudaGetLastError());
 
     CHECK(cudaDeviceSynchronize());
-    TIMER_END(kernel_run, fmt::format("kernel run on {}x{}", image_width, image_height))
+    TIMER_END(kernel_run, FSTR("kernel run on {}x{}", image_width, image_height))
 
     // copy data out
 #if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
     TIMER_BEGIN(copy_data_out)
     CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
+    TIMER_END(copy_data_out, FSTR("device to host {} bytes", image_byte_len))
 #endif
 
     // write image

@@ -1,5 +1,4 @@
 #include "logging.h"
-#include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/details/os.h>
 #include <spdlog/sinks/rotating_file_sink.h>

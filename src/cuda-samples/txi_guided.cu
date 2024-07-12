@@ -152,7 +152,7 @@ int txi_guided(int argc, char** argv)
     // copy data in
     TIMER_BEGIN(copy_data_in)
     CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    TIMER_END(copy_data_in, fmt::format("host to device {} bytes", image_byte_len))
+    TIMER_END(copy_data_in, FSTR("host to device {} bytes", image_byte_len))
 
     // process
     CHECK(cudaDeviceSynchronize());
@@ -164,7 +164,7 @@ int txi_guided(int argc, char** argv)
     separate<<<grid, block>>>(d_img_in, d_r, d_g, d_b, image_width, image_height);
     CHECK(cudaGetLastError());
     CHECK(cudaDeviceSynchronize());
-    TIMER_END(kernel_sep, fmt::format("kernel separate on {}x{}", image_width, image_height))
+    TIMER_END(kernel_sep, FSTR("kernel separate on {}x{}", image_width, image_height))
 
     float* buf_arr[3] = {d_b, d_g, d_r};
     for (int color_idx = 0; color_idx < 3; ++color_idx) {
@@ -180,14 +180,14 @@ int txi_guided(int argc, char** argv)
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
 
-        TIMER_END(kernel_filter, fmt::format("kernel filter on {}x{}", image_width, image_height))
+        TIMER_END(kernel_filter, FSTR("kernel filter on {}x{}", image_width, image_height))
     }
 
     // copy data out
     std::vector<uint8_t> vec_img_out(image_byte_len);
     TIMER_BEGIN(copy_data_out)
     CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    TIMER_END(copy_data_out, fmt::format("device to host {} bytes", image_byte_len))
+    TIMER_END(copy_data_out, FSTR("device to host {} bytes", image_byte_len))
 
     TIMER_END(total, "total")
 

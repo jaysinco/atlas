@@ -1,11 +1,8 @@
 #include "variant.h"
 #include <nlohmann/json.hpp>
-#include <fmt/format.h>
 
 namespace toolkit
 {
-
-using fmt::enums::format_as;
 
 Variant::Variant(): type_(kVoid) {}
 
@@ -81,7 +78,7 @@ bool Variant::asBool() const
     } else if (auto* v = std::any_cast<uint64_t>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to bool");
+        MY_THROW("variant bad cast to bool");
     }
 }
 
@@ -95,7 +92,7 @@ int64_t Variant::asInt() const
     if (auto* v = std::any_cast<double>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to int");
+        MY_THROW("variant bad cast to int");
     }
 }
 
@@ -109,7 +106,7 @@ uint64_t Variant::asUint() const
     if (auto* v = std::any_cast<double>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to uint");
+        MY_THROW("variant bad cast to uint");
     }
 }
 
@@ -123,7 +120,7 @@ double Variant::asDouble() const
     if (auto* v = std::any_cast<double>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to double");
+        MY_THROW("variant bad cast to double");
     }
 }
 
@@ -137,7 +134,7 @@ std::string const& Variant::asStr() const
     if (auto* v = std::any_cast<std::string>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to string");
+        MY_THROW("variant bad cast to string");
     }
 }
 
@@ -151,7 +148,7 @@ Variant::Vec const& Variant::asVec() const
     if (auto* v = std::any_cast<Vec>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to vector");
+        MY_THROW("variant bad cast to vector");
     }
 }
 
@@ -165,7 +162,7 @@ Variant::Map const& Variant::asMap() const
     if (auto* v = std::any_cast<Map>(&val_)) {
         return *v;
     } else {
-        throw std::runtime_error("variant bad cast to map");
+        MY_THROW("variant bad cast to map");
     }
 }
 
@@ -196,7 +193,7 @@ int Variant::getSize() const
     } else if (type_ == kMap) {
         return asMap().size();
     } else {
-        throw std::runtime_error(fmt::format("variant type don't have size: {}", type_));
+        MY_THROW("variant type don't have size: {}", type_);
     }
 }
 
@@ -231,7 +228,7 @@ void Variant::erase(int i)
 {
     auto& v = asVec();
     if (i < 0 || i >= v.size()) {
-        throw std::runtime_error(fmt::format("variant erase wrong index: {}", i));
+        MY_THROW("variant erase wrong index: {}", i);
     }
     v.erase(v.begin() + i);
 }
@@ -241,7 +238,7 @@ void Variant::erase(std::string const& k)
     auto& m = asMap();
     auto it = m.find(k);
     if (it == m.end()) {
-        throw std::runtime_error(fmt::format("variant erase wrong key: {}", k));
+        MY_THROW("variant erase wrong key: {}", k);
     }
     m.erase(it);
 }
@@ -281,7 +278,7 @@ nlohmann::json Variant::toJson() const
             return js;
         }
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", type_));
+            MY_THROW("variant bad type: {}", type_);
     }
 }
 
@@ -320,7 +317,7 @@ Variant Variant::fromJson(nlohmann::json const& js)
         case nlohmann::json::value_t::binary:
         case nlohmann::json::value_t::discarded:
         default:
-            throw std::runtime_error(fmt::format("json bad type: {}", fmt::underlying(type)));
+            MY_THROW("json bad type: {}", type);
     }
 }
 
@@ -340,7 +337,7 @@ void Variant::merge(Variant& a, Variant const& b)
             a = b;
             return;
         }
-        throw std::runtime_error(fmt::format("variant merge bad type: {} <- {}", type_a, type_b));
+        MY_THROW("variant merge bad type: {} <- {}", type_a, type_b);
     }
     switch (type_a) {
         case kVoid:
@@ -364,15 +361,14 @@ void Variant::merge(Variant& a, Variant const& b)
             return;
         }
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", type_a));
+            MY_THROW("variant bad type: {}", type_a);
     }
 }
 
 void Variant::mergeVec(Vec& a, Vec const& b)
 {
     if (a.size() != b.size()) {
-        throw std::runtime_error(
-            fmt::format("variant merge bad size: {} != {}", a.size(), b.size()));
+        MY_THROW("variant merge bad size: {} != {}", a.size(), b.size());
     }
     for (int i = 0; i < a.size(); ++i) {
         merge(a[i], b[i]);
@@ -439,7 +435,7 @@ bool operator==(Variant const& a, Variant const& b)
             return true;
         }
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", type_a));
+            MY_THROW("variant bad type: {}", type_a);
     }
 }
 
@@ -451,7 +447,7 @@ Variant Variant::diff(Variant const& a, Variant const& b)
         if (a.isNumber() && b.isNumber()) {
             return a;
         }
-        throw std::runtime_error(fmt::format("variant diff bad type: {} vs {}", type_a, type_b));
+        MY_THROW("variant diff bad type: {} vs {}", type_a, type_b);
     }
     switch (type_a) {
         case kVoid:
@@ -466,15 +462,14 @@ Variant Variant::diff(Variant const& a, Variant const& b)
         case kMap:
             return diffMap(a.asMap(), b.asMap());
         default:
-            throw std::runtime_error(fmt::format("variant bad type: {}", type_a));
+            MY_THROW("variant bad type: {}", type_a);
     }
 }
 
 Variant Variant::diffVec(Vec const& a, Vec const& b)
 {
     if (a.size() != b.size()) {
-        throw std::runtime_error(
-            fmt::format("variant diff bad size: {} != {}", a.size(), b.size()));
+        MY_THROW("variant diff bad size: {} != {}", a.size(), b.size());
     }
     if (a == b) {
         return {};
@@ -489,8 +484,7 @@ Variant Variant::diffVec(Vec const& a, Vec const& b)
 Variant Variant::diffMap(Map const& a, Map const& b)
 {
     if (a.size() != b.size()) {
-        throw std::runtime_error(
-            fmt::format("variant diff bad size: {} != {}", a.size(), b.size()));
+        MY_THROW("variant diff bad size: {} != {}", a.size(), b.size());
     }
     if (a == b) {
         return {};
@@ -503,7 +497,7 @@ Variant Variant::diffMap(Map const& a, Map const& b)
                 c[k] = diff(va, v);
             }
         } else {
-            throw std::runtime_error(fmt::format("variant diff bad key: {}", k));
+            MY_THROW("variant diff bad key: {}", k);
         }
     }
     return c;

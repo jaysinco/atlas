@@ -46,3 +46,5 @@ private:
 };
 
 }  // namespace net
+
+DEFINE_FORMATTER(net::Packet, item.toVariant().toJsonStr());

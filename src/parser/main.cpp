@@ -95,6 +95,7 @@ MyErrCode parsing()
 
 int main(int argc, char** argv)
 {
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     parsing();
 }

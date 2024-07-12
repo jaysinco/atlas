@@ -1,9 +1,11 @@
 #include "toolkit/args.h"
+#include "toolkit/logging.h"
 #include <uwebsockets/App.h>
 
 int main(int argc, char** argv)
 {
-    INIT_LOG(argc, argv);
+    toolkit::Args args(argc, argv);
+    args.parse();
     auto key_file = (toolkit::getDataDir() / "key.pem").generic_string();
     auto cert_file = (toolkit::getDataDir() / "cert.pem").generic_string();
 

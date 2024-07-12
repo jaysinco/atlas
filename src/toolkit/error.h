@@ -8,6 +8,7 @@ enum class MyErrCode : int
     kOk = 0,
     kFailed,
     kUnknown,
+    kException,
     kCancelled,
     kInvalidArgument,
     kDeadlineExceeded,

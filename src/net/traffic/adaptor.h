@@ -28,19 +28,4 @@ private:
 
 }  // namespace net
 
-template <>
-class fmt::formatter<net::Adaptor>
-{
-public:
-    template <typename Context>
-    constexpr auto parse(Context& ctx)
-    {
-        return ctx.begin();
-    }
-
-    template <typename Context>
-    constexpr auto format(net::Adaptor const& apt, Context& ctx) const
-    {
-        return format_to(ctx.out(), "{}", apt.toVariant().toJsonStr());
-    }
-};
+DEFINE_FORMATTER(net::Adaptor, item.toVariant().toJsonStr());
