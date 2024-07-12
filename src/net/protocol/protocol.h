@@ -13,6 +13,8 @@ using Variant = toolkit::Variant;
 class Protocol
 {
 public:
+    using Stack = std::vector<std::shared_ptr<Protocol>>;
+
     enum Type
     {
         kEmpty,

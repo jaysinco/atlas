@@ -86,7 +86,7 @@ Protocol::Type Http::type() const { return kHTTP; }
 
 Protocol::Type Http::succType() const { return kEmpty; }
 
-bool Http::linkTo(Protocol const& rhs) const { MY_THROW("{}", "unimplemented method"); }
+bool Http::linkTo(Protocol const& rhs) const { MY_THROW("unimplemented method"); }
 
 Http::Detail const& Http::getDetail() const { return d_; }
 

@@ -10,6 +10,6 @@ int main(int argc, char** argv)
     for (auto const& apt: net::Adaptor::all()) {
         j.push_back(apt.toVariant());
     }
-    ILOG("{}", toolkit::Variant(j).toJsonStr(3));
+    ILOG(toolkit::Variant(j).toJsonStr(3));
     MY_CATCH
 }

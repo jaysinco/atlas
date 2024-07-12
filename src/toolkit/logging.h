@@ -2,11 +2,11 @@
 #include "toolkit.h"
 #include <fmt/format.h>
 
-#define FSTR(...) (fmt::format(__VA_ARGS__))
-#define TOSTR(v) (fmt::format("{}", v))
+#define FSTR(...) (toolkit::format(__VA_ARGS__))
+#define TOSTR(v) (FSTR("{}", v))
 #define CURR_FILENAME (std::filesystem::path(__FILE__).filename().string())
-#define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, __VA_ARGS__))
-#define MY_THROW(f, ...) throw std::runtime_error(LOG_FSTR(f, __VA_ARGS__))
+#define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, CURR_FILENAME, __LINE__, ##__VA_ARGS__))
+#define MY_THROW(...) throw std::runtime_error(LOG_FSTR(__VA_ARGS__))
 #define MY_TRY try {
 #define MY_CATCH \
     }            \
@@ -24,6 +24,16 @@
 
 namespace toolkit
 {
+
+template <typename... Ts>
+std::string format(Ts&&... args)
+{
+    if constexpr (sizeof...(Ts) == 1) {
+        return std::string(std::forward<Ts>(args)...);
+    } else {
+        return fmt::format(std::forward<Ts>(args)...);
+    }
+}
 
 enum class LogLevel : int
 {

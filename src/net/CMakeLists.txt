@@ -13,7 +13,6 @@ add_library(${TARGET_NAME} STATIC
     protocol/dns.cpp
     protocol/http.cpp
     traffic/adaptor.cpp
-    # traffic/port-table.cpp
     # traffic/packet.cpp
     # traffic/transport.cpp
 )

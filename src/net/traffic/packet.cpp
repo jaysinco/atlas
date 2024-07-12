@@ -1,5 +1,5 @@
 #include "packet.h"
-#include "port-table.h"
+#include "toolkit/logging.h"
 #include "protocol/ethernet.h"
 #include "protocol/arp.h"
 #include "protocol/ipv4.h"
@@ -9,22 +9,25 @@
 #include "protocol/dns.h"
 #include "protocol/http.h"
 
-std::map<std::string, packet::decoder> packet::decoder_dict = {
-    {Protocol_Type_Ethernet, packet::decode<::ethernet>},
-    {Protocol_Type_ARP, packet::decode<::arp>},
-    {Protocol_Type_RARP, packet::decode<::arp>},
-    {Protocol_Type_IPv4, packet::decode<::ipv4>},
-    {Protocol_Type_ICMP, packet::decode<::icmp>},
-    {Protocol_Type_UDP, packet::decode<::udp>},
-    {Protocol_Type_TCP, packet::decode<::tcp>},
-    {Protocol_Type_DNS, packet::decode<::dns>},
-    {Protocol_Type_HTTP, packet::decode<::http>},
-};
-
-packet::packet() { d.time = gettimeofday(); }
-
-packet::packet(uint8_t const* const start, uint8_t const* const end, timeval const& tv)
+namespace net
 {
+
+Packet::Packet() { d_.time = std::chrono::system_clock::now(); }
+
+MyErrCode Packet::encode(std::vector<uint8_t>& bytes) const
+{
+    for (auto it = d_.layers.crbegin(); it != d_.layers.crend(); ++it) {
+        CHECK_ERR_RET((*it)->encode(bytes));
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Packet::decode(uint8_t const* const start, uint8_t const* const end)
+{
+    if (!d_.layers.empty()) {
+        ELOG("dirty protocol stack");
+        return MyErrCode::kFailed;
+    }
     uint8_t const* pstart = start;
     std::string type = Protocol_Type_Ethernet;
     while (type != Protocol_Type_Void && pstart < end) {
@@ -45,32 +48,6 @@ packet::packet(uint8_t const* const start, uint8_t const* const end, timeval con
     }
     d.time = tv;
     d.owner = get_owner();
-}
-
-timeval packet::gettimeofday()
-{
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-    tm t = {0};
-    t.tm_year = st.wYear - 1900;
-    t.tm_mon = st.wMonth - 1;
-    t.tm_mday = st.wDay;
-    t.tm_hour = st.wHour;
-    t.tm_min = st.wMinute;
-    t.tm_sec = st.wSecond;
-    t.tm_isdst = -1;
-    time_t clock = mktime(&t);
-    timeval tv;
-    tv.tv_sec = clock;
-    tv.tv_usec = st.wMilliseconds * 1000;
-    return tv;
-}
-
-void packet::to_bytes(std::vector<uint8_t>& bytes) const
-{
-    for (auto it = d.layers.crbegin(); it != d.layers.crend(); ++it) {
-        (*it)->to_bytes(bytes);
-    }
 }
 
 static std::string tv2s(timeval const& tv)
@@ -193,3 +170,5 @@ packet packet::ping(mac const& smac, ip4 const& sip, mac const& dmac, ip4 const&
     p.d.layers.push_back(std::make_shared<icmp>(echo));
     return p;
 }
+
+}  // namespace net
