@@ -1,6 +1,5 @@
 #pragma once
 #include "protocol/protocol.h"
-#include <memory>
 #include "protocol/addr.h"
 #include <optional>
 #include <chrono>
@@ -21,11 +20,12 @@ public:
 
     Packet();
     MyErrCode encode(std::vector<uint8_t>& bytes) const;
-    MyErrCode decode(uint8_t const* const start, uint8_t const* const end);
+    MyErrCode decode(uint8_t const* const start, uint8_t const* const end,
+                     Protocol::Type start_type = Protocol::kEthernet);
     Variant const& toVariant() const;
     bool linkTo(Packet const& rhs) const;
-    bool contains(Protocol::Type type) const;
-    bool isError() const;
+    bool hasType(Protocol::Type type) const;
+    bool hasIcmpError() const;
     void setLayers(Protocol::Stack const& st);
     void setLayers(Protocol::Stack&& st);
     void setTime(Time const& tm);
@@ -41,9 +41,8 @@ public:
 private:
     Detail d_;
     std::optional<Variant> j_cached_;
-
-    static std::shared_ptr<Protocol> decode(Protocol::Type type, uint8_t const* const start,
-                                            uint8_t const*& end, Protocol const* prev);
+    static MyErrCode decodeLayer(Protocol::Type type, uint8_t const* const start,
+                                 uint8_t const*& end, Protocol const* prev, Protocol::Ptr& pt);
 };
 
 }  // namespace net

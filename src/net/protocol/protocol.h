@@ -13,7 +13,8 @@ using Variant = toolkit::Variant;
 class Protocol
 {
 public:
-    using Stack = std::vector<std::shared_ptr<Protocol>>;
+    using Ptr = std::shared_ptr<Protocol>;
+    using Stack = std::vector<Ptr>;
 
     enum Type
     {
@@ -54,7 +55,7 @@ public:
     // successor protocol type that follows
     virtual Type succType() const = 0;
 
-    // whether rhs is the response to this
+    // whether this is request, and rhs is the response
     virtual bool linkTo(Protocol const& rhs) const = 0;
 
 public:

@@ -8,6 +8,8 @@
 #include "protocol/tcp.h"
 #include "protocol/dns.h"
 #include "protocol/http.h"
+#include <fmt/chrono.h>
+#include <algorithm>
 
 namespace net
 {
@@ -22,152 +24,160 @@ MyErrCode Packet::encode(std::vector<uint8_t>& bytes) const
     return MyErrCode::kOk;
 }
 
-MyErrCode Packet::decode(uint8_t const* const start, uint8_t const* const end)
+MyErrCode Packet::decode(uint8_t const* const start, uint8_t const* const end,
+                         Protocol::Type start_type)
 {
     if (!d_.layers.empty()) {
         ELOG("dirty protocol stack");
         return MyErrCode::kFailed;
     }
+    Protocol::Type type = start_type;
     uint8_t const* pstart = start;
-    std::string type = Protocol_Type_Ethernet;
-    while (type != Protocol_Type_Void && pstart < end) {
-        if (decoder_dict.count(type) <= 0) {
-            VLOG_IF(3, protocol::is_specific(type))
-                << "unimplemented protocol: {} -> {}"_format(d.layers.back()->type(), type);
-            break;
-        }
-        uint8_t const* pend = end;
-        std::shared_ptr<protocol> prot =
-            decoder_dict.at(type)(pstart, pend, d.layers.size() > 0 ? &*d.layers.back() : nullptr);
+    uint8_t const* pend = end;
+    while (type != Protocol::kEmpty && pstart < end) {
+        Protocol const* prev = d_.layers.empty() ? nullptr : (&*d_.layers.back());
+        Protocol::Ptr pt;
+        CHECK_ERR_RET(decodeLayer(type, pstart, pend, prev, pt));
         if (pend > end) {
-            throw std::runtime_error("exceed data boundary after {}"_format(type));
+            ELOG("exceed data boundary after {}", type);
+            return MyErrCode::kFailed;
         }
-        d.layers.push_back(prot);
+        d_.layers.push_back(pt);
+        type = pt->succType();
         pstart = pend;
-        type = prot->succ_type();
+        pend = end;
     }
-    d.time = tv;
-    d.owner = get_owner();
+    return MyErrCode::kOk;
 }
 
-static std::string tv2s(timeval const& tv)
+Variant const& Packet::toVariant() const
 {
-    tm local;
-    time_t timestamp = tv.tv_sec;
-    localtime_s(&local, &timestamp);
-    char timestr[16] = {0};
-    strftime(timestr, sizeof(timestr), "%H:%M:%S", &local);
-    return "{}.{:03d}"_format(timestr, tv.tv_usec / 1000);
-}
-
-json const& packet::to_json() const
-{
-    if (!j_cached) {
-        json j;
-        j["layers"] = json::array();
-        for (auto it = d.layers.cbegin(); it != d.layers.cend(); ++it) {
-            std::string type = (*it)->type();
-            j[type] = (*it)->to_json();
-            j["layers"].push_back(type);
+    if (!j_cached_) {
+        Variant j;
+        Variant::Vec layers;
+        for (auto& p: d_.layers) {
+            layers.push_back(p->toVariant());
         }
-        j["time"] = tv2s(d.time);
-        j["owner"] = d.owner;
-        const_cast<packet&>(*this).j_cached = j;
+        j["layers"] = layers;
+        j["time"] = TOSTR(d_.time);
+        const_cast<Packet&>(*this).j_cached_ = std::move(j);
     }
-    return *j_cached;
+    return *j_cached_;
 }
 
-bool packet::link_to(packet const& rhs) const
+bool Packet::linkTo(Packet const& rhs) const
 {
-    if (d.layers.size() != rhs.d.layers.size()) {
+    if (d_.layers.size() != rhs.d_.layers.size()) {
         return false;
     }
-    if (d.time.tv_sec > rhs.d.time.tv_sec) {
+    if (d_.time > rhs.d_.time) {
         return false;
     }
-    if (rhs.d.layers.size() > 2 && rhs.d.layers.at(2)->type() == Protocol_Type_ICMP) {
-        auto& ch = dynamic_cast<icmp const&>(*rhs.d.layers.at(2));
-        if (ch.icmp_type() == "error" && d.layers.size() > 1 &&
-            d.layers.at(1)->type() == Protocol_Type_IPv4) {
-            auto& ih = dynamic_cast<ipv4 const&>(*d.layers.at(1));
-            if (ch.get_extra().eip == ih) {
+    if (rhs.d_.layers.size() > 2 && rhs.d_.layers.at(2)->type() == Protocol::kICMP) {
+        auto& ch = dynamic_cast<Icmp const&>(*rhs.d_.layers.at(2));
+        if (ch.icmpType() == "error" && d_.layers.size() > 1 &&
+            d_.layers.at(1)->type() == Protocol::kIPv4) {
+            auto& ih = dynamic_cast<Ipv4 const&>(*d_.layers.at(1));
+            if (ch.getExtra().eip == ih) {
                 return true;
             }
         }
     }
-    for (int i = 0; i < d.layers.size(); ++i) {
-        if (!d.layers.at(i)->link_to(*rhs.d.layers.at(i))) {
+    for (int i = 0; i < d_.layers.size(); ++i) {
+        if (!d_.layers.at(i)->linkTo(*rhs.d_.layers.at(i))) {
             return false;
         }
     }
     return true;
 }
 
-packet::detail const& packet::get_detail() const { return d; }
-
-void packet::set_time(timeval const& tv) { d.time = tv; }
-
-bool packet::is_error() const
+bool Packet::hasType(Protocol::Type type) const
 {
-    return std::find_if(d.layers.cbegin(), d.layers.cend(),
-                        [](std::shared_ptr<protocol> const& pt) {
-                            if (pt->type() == Protocol_Type_ICMP) {
-                                auto& ch = dynamic_cast<const icmp&>(*pt);
-                                return ch.icmp_type() == "error";
-                            }
-                            return false;
-                        }) != d.layers.cend();
+    return std::find_if(d_.layers.cbegin(), d_.layers.cend(), [&](Protocol::Ptr const& pt) {
+               return pt->type() == type;
+           }) != d_.layers.cend();
 }
 
-bool packet::has_type(std::string const& type) const
+bool Packet::hasIcmpError() const
 {
-    return std::find_if(d.layers.cbegin(), d.layers.cend(),
-                        [&](std::shared_ptr<protocol> const& pt) { return pt->type() == type; }) !=
-           d.layers.cend();
+    return std::find_if(d_.layers.cbegin(), d_.layers.cend(), [](Protocol::Ptr const& pt) {
+               if (pt->type() == Protocol::kICMP) {
+                   auto& ch = dynamic_cast<const Icmp&>(*pt);
+                   return ch.icmpType() == "error";
+               }
+               return false;
+           }) != d_.layers.cend();
 }
 
-std::string packet::get_owner() const
+void Packet::setLayers(Protocol::Stack const& st) { d_.layers = st; }
+
+void Packet::setLayers(Protocol::Stack&& st) { d_.layers = std::move(st); }
+
+void Packet::setTime(Time const& tm) { d_.time = tm; }
+
+Packet::Detail const& Packet::getDetail() const { return d_; }
+
+MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, uint8_t const*& end,
+                              Protocol const* prev, Protocol::Ptr& pt)
 {
-    auto output = [](std::string const& src, std::string const& dest) -> std::string {
-        if (src == dest) {
-            return src;
-        }
-        if (src.size() > 0 && dest.size() > 0) {
-            return "{} > {}"_format(src, dest);
-        }
-        return std::max(src, dest);
-    };
-    if (has_type(Protocol_Type_UDP)) {
-        auto const& id = dynamic_cast<ipv4 const&>(*d.layers[1]).get_detail();
-        auto const& ud = dynamic_cast<udp const&>(*d.layers[2]).get_detail();
-        return output(port_table::lookup(std::make_tuple("udp", id.sip, ud.sport)),
-                      port_table::lookup(std::make_tuple("udp", id.dip, ud.dport)));
-    } else if (has_type(Protocol_Type_TCP)) {
-        auto const& id = dynamic_cast<ipv4 const&>(*d.layers[1]).get_detail();
-        auto const& td = dynamic_cast<tcp const&>(*d.layers[2]).get_detail();
-        return output(port_table::lookup(std::make_tuple("tcp", id.sip, td.sport)),
-                      port_table::lookup(std::make_tuple("tcp", id.dip, td.dport)));
+    switch (type) {
+        case Protocol::kEthernet:
+            pt = std::make_shared<Ethernet>();
+            break;
+        case Protocol::kIPv4:
+            pt = std::make_shared<Ipv4>();
+            break;
+        case Protocol::kARP:
+        case Protocol::kRARP:
+            pt = std::make_shared<Arp>();
+            break;
+        case Protocol::kICMP:
+            pt = std::make_shared<Icmp>();
+            break;
+        case Protocol::kTCP:
+            pt = std::make_shared<Tcp>();
+            break;
+        case Protocol::kUDP:
+            pt = std::make_shared<Udp>();
+            break;
+        case Protocol::kDNS:
+            pt = std::make_shared<Dns>();
+            break;
+        case Protocol::kHTTP:
+            pt = std::make_shared<Http>();
+            break;
+        case Protocol::kIPv6:
+        case Protocol::kHTTPS:
+        case Protocol::kSSH:
+        case Protocol::kTELNET:
+        case Protocol::kRDP:
+        case Protocol::kEmpty:
+        case Protocol::kUnknown:
+        default:
+            ELOG("decode '{}' not support", TOSTR(type));
+            return MyErrCode::kFailed;
     }
-    return "";
+    CHECK_ERR_RET(pt->decode(start, end, prev));
+    return MyErrCode::kOk;
 }
 
-packet packet::arp(mac const& smac, ip4 const& sip, mac const& dmac, ip4 const& dip, bool reply,
+Packet Packet::arp(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip, bool reply,
                    bool reverse)
 {
-    packet p;
-    p.d.layers.push_back(std::make_shared<ethernet>(
-        smac, mac::broadcast, reverse ? Protocol_Type_RARP : Protocol_Type_ARP));
-    p.d.layers.push_back(std::make_shared<::arp>(smac, sip, dmac, dip, reply, reverse));
+    Packet p;
+    p.d_.layers.push_back(std::make_shared<Ethernet>(smac, Mac::kBroadcast,
+                                                     reverse ? Protocol::kRARP : Protocol::kARP));
+    p.d_.layers.push_back(std::make_shared<Arp>(smac, sip, dmac, dip, reply, reverse));
     return p;
 }
 
-packet packet::ping(mac const& smac, ip4 const& sip, mac const& dmac, ip4 const& dip, uint8_t ttl,
+Packet Packet::ping(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip, uint8_t ttl,
                     std::string const& echo, bool forbid_slice)
 {
-    packet p;
-    p.d.layers.push_back(std::make_shared<ethernet>(smac, dmac, Protocol_Type_IPv4));
-    p.d.layers.push_back(std::make_shared<ipv4>(sip, dip, ttl, Protocol_Type_ICMP, forbid_slice));
-    p.d.layers.push_back(std::make_shared<icmp>(echo));
+    Packet p;
+    p.d_.layers.push_back(std::make_shared<Ethernet>(smac, dmac, Protocol::kIPv4));
+    p.d_.layers.push_back(std::make_shared<Ipv4>(sip, dip, ttl, Protocol::kICMP, forbid_slice));
+    p.d_.layers.push_back(std::make_shared<Icmp>(echo));
     return p;
 }
 

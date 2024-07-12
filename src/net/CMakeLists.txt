@@ -13,7 +13,7 @@ add_library(${TARGET_NAME} STATIC
     protocol/dns.cpp
     protocol/http.cpp
     traffic/adaptor.cpp
-    # traffic/packet.cpp
+    traffic/packet.cpp
     # traffic/transport.cpp
 )
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
