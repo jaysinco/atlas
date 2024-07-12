@@ -118,6 +118,9 @@ public:
     static void merge(Variant& a, Variant const& b);
     static Variant diff(Variant const& a, Variant const& b);
 
+    // format type
+    static std::string typeToStr(Type type);
+
 private:
     static void mergeVec(Vec& a, Vec const& b);
     static void mergeMap(Map& a, Map const& b);
@@ -133,3 +136,5 @@ bool operator==(Variant const& a, Variant const& b);
 bool operator!=(Variant const& a, Variant const& b);
 
 }  // namespace toolkit
+
+DEFINE_FORMATTER(toolkit::Variant::Type, toolkit::Variant::typeToStr(item));

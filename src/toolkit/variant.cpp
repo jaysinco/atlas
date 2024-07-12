@@ -317,7 +317,7 @@ Variant Variant::fromJson(nlohmann::json const& js)
         case nlohmann::json::value_t::binary:
         case nlohmann::json::value_t::discarded:
         default:
-            MY_THROW("json bad type: {}", type);
+            MY_THROW("json bad type: {}", static_cast<int>(type));
     }
 }
 
@@ -501,6 +501,30 @@ Variant Variant::diffMap(Map const& a, Map const& b)
         }
     }
     return c;
+}
+
+std::string Variant::typeToStr(Type type)
+{
+    switch (type) {
+        case kVoid:
+            return "void";
+        case kBool:
+            return "bool";
+        case kInt:
+            return "int";
+        case kUint:
+            return "uint";
+        case kDouble:
+            return "double";
+        case kStr:
+            return "str";
+        case kVec:
+            return "vec";
+        case kMap:
+            return "map";
+        default:
+            return "invalid";
+    }
 }
 
 }  // namespace toolkit
