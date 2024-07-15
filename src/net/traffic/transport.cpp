@@ -1,40 +1,47 @@
 #include "transport.h"
 #include "protocol/arp.h"
 #include "protocol/icmp.h"
+#include <pcap.h>
 #include <atomic>
 #include <thread>
 
-pcap_t* transport::open_adaptor(adaptor const& apt, int timeout_ms)
+namespace net
 {
-    pcap_t* handle;
+
+void* Transport::openAdaptor(Adaptor const& apt, int timeout_ms)
+{
+    pcap_t* hndl;
     char* errbuf = new char[PCAP_ERRBUF_SIZE];
-    if (!(handle = pcap_open(apt.name.c_str(), 65536, PCAP_OPENFLAG_PROMISCUOUS, timeout_ms, NULL,
-                             errbuf))) {
-        throw std::runtime_error("failed to open adapter: {}"_format(apt.name));
+    if (!(hndl = pcap_open(apt.name.c_str(), 65536, PCAP_OPENFLAG_PROMISCUOUS, timeout_ms, NULL,
+                           errbuf))) {
+        MY_THROW("failed to open adapter {}: {}", apt.name, errbuf);
     }
-    return handle;
+    return hndl;
 }
 
-void transport::setfilter(pcap_t* handle, std::string const& filter, ip4 const& mask)
+void Transport::setFilter(void* handle, std::string const& filter, Ip4 const& mask)
 {
+    auto hndl = reinterpret_cast<pcap_t*>(handle);
     bpf_program fcode;
-    if (pcap_compile(handle, &fcode, filter.c_str(), 1, static_cast<uint32_t>(mask)) < 0) {
-        throw std::runtime_error(
+    if (pcap_compile(hndl, &fcode, filter.c_str(), 1, static_cast<uint32_t>(mask)) < 0) {
+        MY_THROW(
             "failed to compile pcap filter: {}, please refer to "
-            "https://nmap.org/npcap/guide/wpcap/pcap-filter.html"_format(filter));
+            "https://nmap.org/npcap/guide/wpcap/pcap-filter.html",
+            filter);
     }
-    if (pcap_setfilter(handle, &fcode) < 0) {
-        throw std::runtime_error("failed to set pcap filter: {}"_format(filter));
+    if (pcap_setfilter(hndl, &fcode) < 0) {
+        MY_THROW("failed to set pcap filter: {}", filter);
     }
 }
 
-bool transport::recv(pcap_t* handle, std::function<bool(packet const& p)> callback, int timeout_ms,
+bool Transport::recv(void* handle, std::function<bool(Packet const& p)> callback, int timeout_ms,
                      std::chrono::system_clock::time_point const& start_tm)
 {
+    auto hndl = reinterpret_cast<pcap_t*>(handle);
     int res;
     pcap_pkthdr* info;
     uint8_t const* start;
-    while ((res = pcap_next_ex(handle, &info, &start)) >= 0) {
+    while ((res = pcap_next_ex(hndl, &info, &start)) >= 0) {
         if (timeout_ms > 0) {
             auto now = std::chrono::system_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_tm);
@@ -45,17 +52,23 @@ bool transport::recv(pcap_t* handle, std::function<bool(packet const& p)> callba
         if (res == 0) {
             continue;  // timeout elapsed
         }
-        if (callback(packet(start, start + info->len, info->ts))) {
+        Packet pac;
+        std::time_t t = std::time(nullptr);
+        auto tm = std::chrono::system_clock::from_time_t(t);
+        if (pac.decode(start, start + info->len, info->ts) != MyErrCode::kOk) {
+            MY_THROW("failed to decode packet");
+        }
+        if (callback(pac)) {
             return true;
         }
     }
     if (res == -1) {
-        throw std::runtime_error("failed to read packets: {}"_format(pcap_geterr(handle)));
+        MY_THROW("failed to read packets: {}", pcap_geterr(hndl));
     }
-    throw std::runtime_error("stop reading packets due to unexpected error");
+    MY_THROW("stop reading packets due to unexpected error");
 }
 
-void transport::send(pcap_t* handle, packet const& pac)
+void Transport::send(pcap_t* handle, packet const& pac)
 {
     std::vector<uint8_t> bytes;
     pac.to_bytes(bytes);
@@ -65,7 +78,7 @@ void transport::send(pcap_t* handle, packet const& pac)
     }
 }
 
-bool transport::request(pcap_t* handle, packet const& req, packet& reply, int timeout_ms,
+bool Transport::request(pcap_t* handle, packet const& req, packet& reply, int timeout_ms,
                         bool do_send)
 {
     auto start_tm = std::chrono::system_clock::now();
@@ -84,7 +97,7 @@ bool transport::request(pcap_t* handle, packet const& req, packet& reply, int ti
         timeout_ms, start_tm);
 }
 
-bool transport::ip2mac(pcap_t* handle, ip4 const& ip, mac& mac_, bool use_cache, int timeout_ms)
+bool Transport::ip2mac(pcap_t* handle, ip4 const& ip, mac& mac_, bool use_cache, int timeout_ms)
 {
     static std::map<ip4, std::pair<mac, std::chrono::system_clock::time_point>> cached;
     auto start_tm = std::chrono::system_clock::now();
@@ -115,7 +128,7 @@ bool transport::ip2mac(pcap_t* handle, ip4 const& ip, mac& mac_, bool use_cache,
         }
     });
     packet reply;
-    bool ok = transport::request(handle, req, reply, timeout_ms, false);
+    bool ok = Transport::request(handle, req, reply, timeout_ms, false);
     if (ok) {
         protocol const& prot = *reply.get_detail().layers.back();
         mac_ = dynamic_cast<arp const&>(prot).get_detail().smac;
@@ -133,7 +146,7 @@ static long operator-(timeval const& tv1, timeval const& tv2)
     return (diff_sec * 1000 + diff_ms);
 }
 
-bool transport::ping(pcap_t* handle, adaptor const& apt, ip4 const& ip, packet& reply,
+bool Transport::ping(pcap_t* handle, adaptor const& apt, ip4 const& ip, packet& reply,
                      long& cost_ms, int ttl, std::string const& echo, bool forbid_slice,
                      int timeout_ms)
 {
@@ -144,14 +157,14 @@ bool transport::ping(pcap_t* handle, adaptor const& apt, ip4 const& ip, packet& 
         return false;
     }
     packet req = packet::ping(apt.mac_, apt.ip, dmac, ip, ttl, echo, forbid_slice);
-    bool ok = transport::request(handle, req, reply, timeout_ms);
+    bool ok = Transport::request(handle, req, reply, timeout_ms);
     if (ok) {
         cost_ms = reply.get_detail().time - req.get_detail().time;
     }
     return ok;
 }
 
-bool transport::query_dns(ip4 const& server, std::string const& domain, dns& reply, int timeout_ms)
+bool Transport::query_dns(ip4 const& server, std::string const& domain, dns& reply, int timeout_ms)
 {
     SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) {
@@ -196,7 +209,7 @@ bool transport::query_dns(ip4 const& server, std::string const& domain, dns& rep
     return true;
 }
 
-int transport::calc_mtu(pcap_t* handle, adaptor const& apt, ip4 const& ip, int high_bound,
+int Transport::calc_mtu(pcap_t* handle, adaptor const& apt, ip4 const& ip, int high_bound,
                         bool print_log)
 {
     int const offset = sizeof(ipv4::detail) + sizeof(icmp::detail);
@@ -234,3 +247,5 @@ int transport::calc_mtu(pcap_t* handle, adaptor const& apt, ip4 const& ip, int h
     }
     return low + offset;
 }
+
+}  // namespace net

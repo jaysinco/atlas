@@ -2,34 +2,39 @@
 #include "packet.h"
 #include "adaptor.h"
 #include "protocol/dns.h"
-#include <pcap.h>
+#include <functional>
 
-class transport
+namespace net
+{
+
+class Transport
 {
 public:
-    static pcap_t *open_adaptor(const adaptor &apt, int timeout_ms = 1000);
+    static void* openAdaptor(Adaptor const& apt, int timeout_ms = 1000);
 
-    static void setfilter(pcap_t *handle, const std::string &filter, const ip4 &mask);
+    static void setFilter(void* handle, std::string const& filter, Ip4 const& mask);
 
     static bool recv(
-        pcap_t *handle, std::function<bool(const packet &p)> callback, int timeout_ms = -1,
-        const std::chrono::system_clock::time_point &start_tm = std::chrono::system_clock::now());
+        void* handle, std::function<bool(Packet const& p)> callback, int timeout_ms = -1,
+        std::chrono::system_clock::time_point const& start_tm = std::chrono::system_clock::now());
 
-    static void send(pcap_t *handle, const packet &pac);
+    static void send(void* handle, Packet const& pac);
 
-    static bool request(pcap_t *handle, const packet &req, packet &reply, int timeout_ms = -1,
+    static bool request(void* handle, Packet const& req, Packet& reply, int timeout_ms = -1,
                         bool do_send = true);
 
-    static bool ip2mac(pcap_t *handle, const ip4 &ip, mac &mac_, bool use_cache = true,
+    static bool ip2mac(void* handle, Ip4 const& ip, Mac& mac, bool use_cache = true,
                        int timeout_ms = 5000);
 
-    static bool ping(pcap_t *handle, const adaptor &apt, const ip4 &ip, packet &reply,
-                     long &cost_ms, int ttl = 128, const std::string &echo = "",
+    static bool ping(void* handle, Adaptor const& apt, Ip4 const& ip, Packet& reply,
+                     int64_t& cost_ms, int ttl = 128, std::string const& echo = "",
                      bool forbid_slice = false, int timeout_ms = 5000);
 
-    static bool query_dns(const ip4 &server, const std::string &domain, dns &reply,
-                          int timeout_ms = 5000);
+    static bool queryDns(Ip4 const& server, std::string const& domain, Dns& reply,
+                         int timeout_ms = 5000);
 
-    static int calc_mtu(pcap_t *handle, const adaptor &apt, const ip4 &ip, int high_bound = 1500,
-                        bool print_log = false);
+    static int calcMtu(void* handle, Adaptor const& apt, Ip4 const& ip, int high_bound = 1500,
+                       bool print_log = false);
 };
+
+}  // namespace net
