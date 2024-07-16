@@ -33,7 +33,7 @@ MyErrCode Packet::decode(uint8_t const* const start, uint8_t const* const end,
     Protocol::Type type = start_type;
     uint8_t const* pstart = start;
     uint8_t const* pend = end;
-    while (type != Protocol::kEmpty && pstart < end) {
+    while (type != Protocol::kEmpty && type != Protocol::kUnknown && pstart < end) {
         Protocol const* prev = d_.layers.empty() ? nullptr : (&*d_.layers.back());
         Protocol::Ptr pt;
         CHECK_ERR_RET(decodeLayer(type, pstart, pend, prev, pt));
@@ -101,7 +101,7 @@ bool Packet::hasIcmpError() const
 {
     return std::find_if(d_.layers.cbegin(), d_.layers.cend(), [](Protocol::Ptr const& pt) {
                if (pt->type() == Protocol::kICMP) {
-                   auto& ch = dynamic_cast<const Icmp&>(*pt);
+                   auto& ch = dynamic_cast<Icmp const&>(*pt);
                    return ch.icmpType() == "error";
                }
                return false;
@@ -153,7 +153,7 @@ MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, u
         case Protocol::kEmpty:
         case Protocol::kUnknown:
         default:
-            DLOG("decode '{}' not support", TOSTR(type));
+            ELOG("decode '{}' not support", TOSTR(type));
             return MyErrCode::kFailed;
     }
     CHECK_ERR_RET(pt->decode(start, end, prev));

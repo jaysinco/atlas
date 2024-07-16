@@ -19,6 +19,10 @@ MyErrCode Transport::open(Adaptor const& apt, void*& handle, bool promisc, int t
         ELOG("failed to open adapter {}: {}", apt.name, errbuf);
         return MyErrCode::kFailed;
     }
+    if (pcap_datalink(hndl) != DLT_EN10MB) {
+        ELOG("link layer header is not ethernet");
+        return MyErrCode::kFailed;
+    }
     handle = hndl;
     return MyErrCode::kOk;
 }
@@ -68,9 +72,7 @@ MyErrCode Transport::recv(void* handle, std::function<bool(Packet const& p)> cal
             continue;  // timeout elapsed
         }
         Packet pac;
-        if (pac.decode(start, start + info->len, Protocol::kEthernet) != MyErrCode::kOk) {
-            continue;
-        }
+        CHECK_ERR_RET(pac.decode(start, start + info->len, Protocol::kEthernet));
         pac.setTime(Packet::Time{std::chrono::seconds{info->ts.tv_sec} +
                                  std::chrono::microseconds{info->ts.tv_usec}});
         if (callback(pac)) {

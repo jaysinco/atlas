@@ -1,4 +1,5 @@
 #include "arp.h"
+#include "ethernet.h"
 #include "toolkit/logging.h"
 
 namespace net
@@ -28,8 +29,12 @@ MyErrCode Arp::encode(std::vector<uint8_t>& bytes) const
 MyErrCode Arp::decode(uint8_t const* const start, uint8_t const*& end, Protocol const* prev)
 {
     if (end != start + sizeof(Detail)) {
-        ELOG("abnormal arp length: expected={}, got={}", sizeof(Detail), end - start);
-        return MyErrCode::kFailed;
+        int padded = Ethernet::kMinFrameSizeNoFCS - sizeof(Ethernet::Detail) - sizeof(Arp::Detail);
+        if (end != start + sizeof(Detail) + padded) {
+            ELOG("abnormal arp length: expected={} or {}, got={}", sizeof(Detail),
+                 sizeof(Detail) + padded, end - start);
+            return MyErrCode::kFailed;
+        }
     }
     d_ = ntoh(*reinterpret_cast<Detail const*>(start));
     return MyErrCode::kOk;

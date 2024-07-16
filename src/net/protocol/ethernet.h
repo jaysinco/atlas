@@ -9,6 +9,9 @@ namespace net
 class Ethernet: public Protocol
 {
 public:
+    static constexpr int kMinFrameSize = 64;
+    static constexpr int kMinFrameSizeNoFCS = kMinFrameSize - 4;  // without frame check sequence
+
     struct Detail
     {
         Mac dmac;       // Destination address
