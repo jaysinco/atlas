@@ -10,12 +10,12 @@
 namespace net
 {
 
-MyErrCode Transport::open(Adaptor const& apt, void*& handle, int timeout_ms)
+MyErrCode Transport::open(Adaptor const& apt, void*& handle, bool promisc, int timeout_ms)
 {
     pcap_t* hndl;
     char* errbuf = new char[PCAP_ERRBUF_SIZE];
     auto errbuf_guard = toolkit::scopeExit([&] { delete[] errbuf; });
-    if (!(hndl = pcap_open_live(apt.name.c_str(), 65536, 1, timeout_ms, errbuf))) {
+    if (!(hndl = pcap_open_live(apt.name.c_str(), 65536, promisc, timeout_ms, errbuf))) {
         ELOG("failed to open adapter {}: {}", apt.name, errbuf);
         return MyErrCode::kFailed;
     }
@@ -68,7 +68,9 @@ MyErrCode Transport::recv(void* handle, std::function<bool(Packet const& p)> cal
             continue;  // timeout elapsed
         }
         Packet pac;
-        CHECK_ERR_RET(pac.decode(start, start + info->len, Protocol::kEthernet));
+        if (pac.decode(start, start + info->len, Protocol::kEthernet) != MyErrCode::kOk) {
+            continue;
+        }
         pac.setTime(Packet::Time{std::chrono::seconds{info->ts.tv_sec} +
                                  std::chrono::microseconds{info->ts.tv_usec}});
         if (callback(pac)) {

@@ -10,7 +10,8 @@ namespace net
 class Transport
 {
 public:
-    static MyErrCode open(Adaptor const& apt, void*& handle, int timeout_ms = 1000);
+    static MyErrCode open(Adaptor const& apt, void*& handle, bool promisc = true,
+                          int timeout_ms = 1000);
     static MyErrCode close(void* handle);
     static MyErrCode setFilter(void* handle, std::string const& filter, Ip4 const& mask);
 

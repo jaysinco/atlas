@@ -153,7 +153,7 @@ MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, u
         case Protocol::kEmpty:
         case Protocol::kUnknown:
         default:
-            ELOG("decode '{}' not support", TOSTR(type));
+            DLOG("decode '{}' not support", TOSTR(type));
             return MyErrCode::kFailed;
     }
     CHECK_ERR_RET(pt->decode(start, end, prev));
