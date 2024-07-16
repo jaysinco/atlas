@@ -6,11 +6,9 @@ int main(int argc, char* argv[])
 {
     MY_TRY
     toolkit::Args args(argc, argv);
-    args.optional("ip,i", po::value<std::string>()->default_value(""),
-                  "ipv4 address used to choose adapter");
-    args.optional("filter,f", po::value<std::string>()->default_value(""),
-                  "capture filter applied to adapter driver");
-    args.parse();
+    args.optional("filter,f", po::value<std::string>()->default_value(""), "capture filter");
+    args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
+    CHECK_ERR_RET_INT(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
     auto opt_filter = args.get<std::string>("filter");
@@ -31,5 +29,5 @@ int main(int argc, char* argv[])
         ILOG(p.toVariant()["layers"].toJsonStr(3));
         return false;
     }));
-    MY_CATCH
+    MY_CATCH_RET_INT
 }

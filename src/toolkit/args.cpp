@@ -23,7 +23,9 @@ void Args::positional(char const* name, po::value_semantic const* s, char const*
                       int max_count)
 {
     optional(name, s, description);
-    pos_args_.add(name, max_count);
+    std::string name_pos = name;
+    name_pos = name_pos.substr(0, name_pos.find_first_of(','));
+    pos_args_.add(name_pos.c_str(), max_count);
 }
 
 Args& Args::addSub(std::string const& name, std::string const& desc)
@@ -50,6 +52,7 @@ MyErrCode Args::parse(std::vector<std::string> const& args)
 
 MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
 {
+    MY_TRY
     if (containSub()) {
         parser.allow_unregistered();
         addSubcommandFlags();
@@ -95,11 +98,12 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
 
     if (init_logger) {
         CHECK_ERR_RET(initLogger(program_, get<bool>("logtostderr"), get<bool>("logtofile"),
-                                 static_cast<LogLevel>(get<int>("minloglevel")),
+                                 static_cast<LogLevel>(get<int>("loglevel")),
                                  static_cast<LogLevel>(get<int>("logbuflevel")),
                                  get<int>("logbufsecs"), getLoggingDir(), get<int>("maxlogsize")));
     }
     return MyErrCode::kOk;
+    MY_CATCH_RET
 }
 
 void Args::printUsage(std::ostream& os)
@@ -159,7 +163,7 @@ void Args::addLoggingFlags()
 {
     po::options_description log_args("Logging arguments");
     auto args_init = log_args.add_options();
-    args_init("minloglevel", po::value<int>()->default_value(static_cast<int>(LogLevel::kINFO)),
+    args_init("loglevel,v", po::value<int>()->default_value(static_cast<int>(LogLevel::kINFO)),
               "log level (0-6)");
     args_init("logbuflevel", po::value<int>()->default_value(static_cast<int>(LogLevel::kERROR)),
               "log buffered level");

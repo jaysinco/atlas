@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     toolkit::Args args(argc, argv);
     args.optional("attack,a", po::bool_switch(), "deploy arp attack");
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
-    args.parse();
+    CHECK_ERR_RET_INT(args.parse());
 
     auto opt_attack = args.get<bool>("attack");
     auto opt_ip = args.get<std::string>("ip");
@@ -63,5 +63,5 @@ int main(int argc, char* argv[])
             ILOG("victim's mac restored to {}", victim_actual_mac);
         }
     }
-    MY_CATCH
+    MY_CATCH_RET_INT
 }
