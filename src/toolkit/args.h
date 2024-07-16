@@ -4,12 +4,10 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 
+namespace po = boost::program_options;
+
 namespace toolkit
 {
-
-namespace po = boost::program_options;
-using po::bool_switch;
-using po::value;
 
 class Args
 {

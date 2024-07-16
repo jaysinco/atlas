@@ -10,7 +10,8 @@ namespace net
 class Packet
 {
 public:
-    using Time = std::chrono::system_clock::time_point;
+    using Clock = std::chrono::system_clock;
+    using Time = Clock::time_point;
 
     struct Detail
     {
