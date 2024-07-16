@@ -25,8 +25,8 @@ target_link_libraries(${TARGET_NAME}-lsdev ${TARGET_NAME})
 add_executable(${TARGET_NAME}-sniff cli/sniff.cpp)
 target_link_libraries(${TARGET_NAME}-sniff ${TARGET_NAME})
 
-# add_executable(arp ${CMAKE_SOURCE_DIR}/src/tools/arp.cpp)
-# target_link_libraries(arp ${TARGET_NAME})
+add_executable(${TARGET_NAME}-arp cli/arp.cpp)
+target_link_libraries(${TARGET_NAME}-arp ${TARGET_NAME})
 
 # add_executable(ping ${CMAKE_SOURCE_DIR}/src/tools/ping.cpp)
 # target_link_libraries(ping ${TARGET_NAME})

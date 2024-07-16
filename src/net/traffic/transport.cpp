@@ -64,7 +64,7 @@ MyErrCode Transport::recv(void* handle, std::function<bool(Packet const& p)> cal
             auto now = std::chrono::system_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_tm);
             if (duration.count() >= timeout_ms) {
-                ELOG("packet receive timeout: {}ms >= {}ms", duration.count(), timeout_ms);
+                DLOG("packet receive timeout: {}ms >= {}ms", duration.count(), timeout_ms);
                 return MyErrCode::kTimeout;
             }
         }
