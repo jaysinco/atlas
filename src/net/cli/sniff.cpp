@@ -7,7 +7,7 @@ int main(int argc, char* argv[])
     MY_TRY
     toolkit::Args args(argc, argv);
     args.optional("ip,i", po::value<std::string>()->default_value(""),
-                  "ipv4 address used to choose adapter, select first if empty");
+                  "ipv4 address used to choose adapter");
     args.optional("filter,f", po::value<std::string>()->default_value(""),
                   "capture filter applied to adapter driver");
     args.parse();

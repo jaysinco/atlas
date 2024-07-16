@@ -104,6 +104,7 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
 
 void Args::printUsage(std::ostream& os)
 {
+    os << std::endl;
     os << "Usage: " << program_;
     if (containOptional()) {
         os << " [options]";
@@ -136,6 +137,7 @@ void Args::printUsage(std::ostream& os)
         os << std::endl;
         os << opt_args_;
     }
+    os << std::endl;
 }
 
 bool Args::has(std::string const& name) const { return vars_.count(name) != 0; }
