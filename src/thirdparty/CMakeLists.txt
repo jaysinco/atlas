@@ -41,6 +41,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/liblzma.so
         ${TC_INSTALL_DIR}/lib/libzstd.so
         ${TC_INSTALL_DIR}/lib/libcurl.so
+        # ${TC_INSTALL_DIR}/lib/libpcap.so
     )
 
     if(TC_CROSS_COMPILE)
