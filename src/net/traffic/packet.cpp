@@ -36,7 +36,14 @@ MyErrCode Packet::decode(uint8_t const* const start, uint8_t const* const end,
     while (type != Protocol::kEmpty && type != Protocol::kUnknown && pstart < end) {
         Protocol const* prev = d_.layers.empty() ? nullptr : (&*d_.layers.back());
         Protocol::Ptr pt;
-        CHECK_ERR_RET(decodeLayer(type, pstart, pend, prev, pt));
+        auto ok = decodeLayer(type, pstart, pend, prev, pt);
+        if (ok != MyErrCode::kOk) {
+            if (ok == MyErrCode::kUnimplemented) {
+                break;
+            } else {
+                return ok;
+            }
+        }
         if (pend > end) {
             ELOG("exceed data boundary after {}", type);
             return MyErrCode::kFailed;
@@ -153,8 +160,8 @@ MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, u
         case Protocol::kEmpty:
         case Protocol::kUnknown:
         default:
-            ELOG("decode '{}' not support", TOSTR(type));
-            return MyErrCode::kFailed;
+            DLOG("decode '{}' not implemented", TOSTR(type));
+            return MyErrCode::kUnimplemented;
     }
     CHECK_ERR_RET(pt->decode(start, end, prev));
     return MyErrCode::kOk;

@@ -33,7 +33,7 @@ Variant Tcp::toVariant() const
 {
     Variant j;
     j["type"] = TOSTR(type());
-    j["tcp-type"] = succType();
+    j["tcp-type"] = TOSTR(succType());
     j["source-port"] = d_.sport;
     j["dest-port"] = d_.dport;
     size_t header_size = 4 * (d_.hl_flags >> 12 & 0xf);

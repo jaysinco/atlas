@@ -1,5 +1,6 @@
 #include "ipv4.h"
 #include "toolkit/logging.h"
+#include "ethernet.h"
 
 namespace net
 {
@@ -49,8 +50,12 @@ MyErrCode Ipv4::decode(uint8_t const* const start, uint8_t const*& end, Protocol
 {
     d_ = ntoh(*reinterpret_cast<Detail const*>(start));
     if (d_.tlen != end - start) {
-        ELOG("abnormal ipv4 length: expected={}, got={}", d_.tlen, end - start);
-        return MyErrCode::kFailed;
+        int padded = Ethernet::kMinFrameSizeNoFCS - sizeof(Ethernet::Detail) - d_.tlen;
+        if (d_.tlen + padded != end - start) {
+            ELOG("abnormal ipv4 length: expected={} or {}, got={}", d_.tlen, d_.tlen + padded,
+                 end - start);
+            return MyErrCode::kFailed;
+        }
     }
     end = start + 4 * (d_.ver_hl & 0xf);
     return MyErrCode::kOk;
@@ -60,7 +65,7 @@ Variant Ipv4::toVariant() const
 {
     Variant j;
     j["type"] = TOSTR(type());
-    j["ipv4-type"] = TOSTR(succType());
+    j["ipv4-type"] = FSTR("{}({})", succType(), d_.type);
     j["version"] = d_.ver_hl >> 4;
     j["tos"] = d_.tos;
     size_t header_size = 4 * (d_.ver_hl & 0xf);

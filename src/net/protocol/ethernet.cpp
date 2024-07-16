@@ -47,7 +47,7 @@ Variant Ethernet::toVariant() const
 {
     Variant j;
     j["type"] = TOSTR(type());
-    j["ethernet-type"] = TOSTR(succType());
+    j["ethernet-type"] = FSTR("{}({:#x})", succType(), d_.type);
     j["source-mac"] = d_.smac.toStr();
     j["dest-mac"] = d_.dmac.toStr();
     return j;

@@ -125,7 +125,7 @@ MyErrCode Icmp::decode(uint8_t const* const start, uint8_t const*& end, Protocol
 Variant Icmp::toVariant() const
 {
     Variant j;
-    j["type"] = type();
+    j["type"] = TOSTR(type());
     std::string tp = icmpType();
     j["icmp-type"] = tp;
     if (type_dict.count(d_.type) > 0) {
