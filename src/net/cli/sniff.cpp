@@ -6,8 +6,8 @@ int main(int argc, char* argv[])
 {
     MY_TRY
     toolkit::Args args(argc, argv);
-    args.optional("filter,f", po::value<std::string>()->default_value(""), "capture filter");
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
+    args.optional("filter,f", po::value<std::string>()->default_value(""), "capture filter");
     CHECK_ERR_RET_INT(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
