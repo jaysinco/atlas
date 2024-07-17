@@ -105,7 +105,7 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
         opt.logbuflevel = static_cast<LogLevel>(get<int>("logbuflevel"));
         opt.logbufsecs = get<int>("logbufsecs");
         opt.maxlogsize = get<int>("maxlogsize");
-        CHECK_ERR_RET(initLogger(opt));
+        CHECK_ERR_RET(initLogger(std::move(opt)));
     }
     return MyErrCode::kOk;
     MY_CATCH_RET

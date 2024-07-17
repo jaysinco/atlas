@@ -29,7 +29,29 @@ static spdlog::level::level_enum level(LogLevel level)
     return static_cast<spdlog::level::level_enum>(level);
 }
 
-MyErrCode initLogger(LoggerOption const& opt)
+class LoggerCallbackSink: public spdlog::sinks::base_sink<std::mutex>
+{
+public:
+    LoggerCallbackSink(LoggerCallback&& cb): cb_(std::move(cb)) {}
+
+protected:
+    void sink_it_(spdlog::details::log_msg const& msg) override
+    {
+        spdlog::memory_buf_t buf;
+        formatter_->format(msg, buf);
+        cb_(static_cast<LogLevel>(msg.level), std::string_view(buf.data(), buf.size() - 1));
+    }
+
+    void flush_() override
+    {
+        // do nothing
+    }
+
+private:
+    LoggerCallback cb_;
+};
+
+MyErrCode initLogger(LoggerOption&& opt)
 {
     if (spdlog::get(opt.program)) {
         return MyErrCode::kOk;
@@ -54,6 +76,12 @@ MyErrCode initLogger(LoggerOption const& opt)
         console_sink->set_level(spdlog::level::trace);  //
         console_sink->set_pattern("%^%L%m%d %P %t %H:%M:%S.%f] %v%$");
         sinks.push_back(console_sink);
+    }
+    if (opt.callback) {
+        auto cb_sink = std::make_shared<LoggerCallbackSink>(std::move(opt.callback));
+        cb_sink->set_level(spdlog::level::trace);
+        cb_sink->set_pattern("%L%m%d %P %t %H:%M:%S.%f] %v");
+        sinks.push_back(cb_sink);
     }
 
     auto logger = std::make_shared<spdlog::logger>(opt.program, sinks.begin(), sinks.end());

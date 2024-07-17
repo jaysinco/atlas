@@ -1,6 +1,7 @@
 #pragma once
 #include "error.h"
 #include "format.h"
+#include <functional>
 
 #define MY_TRY try {
 #define MY_CATCH_FUNC(x)                    \
@@ -38,6 +39,8 @@ enum class LogLevel : int
     kTOTAL,
 };
 
+using LoggerCallback = std::function<void(LogLevel, std::string_view)>;
+
 struct LoggerOption
 {
     std::string program;
@@ -48,11 +51,12 @@ struct LoggerOption
     int logbufsecs;
     std::filesystem::path logdir;
     int maxlogsize;
+    LoggerCallback callback;
 
     LoggerOption();
 };
 
-MyErrCode initLogger(LoggerOption const& opt = LoggerOption{});
+MyErrCode initLogger(LoggerOption&& opt = LoggerOption{});
 void logPrint(LogLevel level, std::string_view content);
 void logPrint(LogLevel level, char const* filepath, int line, std::string_view content);
 
