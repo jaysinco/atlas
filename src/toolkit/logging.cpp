@@ -42,10 +42,7 @@ protected:
         cb_(static_cast<LogLevel>(msg.level), std::string_view(buf.data(), buf.size() - 1));
     }
 
-    void flush_() override
-    {
-        // do nothing
-    }
+    void flush_() override {}
 
 private:
     LoggerCallback cb_;

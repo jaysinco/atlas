@@ -16,7 +16,7 @@ public:
     static MyErrCode setFilter(void* handle, std::string const& filter, Ip4 const& mask);
 
     static MyErrCode recv(
-        void* handle, std::function<bool(Packet const& p)> callback, int timeout_ms = -1,
+        void* handle, std::function<bool(Packet&& p)> callback, int timeout_ms = -1,
         std::chrono::system_clock::time_point const& start_tm = std::chrono::system_clock::now());
 
     static MyErrCode send(void* handle, Packet const& pac);

@@ -53,8 +53,8 @@ MyErrCode Transport::setFilter(void* handle, std::string const& filter, Ip4 cons
     return MyErrCode::kOk;
 }
 
-MyErrCode Transport::recv(void* handle, std::function<bool(Packet const& p)> callback,
-                          int timeout_ms, std::chrono::system_clock::time_point const& start_tm)
+MyErrCode Transport::recv(void* handle, std::function<bool(Packet&& p)> callback, int timeout_ms,
+                          std::chrono::system_clock::time_point const& start_tm)
 {
     auto hndl = reinterpret_cast<pcap_t*>(handle);
     int res;
@@ -76,7 +76,7 @@ MyErrCode Transport::recv(void* handle, std::function<bool(Packet const& p)> cal
         CHECK_ERR_RET(pac.decode(start, start + info->len, Protocol::kEthernet));
         pac.setTime(Packet::Time{std::chrono::seconds{info->ts.tv_sec} +
                                  std::chrono::microseconds{info->ts.tv_usec}});
-        if (callback(pac)) {
+        if (callback(std::move(pac))) {
             return MyErrCode::kOk;
         }
     }
@@ -110,9 +110,9 @@ MyErrCode Transport::request(void* handle, Packet const& req, Packet& reply, int
     }
     return recv(
         handle,
-        [&](Packet const& p) {
+        [&](Packet&& p) {
             if (req.linkTo(p)) {
-                reply = p;
+                reply = std::move(p);
                 return true;
             }
             return false;

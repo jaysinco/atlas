@@ -11,9 +11,6 @@ if(UNIX)
     xxd_add_resources(demo_opencl_xxd_gen_cpp data/hello.cl)
     add_executable(demo-opencl demo-opencl.cpp ${demo_opencl_xxd_gen_cpp})
     target_link_libraries(demo-opencl toolkit opencl-clhpp)
-
-    add_executable(demo-ftxui demo-ftxui.cpp)
-    target_link_libraries(demo-ftxui toolkit ftxui)
 endif()
 
 file(COPY
