@@ -2,6 +2,7 @@
 #include "protocol/arp.h"
 #include "protocol/icmp.h"
 #include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 #include <pcap.h>
 #include <unistd.h>
 #include <atomic>

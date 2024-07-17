@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "toolkit.h"
 #include <spdlog/spdlog.h>
 #include <spdlog/details/os.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -6,6 +7,18 @@
 
 namespace toolkit
 {
+
+LoggerOption::LoggerOption()
+{
+    program = currentExeName();
+    logtostderr = true;
+    logtofile = false;
+    loglevel = LogLevel::kINFO;
+    logbuflevel = LogLevel::kERROR;
+    logbufsecs = 30;
+    logdir = getLoggingDir();
+    maxlogsize = 100;
+}
 
 static spdlog::level::level_enum level(LogLevel level)
 {
@@ -16,40 +29,38 @@ static spdlog::level::level_enum level(LogLevel level)
     return static_cast<spdlog::level::level_enum>(level);
 }
 
-MyErrCode initLogger(std::string const& program, bool logtostderr, bool logtofile,
-                     LogLevel minloglevel, LogLevel logbuflevel, int logbufsecs,
-                     std::filesystem::path const& logdir, int maxlogsize)
+MyErrCode initLogger(LoggerOption const& opt)
 {
-    if (spdlog::get(program)) {
+    if (spdlog::get(opt.program)) {
         return MyErrCode::kOk;
     }
 
     std::vector<spdlog::sink_ptr> sinks;
-    if (logtofile) {
-        std::filesystem::path fpath(logdir);
+    if (opt.logtofile) {
+        std::filesystem::path fpath(opt.logdir);
         std::string fname =
-            FSTR("{}_{:%Y%m%d.%H%M%S}_{}.log", std::filesystem::path(program).stem().string(),
+            FSTR("{}_{:%Y%m%d.%H%M%S}_{}.log", std::filesystem::path(opt.program).stem().string(),
                  spdlog::details::os::localtime(), spdlog::details::os::pid());
         fpath /= fname;
 
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            fpath.string(), maxlogsize * 1024 * 1024, 10, true);
+            fpath.string(), opt.maxlogsize * 1024 * 1024, 10, true);
         file_sink->set_level(spdlog::level::trace);
         file_sink->set_pattern("%L%m%d %P %t %H:%M:%S.%f] %v");
         sinks.push_back(file_sink);
     }
-    if (logtostderr) {
+    if (opt.logtostderr) {
         auto console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
         console_sink->set_level(spdlog::level::trace);  //
         console_sink->set_pattern("%^%L%m%d %P %t %H:%M:%S.%f] %v%$");
         sinks.push_back(console_sink);
     }
 
-    auto logger = std::make_shared<spdlog::logger>(program, sinks.begin(), sinks.end());
-    logger->set_level(level(minloglevel));
-    logger->flush_on(level(logbuflevel));
+    auto logger = std::make_shared<spdlog::logger>(opt.program, sinks.begin(), sinks.end());
+    logger->set_level(level(opt.loglevel));
+    logger->flush_on(level(opt.logbuflevel));
     spdlog::set_default_logger(logger);
-    spdlog::flush_every(std::chrono::seconds(logbufsecs));
+    spdlog::flush_every(std::chrono::seconds(opt.logbufsecs));
 
     ILOG("### GIT HASH: {} ###", _GIT_HASH);
     ILOG("### GIT BRANCH: {} ###", _GIT_BRANCH);

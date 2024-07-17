@@ -1,6 +1,7 @@
 #include "traffic/transport.h"
 #include "toolkit/logging.h"
 #include "toolkit/args.h"
+#include "toolkit/toolkit.h"
 
 int main(int argc, char* argv[])
 {

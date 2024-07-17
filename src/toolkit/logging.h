@@ -1,5 +1,5 @@
 #pragma once
-#include "toolkit.h"
+#include "error.h"
 #include "format.h"
 
 #define MY_TRY try {
@@ -38,11 +38,21 @@ enum class LogLevel : int
     kTOTAL,
 };
 
-MyErrCode initLogger(std::string const& program = currentExeName(), bool logtostderr = true,
-                     bool logtofile = false, LogLevel minloglevel = LogLevel::kINFO,
-                     LogLevel logbuflevel = LogLevel::kERROR, int logbufsecs = 30,
-                     std::filesystem::path const& logdir = getLoggingDir(), int maxlogsize = 100);
+struct LoggerOption
+{
+    std::string program;
+    bool logtostderr;
+    bool logtofile;
+    LogLevel loglevel;
+    LogLevel logbuflevel;
+    int logbufsecs;
+    std::filesystem::path logdir;
+    int maxlogsize;
 
+    LoggerOption();
+};
+
+MyErrCode initLogger(LoggerOption const& opt = LoggerOption{});
 void logPrint(LogLevel level, std::string_view content);
 void logPrint(LogLevel level, char const* filepath, int line, std::string_view content);
 

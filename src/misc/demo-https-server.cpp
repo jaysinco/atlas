@@ -1,5 +1,6 @@
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 #include <uwebsockets/App.h>
 
 int main(int argc, char** argv)

@@ -1,4 +1,4 @@
-#include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 #include "toolkit/sqlite-helper.h"
 #include <catch2/catch_all.hpp>
 

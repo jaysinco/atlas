@@ -1,13 +1,18 @@
 #include "traffic/transport.h"
 #include "toolkit/logging.h"
 #include "toolkit/args.h"
+#include "toolkit/toolkit.h"
 #include <signal.h>
 #include <atomic>
 #include <thread>
 
 std::atomic<bool> end_attack = false;
 
-void onInterrupt(int) { end_attack = true; }
+void onInterrupt(int)
+{
+    ILOG("about to stop attack...");
+    end_attack = true;
+}
 
 int main(int argc, char* argv[])
 {

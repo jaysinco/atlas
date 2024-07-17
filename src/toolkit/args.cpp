@@ -36,17 +36,17 @@ Args& Args::addSub(std::string const& name, std::string const& desc)
     return *pargs;
 }
 
-MyErrCode Args::parse()
+MyErrCode Args::parse(bool init_logger)
 {
     po::command_line_parser parser(argc_, argv_);
-    CHECK_ERR_RET(parse(parser, true));
+    CHECK_ERR_RET(parse(parser, init_logger));
     return MyErrCode::kOk;
 }
 
-MyErrCode Args::parse(std::vector<std::string> const& args)
+MyErrCode Args::parse(std::vector<std::string> const& args, bool init_logger)
 {
     po::command_line_parser parser(args);
-    CHECK_ERR_RET(parse(parser, false));
+    CHECK_ERR_RET(parse(parser, init_logger));
     return MyErrCode::kOk;
 }
 
@@ -87,7 +87,7 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
         } else {
             auto args = po::collect_unrecognized(parsed_result.options, po::include_positional);
             args.erase(args.begin());
-            it->second.args->parse(args);
+            it->second.args->parse(args, false);
         }
     } else {
         if (get<bool>("help")) {
@@ -97,10 +97,15 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
     }
 
     if (init_logger) {
-        CHECK_ERR_RET(initLogger(program_, get<bool>("logtostderr"), get<bool>("logtofile"),
-                                 static_cast<LogLevel>(get<int>("loglevel")),
-                                 static_cast<LogLevel>(get<int>("logbuflevel")),
-                                 get<int>("logbufsecs"), getLoggingDir(), get<int>("maxlogsize")));
+        LoggerOption opt;
+        opt.program = program_;
+        opt.logtostderr = get<bool>("logtostderr");
+        opt.logtofile = get<bool>("logtofile");
+        opt.loglevel = static_cast<LogLevel>(get<int>("loglevel"));
+        opt.logbuflevel = static_cast<LogLevel>(get<int>("logbuflevel"));
+        opt.logbufsecs = get<int>("logbufsecs");
+        opt.maxlogsize = get<int>("maxlogsize");
+        CHECK_ERR_RET(initLogger(opt));
     }
     return MyErrCode::kOk;
     MY_CATCH_RET

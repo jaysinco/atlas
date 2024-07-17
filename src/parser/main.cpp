@@ -1,6 +1,7 @@
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
 #include "toolkit/encoding.h"
+#include "toolkit/toolkit.h"
 #include <boost/phoenix/phoenix.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>

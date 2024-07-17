@@ -1,5 +1,6 @@
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 
 void func5()
 {

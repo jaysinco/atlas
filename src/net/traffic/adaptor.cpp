@@ -1,6 +1,7 @@
 #include "adaptor.h"
 #include <algorithm>
 #include <mutex>
+#include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
 #include <sys/types.h>
 #include <net/if.h>

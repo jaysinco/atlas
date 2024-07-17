@@ -2,6 +2,7 @@
 #include <sstream>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
 
 namespace net
