@@ -10,6 +10,7 @@ add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
+add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
 
 if(UNIX)
     add_subdirectory(imgui)
@@ -42,6 +43,9 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libzstd.so
         ${TC_INSTALL_DIR}/lib/libcurl.so
         # ${TC_INSTALL_DIR}/lib/libpcap.so
+        ${TC_INSTALL_DIR}/lib/libftxui-screen.so
+        ${TC_INSTALL_DIR}/lib/libftxui-dom.so
+        ${TC_INSTALL_DIR}/lib/libftxui-component.so
     )
 
     if(TC_CROSS_COMPILE)
