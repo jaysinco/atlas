@@ -8,7 +8,6 @@
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
-#include <ftxui/dom/table.hpp>
 
 std::mutex g_log_lock;
 std::vector<std::pair<toolkit::LogLevel, std::string>> g_log_store;
@@ -46,24 +45,114 @@ void startCapture(std::string const& ipstr, std::string const& filter)
 
 void stopCapture() { g_capture_should_stop = true; }
 
+class TextView: public ftxui::ComponentBase
+{
+public:
+    TextView() { selected_ = 0; }
+
+    void clear() { texts_.clear(); }
+
+    void addText(std::string const& content) { texts_.push_back(content); }
+
+    ftxui::Element Render() override
+    {
+        std::vector<ftxui::Element> elems;
+        for (int i = 0; i < texts_.size(); ++i) {
+            if (i == selected_) {
+                elems.push_back(ftxui::paragraph(texts_.at(i)) | ftxui::inverted | ftxui::focus);
+            } else {
+                elems.push_back(ftxui::paragraph(texts_.at(i)));
+            }
+        }
+        return ftxui::vbox(std::move(elems)) | ftxui::vscroll_indicator | ftxui::yframe |
+               ftxui::yflex;
+    }
+
+    bool OnEvent(ftxui::Event event) override
+    {
+        if (event.is_mouse() && event.mouse().button == ftxui::Mouse::WheelUp) {
+            prevSelection();
+            return true;
+        }
+        if (event.is_mouse() && event.mouse().button == ftxui::Mouse::WheelDown) {
+            nextSelection();
+            return true;
+        }
+        return false;
+    }
+
+    bool Focusable() const override { return true; }
+
+private:
+    void nextSelection()
+    {
+        ++selected_;
+        updateSelection();
+    }
+
+    void prevSelection()
+    {
+        --selected_;
+        updateSelection();
+    }
+
+    void updateSelection()
+    {
+        selected_ = std::max(0, std::min(static_cast<int>(texts_.size() - 1), selected_));
+    }
+
+private:
+    std::vector<std::string> texts_;
+    int selected_;
+};
+
 class LogView: public ftxui::ComponentBase
 {
 public:
-    LogView()
+    LogView(int line_per_page): line_per_page_(line_per_page)
     {
+        curr_page_ = 1;
+        total_page_ = 0;
+        text_view_ = ftxui::Make<TextView>();
         body_ = ftxui::Container::Vertical({
             ftxui::Container::Horizontal({
                 Button(
+                    "<<", [&] { beginPage(); }, ftxui::ButtonOption::Ascii()),
+                Button(
                     "<", [&] { prevPage(); }, ftxui::ButtonOption::Ascii()),
-                ftxui::Renderer([&] { return renderPageNum(); }),
+                ftxui::Renderer(
+                    [&] { return ftxui::text(FSTR("{}/{}", curr_page_, total_page_)); }),
                 Button(
                     ">", [&] { nextPage(); }, ftxui::ButtonOption::Ascii()),
+                Button(
+                    ">>", [&] { endPage(); }, ftxui::ButtonOption::Ascii()),
             }),
-            ftxui::Renderer([&] { return renderTable(); }),
+            text_view_,
         });
-
         Add(body_);
     }
+
+    ftxui::Element Render() override
+    {
+        text_view_->clear();
+        {
+            std::lock_guard<std::mutex> log_guard(g_log_lock);
+            int64_t total_store = g_log_store.size();
+            total_page_ = std::ceil(total_store / static_cast<float>(line_per_page_));
+            updateCurrPage();
+            for (int i = (curr_page_ - 1) * line_per_page_ + 1; i <= curr_page_ * line_per_page_;
+                 ++i) {
+                if (i <= total_store) {
+                    text_view_->addText(g_log_store.at(i - 1).second);
+                }
+            }
+        }
+        return ftxui::ComponentBase::Render();
+    }
+
+    void beginPage() { curr_page_ = 1; }
+
+    void endPage() { curr_page_ = total_page_; }
 
     void nextPage()
     {
@@ -80,31 +169,12 @@ public:
 private:
     void updateCurrPage() { curr_page_ = std::max(1L, std::min(total_page_, curr_page_)); }
 
-    ftxui::Element renderPageNum() { return ftxui::text(FSTR("{}/{}", curr_page_, total_page_)); }
-
-    ftxui::Element renderTable()
-    {
-        std::vector<ftxui::Element> lines;
-        {
-            std::lock_guard<std::mutex> log_guard(g_log_lock);
-            int64_t total_store = g_log_store.size();
-            total_page_ = std::ceil(total_store / static_cast<float>(kLinePerPage));
-            updateCurrPage();
-            for (int i = (curr_page_ - 1) * kLinePerPage + 1; i <= curr_page_ * kLinePerPage; ++i) {
-                if (i <= total_store) {
-                    lines.push_back(ftxui::paragraph(g_log_store.at(i - 1).second));
-                }
-            }
-        }
-        return ftxui::vbox(std::move(lines)) | ftxui::vscroll_indicator | ftxui::yframe |
-               ftxui::border;
-    }
-
 private:
     ftxui::Component body_;
-    constexpr static int kLinePerPage = 10;
-    int64_t curr_page_ = 1;
-    int64_t total_page_ = 0;
+    std::shared_ptr<TextView> text_view_;
+    int line_per_page_;
+    int64_t curr_page_;
+    int64_t total_page_;
 };
 
 class CaptureView: public ftxui::ComponentBase
@@ -132,7 +202,7 @@ class MainView: public ftxui::ComponentBase
 public:
     MainView(): tab_values_({"capture", "log"})
     {
-        log_view_ = ftxui::Make<LogView>();
+        log_view_ = ftxui::Make<LogView>(20);
         capture_view_ = ftxui::Make<CaptureView>();
 
         tab_toggle_ = ftxui::Toggle(&tab_values_, &tab_selected_);
@@ -149,16 +219,18 @@ public:
         });
 
         body_ = CatchEvent(body_, [&](ftxui::Event event) {
-            ILOG(
-                "event got event gotevent gotevent gotevent gotevent gotevent gotevent gotevent "
-                "gotevent gotevent gotevent gotevent gotevent gotevent "
-                "got gotevent gotevent gotevent gotevent gotevent gotevent mM");
             if (tab_selected_ == 1) {
                 if (event == ftxui::Event::PageDown) {
                     log_view_->nextPage();
                     return true;
                 } else if (event == ftxui::Event::PageUp) {
                     log_view_->prevPage();
+                    return true;
+                } else if (event == ftxui::Event::Home) {
+                    log_view_->beginPage();
+                    return true;
+                } else if (event == ftxui::Event::End) {
+                    log_view_->endPage();
                     return true;
                 }
             }
