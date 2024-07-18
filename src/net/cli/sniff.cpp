@@ -59,7 +59,7 @@ public:
         std::vector<ftxui::Element> elems;
         for (int i = 0; i < texts_.size(); ++i) {
             if (i == selected_) {
-                elems.push_back(ftxui::paragraph(texts_.at(i)) | ftxui::inverted | ftxui::focus);
+                elems.push_back(ftxui::paragraph(texts_.at(i)) | ftxui::focus);
             } else {
                 elems.push_back(ftxui::paragraph(texts_.at(i)));
             }
@@ -121,7 +121,7 @@ public:
                 Button(
                     "<", [&] { prevPage(); }, ftxui::ButtonOption::Ascii()),
                 ftxui::Renderer(
-                    [&] { return ftxui::text(FSTR("{}/{}", curr_page_, total_page_)); }),
+                    [&] { return ftxui::text(FSTR(" {}/{} ", curr_page_, total_page_)); }),
                 Button(
                     ">", [&] { nextPage(); }, ftxui::ButtonOption::Ascii()),
                 Button(
@@ -218,25 +218,6 @@ public:
             tab_container_,
         });
 
-        body_ = CatchEvent(body_, [&](ftxui::Event event) {
-            if (tab_selected_ == 1) {
-                if (event == ftxui::Event::PageDown) {
-                    log_view_->nextPage();
-                    return true;
-                } else if (event == ftxui::Event::PageUp) {
-                    log_view_->prevPage();
-                    return true;
-                } else if (event == ftxui::Event::Home) {
-                    log_view_->beginPage();
-                    return true;
-                } else if (event == ftxui::Event::End) {
-                    log_view_->endPage();
-                    return true;
-                }
-            }
-            return false;
-        });
-
         Add(body_);
     }
 
@@ -248,6 +229,26 @@ public:
                    tab_container_->Render(),
                }) |
                ftxui::border;
+    }
+
+    bool OnEvent(ftxui::Event event) override
+    {
+        if (tab_selected_ == 1) {
+            if (event == ftxui::Event::PageDown) {
+                log_view_->nextPage();
+                return true;
+            } else if (event == ftxui::Event::PageUp) {
+                log_view_->prevPage();
+                return true;
+            } else if (event == ftxui::Event::Home) {
+                log_view_->beginPage();
+                return true;
+            } else if (event == ftxui::Event::End) {
+                log_view_->endPage();
+                return true;
+            }
+        }
+        return ftxui::ComponentBase::OnEvent(event);
     }
 
 private:
