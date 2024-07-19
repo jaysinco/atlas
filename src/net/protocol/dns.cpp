@@ -1,7 +1,6 @@
 #include "dns.h"
 #include <boost/algorithm/string.hpp>
 #include "addr.h"
-#include "toolkit/logging.h"
 
 namespace net
 {

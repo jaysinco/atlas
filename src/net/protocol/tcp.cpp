@@ -1,6 +1,5 @@
 #include "tcp.h"
 #include "ipv4.h"
-#include "toolkit/logging.h"
 #include <boost/algorithm/string/join.hpp>
 
 namespace net

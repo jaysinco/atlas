@@ -44,8 +44,8 @@ int main(int argc, char* argv[])
             std::cout << std::setw(6);
             net::Packet reply;
             int64_t cost_ms;
-            if (net::Transport::ping(handle, apt, target_ip, reply, cost_ms, ttl, "hello,world") ==
-                MyErrCode::kOk) {
+            if (net::Transport::ping(handle, apt, target_ip, reply, cost_ms, ttl, "hello,world",
+                                     false, 3000) == MyErrCode::kOk) {
                 if (reply.hasIcmpError()) {
                     auto& ih = dynamic_cast<net::Ipv4 const&>(*reply.getDetail().layers.at(1));
                     router_ip = ih.getDetail().sip;

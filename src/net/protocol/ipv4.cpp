@@ -14,10 +14,10 @@ std::map<uint8_t, Protocol::Type> Ipv4::type_dict = {
 Ipv4::Ipv4(Ip4 const& sip, Ip4 const& dip, uint8_t ttl, Type type, bool forbid_slice)
 {
     bool found = false;
-    for (auto it = type_dict.cbegin(); it != type_dict.cend(); ++it) {
-        if (it->second == type) {
+    for (auto it: type_dict) {
+        if (it.second == type) {
             found = true;
-            d_.type = it->first;
+            d_.type = it.first;
             break;
         }
     }
@@ -50,12 +50,7 @@ MyErrCode Ipv4::decode(uint8_t const* const start, uint8_t const*& end, Protocol
 {
     d_ = ntoh(*reinterpret_cast<Detail const*>(start));
     if (d_.tlen != end - start) {
-        int padded = Ethernet::kMinFrameSizeNoFCS - sizeof(Ethernet::Detail) - d_.tlen;
-        if (d_.tlen + padded != end - start) {
-            ELOG("abnormal ipv4 length: expected={} or {}, got={}", d_.tlen, d_.tlen + padded,
-                 end - start);
-            return MyErrCode::kFailed;
-        }
+        // permitted, may due to ip slice or size constraint
     }
     end = start + 4 * (d_.ver_hl & 0xf);
     return MyErrCode::kOk;

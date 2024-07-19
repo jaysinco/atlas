@@ -1,6 +1,5 @@
 #include "udp.h"
 #include "ipv4.h"
-#include "toolkit/logging.h"
 
 namespace net
 {
