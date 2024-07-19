@@ -190,7 +190,7 @@ MyErrCode Transport::queryDns(Ip4 const& server, std::string const& domain, Dns&
     auto socket_guard = toolkit::scopeExit([&] {
         DLOG("socket closed");
         if (shutdown(s, SHUT_RDWR) != 0) {
-            ELOG("failed to shutdown socket: {}", strerror(errno));
+            DLOG("failed to shutdown socket: {}", strerror(errno));
         };
         if (::close(s) != 0) {
             ELOG("failed to close socket: {}", strerror(errno));
@@ -208,11 +208,12 @@ MyErrCode Transport::queryDns(Ip4 const& server, std::string const& domain, Dns&
         ELOG("failed to send dns data: {}", strerror(errno));
         return MyErrCode::kFailed;
     }
+    int64_t timeout_us = timeout_ms * 1000;
     struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = timeout_ms * 1000;
+    timeout.tv_sec = timeout_us / 1'000'000;
+    timeout.tv_usec = timeout_us % 1'000'000;
     if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
-        ELOG("failed to set socket receive timeout: {}", strerror(errno));
+        ELOG("failed to set socket receive timeout to {}ms: {}", timeout_ms, strerror(errno));
         return MyErrCode::kFailed;
     }
     char buf[1024] = {0};

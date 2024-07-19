@@ -77,7 +77,7 @@ MyErrCode Ip4::fromDottedDec(std::string const& s, Ip4* ip)
 {
     in_addr addr;
     if (inet_pton(AF_INET, s.c_str(), &addr) != 1) {
-        ELOG("failed to parse ip4: {}", s);
+        DLOG("failed to parse ip4: {}", s);
         return MyErrCode::kFailed;
     }
     if (ip) {
@@ -96,7 +96,7 @@ MyErrCode Ip4::fromDomain(std::string const& s, Ip4* ip)
     addrinfo* first_addr;
     auto ret = getaddrinfo(s.c_str(), nullptr, &hints, &first_addr);
     if (ret != 0 || first_addr == nullptr) {
-        ELOG("failed to get ip4 from domain: {}", s);
+        DLOG("failed to get ip4 from domain: {}", s);
         return MyErrCode::kFailed;
     }
     auto first_addr_guard = toolkit::scopeExit([&] { freeaddrinfo(first_addr); });

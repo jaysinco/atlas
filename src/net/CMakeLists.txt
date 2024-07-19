@@ -22,20 +22,22 @@ target_link_libraries(${TARGET_NAME} toolkit pcap)
 add_executable(${TARGET_NAME}-lsdev cli/lsdev.cpp)
 target_link_libraries(${TARGET_NAME}-lsdev ${TARGET_NAME})
 
-add_executable(${TARGET_NAME}-sniff cli/sniff.cpp)
+add_executable(${TARGET_NAME}-sniff
+    cli/sniff/main.cpp
+)
 target_link_libraries(${TARGET_NAME}-sniff ${TARGET_NAME} ftxui)
 
 add_executable(${TARGET_NAME}-arp cli/arp.cpp)
 target_link_libraries(${TARGET_NAME}-arp ${TARGET_NAME})
 
-# add_executable(ping ${CMAKE_SOURCE_DIR}/src/tools/ping.cpp)
-# target_link_libraries(ping ${TARGET_NAME})
+add_executable(${TARGET_NAME}-ping cli/ping.cpp)
+target_link_libraries(${TARGET_NAME}-ping ${TARGET_NAME})
 
-# add_executable(mtu ${CMAKE_SOURCE_DIR}/src/tools/mtu.cpp)
-# target_link_libraries(mtu ${TARGET_NAME})
+add_executable(${TARGET_NAME}-mtu cli/mtu.cpp)
+target_link_libraries(${TARGET_NAME}-mtu ${TARGET_NAME})
 
 # add_executable(traceroute ${CMAKE_SOURCE_DIR}/src/tools/traceroute.cpp)
 # target_link_libraries(traceroute ${TARGET_NAME})
 
-# add_executable(dns ${CMAKE_SOURCE_DIR}/src/tools/dns.cpp)
-# target_link_libraries(dns ${TARGET_NAME})
+add_executable(${TARGET_NAME}-dns cli/dns.cpp)
+target_link_libraries(${TARGET_NAME}-dns ${TARGET_NAME})

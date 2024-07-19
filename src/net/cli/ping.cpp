@@ -1,46 +1,51 @@
-#include "transport/transport.h"
+#include "traffic/transport.h"
+#include "toolkit/logging.h"
+#include "toolkit/args.h"
+#include "toolkit/toolkit.h"
 #include "protocol/ipv4.h"
 #include <iostream>
 
 int main(int argc, char* argv[])
 {
-    NT_TRY
+    MY_TRY
     toolkit::Args args(argc, argv);
-    args.parse();
-    if (argc < 2) {
-        LOG(ERROR) << "empty target name, please input ip or host name";
-        return -1;
-    }
+    args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
+    args.optional("count,c", po::value<int>()->default_value(5), "send count");
+    CHECK_ERR_RET_INT(args.parse());
 
-    ip4 target_ip;
-    std::string target_name = argv[1];
+    auto opt_target = args.get<std::string>("target");
+    auto opt_count = args.get<int>("count");
+
+    net::Ip4 target_ip;
     std::ostringstream ip_desc;
-    if (ip4::from_dotted_dec(target_name, &target_ip)) {
-        ip_desc << target_ip.to_str();
+    if (net::Ip4::fromDottedDec(opt_target, &target_ip) == MyErrCode::kOk) {
+        ip_desc << target_ip.toStr();
     } else {
-        if (!ip4::from_domain(target_name, &target_ip)) {
-            LOG(ERROR) << "invalid ip or host name: {}"_format(target_name);
+        if (net::Ip4::fromDomain(opt_target, &target_ip) != MyErrCode::kOk) {
+            ELOG("invalid ip or host name: {}", opt_target);
             return -1;
         }
-        ip_desc << target_name << " [" << target_ip.to_str() << "]";
+        ip_desc << opt_target << " [" << target_ip.toStr() << "]";
     }
+    std::cout << "Ping " << ip_desc.str() << ":" << std::endl;
 
-    std::cout << "\nPing " << ip_desc.str() << ":" << std::endl;
-    auto& apt = adaptor::fit(ip4::zeros);
-    pcap_t* handle = transport::open_adaptor(apt);
-    std::shared_ptr<void> handle_guard(nullptr, [&](void*) { pcap_close(handle); });
-    constexpr int total_cnt = 4;
+    auto& apt = net::Adaptor::fit(net::Ip4::kZeros);
+    void* handle;
+    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
+
     int recv_cnt = 0;
-    long sum_cost = 0;
-    long min_cost = std::numeric_limits<long>::max();
-    long max_cost = std::numeric_limits<long>::min();
-    for (int i = 0; i < total_cnt; ++i) {
-        std::cout << "Reply from " << target_ip.to_str() << ": ";
-        packet reply;
-        long cost_ms;
-        if (transport::ping(handle, apt, target_ip, reply, cost_ms, 128, "greatjaysinco")) {
-            if (reply.is_error()) {
-                VLOG(1) << reply.to_json().dump(3);
+    int64_t sum_cost = 0;
+    int64_t min_cost = std::numeric_limits<int64_t>::max();
+    int64_t max_cost = std::numeric_limits<int64_t>::min();
+    for (int i = 0; i < opt_count; ++i) {
+        std::cout << "Reply from " << target_ip.toStr() << ": ";
+        net::Packet reply;
+        int64_t cost_ms;
+        if (net::Transport::ping(handle, apt, target_ip, reply, cost_ms, 128, "greatjaysinco") ==
+            MyErrCode::kOk) {
+            if (reply.hasIcmpError()) {
+                TLOG(reply.toVariant().toJsonStr(3));
                 std::cout << "error" << std::endl;
                 continue;
             }
@@ -48,22 +53,23 @@ int main(int argc, char* argv[])
             min_cost = std::min(min_cost, cost_ms);
             max_cost = std::max(max_cost, cost_ms);
             sum_cost += cost_ms;
-            auto& prot = *reply.get_detail().layers.at(1);
-            int ttl = dynamic_cast<ipv4 const&>(prot).get_detail().ttl;
-            std::cout << "time=" << cost_ms << "ms"
+            auto& prot = *reply.getDetail().layers.at(1);
+            int ttl = dynamic_cast<net::Ipv4 const&>(prot).getDetail().ttl;
+            std::cout << "time" << (cost_ms == 0 ? "<1" : FSTR("={}", cost_ms)) << "ms"
                       << " ttl=" << ttl << std::endl;
         } else {
             std::cout << "timeout" << std::endl;
         }
     }
     std::cout << "\nStatistical information:" << std::endl;
-    std::cout << "    packets: sent=" << total_cnt << ", recv=" << recv_cnt
-              << ", lost=" << (total_cnt - recv_cnt) << " ("
-              << int(float(total_cnt - recv_cnt) / total_cnt * 100) << "% lost)\n";
+    std::cout << "    packets: sent=" << opt_count << ", recv=" << recv_cnt
+              << ", lost=" << (opt_count - recv_cnt) << " ("
+              << static_cast<int>(static_cast<float>(opt_count - recv_cnt) / opt_count * 100)
+              << "% lost)\n";
     if (sum_cost > 0) {
         std::cout << "Estimated time of round trip:" << std::endl;
         std::cout << "    min=" << min_cost << "ms, max=" << max_cost
-                  << "ms, avg=" << (sum_cost) / total_cnt << "ms\n";
+                  << "ms, avg=" << (sum_cost) / opt_count << "ms\n";
     }
-    NT_CATCH
+    MY_CATCH_RET_INT
 }
