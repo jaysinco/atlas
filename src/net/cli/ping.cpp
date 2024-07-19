@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
         std::cout << "Reply from " << target_ip.toStr() << ": ";
         net::Packet reply;
         int64_t cost_ms;
-        if (net::Transport::ping(handle, apt, target_ip, reply, cost_ms, 128, "greatjaysinco") ==
+        if (net::Transport::ping(handle, apt, target_ip, reply, cost_ms, 128, "hello,world") ==
             MyErrCode::kOk) {
             if (reply.hasIcmpError()) {
                 TLOG(reply.toVariant().toJsonStr(3));

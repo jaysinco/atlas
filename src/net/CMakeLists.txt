@@ -36,8 +36,8 @@ target_link_libraries(${TARGET_NAME}-ping ${TARGET_NAME})
 add_executable(${TARGET_NAME}-mtu cli/mtu.cpp)
 target_link_libraries(${TARGET_NAME}-mtu ${TARGET_NAME})
 
-# add_executable(traceroute ${CMAKE_SOURCE_DIR}/src/tools/traceroute.cpp)
-# target_link_libraries(traceroute ${TARGET_NAME})
+add_executable(${TARGET_NAME}-traceroute cli/traceroute.cpp)
+target_link_libraries(${TARGET_NAME}-traceroute ${TARGET_NAME})
 
 add_executable(${TARGET_NAME}-dns cli/dns.cpp)
 target_link_libraries(${TARGET_NAME}-dns ${TARGET_NAME})

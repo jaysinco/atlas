@@ -59,7 +59,7 @@ public:
         std::vector<ftxui::Element> elems;
         for (int i = 0; i < texts_.size(); ++i) {
             if (i == selected_) {
-                elems.push_back(ftxui::paragraph(texts_.at(i)) | ftxui::focus);
+                elems.push_back(ftxui::paragraph(texts_.at(i)) | ftxui::inverted | ftxui::focus);
             } else {
                 elems.push_back(ftxui::paragraph(texts_.at(i)));
             }
