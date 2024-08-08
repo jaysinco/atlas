@@ -10,7 +10,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 add_subdirectory(thirdparty)
 add_subdirectory(toolkit)
 add_subdirectory(parser)
-add_subdirectory(misc)
+add_subdirectory(demo)
 add_subdirectory(test)
 
 if(UNIX)
