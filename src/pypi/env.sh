@@ -50,7 +50,9 @@ if [ ! -d "$venv_path" ]; then
     pip3 install \
         -i https://mirrors.aliyun.com/pypi/simple \
         -f https://mirror.sjtu.edu.cn/pytorch-wheels/torch_stable.html \
-        torch==2.3.1+$torch_type
+        torch==2.3.1+$torch_type \
+        torchvision==0.18.1+$torch_type \
+        torchaudio==2.3.1+$torch_type
 else
     source $venv_path/bin/activate
 fi \
