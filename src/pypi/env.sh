@@ -27,25 +27,28 @@ done
 
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 git_root="$(git rev-parse --show-toplevel)"
-venv_name=myenv
-venv_path=$script_dir/$venv_name
 
 case "$OSTYPE" in
     linux*)   os=linux ;;
     msys*)    os=windows ;;
 esac
 
+venv_name=myenv
+venv_dir=$script_dir/$venv_name
+venv_script_name=$([ "$os" == "linux" ] && echo "bin" || echo "Scripts")
+venv_script_dir=$venv_dir/$venv_script_name
+torch_type=$([ "$os" == "linux" ] && echo "cpu" || echo "cu118")
+
 pushd $script_dir \
 && \
 if [ $do_clean -eq 1 ]; then
-    rm -rf $venv_path
+    rm -rf $venv_dir
 fi \
 && \
-if [ ! -d "$venv_path" ]; then
-    torch_type=$([ "$os" == "linux" ] && echo "cpu" || echo "cu118")
+if [ ! -d "$venv_dir" ]; then
     python -m venv $venv_name \
     && \
-    source $venv_path/bin/activate \
+    source $venv_script_dir/activate \
     && \
     pip3 install \
         -i https://mirrors.aliyun.com/pypi/simple \
@@ -54,7 +57,7 @@ if [ ! -d "$venv_path" ]; then
         torchvision==0.18.1+$torch_type \
         torchaudio==2.3.1+$torch_type
 else
-    source $venv_path/bin/activate
+    source $venv_script_dir/activate
 fi \
 && \
 pip3 install \
@@ -62,7 +65,7 @@ pip3 install \
     -r $script_dir/requirements.txt \
 && \
 if [ "$os" == "linux" ]; then
-    /usr/bin/fish -C "source $venv_path/bin/activate.fish"
+    /usr/bin/fish -C "source $venv_script_dir/activate.fish"
 else
-    /usr/bin/bash
+    /usr/bin/bash --init-file <(echo ". \"$HOME/.bashrc\"; VIRTUAL_ENV_DISABLE_PROMPT=1; source \"$venv_script_dir/activate\"")
 fi
