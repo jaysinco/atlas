@@ -2,4 +2,5 @@
     "files.watcherExclude": {
         "{bin,out}": true,
     },
+    "python.defaultInterpreterPath": "${workspaceFolder}/src/pypi/myenv/bin/python",
 }

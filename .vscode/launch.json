@@ -31,6 +31,14 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/bin/aarch64-debug/cuda-samples"
-        }
+        },
+        {
+            "name": "Python: Launch",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/src/pypi",
+        },
     ]
 }
