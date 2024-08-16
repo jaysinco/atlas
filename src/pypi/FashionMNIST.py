@@ -3,6 +3,7 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
+import os
 
 
 class ClassifyNet(nn.Module):
@@ -21,10 +22,7 @@ class ClassifyNet(nn.Module):
         return self.stack(x)
 
 
-def train(learning_rate, batch_size, epochs):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using {device} device")
-
+def train(device, learning_rate, batch_size, epochs):
     model = ClassifyNet().to(device)
     for name, param in model.named_parameters():
         print(f"Layer: {name} Size: {param.size()}")
@@ -42,16 +40,18 @@ def train(learning_rate, batch_size, epochs):
 
     for t in range(epochs):
         print(f"Epoch {t+1}/{epochs}\n-------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer)
-        test_loop(test_dataloader, model, loss_fn)
+        train_loop(device, train_dataloader, model, loss_fn, optimizer)
+        test_loop(device, test_dataloader, model, loss_fn)
     print("Done!")
 
 
-def train_loop(dataloader: DataLoader, model: nn.Module, loss_fn, optimizer: torch.optim.Optimizer):
+def train_loop(device, dataloader: DataLoader, model: nn.Module, loss_fn, optimizer: torch.optim.Optimizer):
     model.train()
     size = len(dataloader.dataset)
 
     for batch, (X, y) in enumerate(dataloader):
+        X = X.to(device)
+        y = y.to(device)
         pred: torch.Tensor = model(X)
         loss: torch.Tensor = loss_fn(pred, y)
         loss.backward()
@@ -62,7 +62,7 @@ def train_loop(dataloader: DataLoader, model: nn.Module, loss_fn, optimizer: tor
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
-def test_loop(dataloader: DataLoader, model: nn.Module, loss_fn):
+def test_loop(device, dataloader: DataLoader, model: nn.Module, loss_fn):
     model.eval()
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
@@ -70,6 +70,8 @@ def test_loop(dataloader: DataLoader, model: nn.Module, loss_fn):
 
     with torch.no_grad():
         for X, y in dataloader:
+            X = X.to(device)
+            y = y.to(device)
             pred: torch.Tensor = model(X)
             loss: torch.Tensor = loss_fn(pred, y)
             test_loss += loss.item()
@@ -77,12 +79,23 @@ def test_loop(dataloader: DataLoader, model: nn.Module, loss_fn):
 
     test_loss /= num_batches
     correct /= size
-    print(f"Test Error: \n Accuracy: {
-          (100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 
 if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     learning_rate = 1e-3
     batch_size = 64
     epochs = 30
-    train(learning_rate, batch_size, epochs)
+    num_cores = 1
+
+    # inter-op parallelism
+    torch.set_num_interop_threads(num_cores)
+
+    # intra-op parallelism
+    torch.set_num_threads(num_cores)
+    # os.environ["OMP_NUM_THREADS"] = str(num_cores)
+    # os.environ["MKL_NUM_THREADS"] = str(num_cores)
+
+    print(f"Using {device} device")
+    train(device, learning_rate, batch_size, epochs)
