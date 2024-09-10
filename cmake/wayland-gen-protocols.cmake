@@ -1,4 +1,4 @@
-function(wayland_gen_client_protocol outfiles)
+function(wayland_gen_protocols outfiles)
     set(options)
     set(oneValueArgs)
     set(multiValueArgs OPTIONS)
@@ -9,8 +9,17 @@ function(wayland_gen_client_protocol outfiles)
     foreach(it ${xml_files})
         get_filename_component(outfilename ${it} NAME_WE)
         set(infile ${it})
+        set(serverheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-protocol.h)
         set(clientheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-client-protocol.h)
-        set(privatecode ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-client-protocol.c)
+        set(privatecode ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-protocol.c)
+
+        add_custom_command(
+            OUTPUT ${serverheader}
+            COMMAND wayland-scanner
+            ARGS server-header ${infile} ${serverheader}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            MAIN_DEPENDENCY ${infile}
+        )
 
         add_custom_command(
             OUTPUT ${clientheader}
@@ -28,7 +37,7 @@ function(wayland_gen_client_protocol outfiles)
             MAIN_DEPENDENCY ${infile}
         )
 
-        list(APPEND ${outfiles} ${clientheader} ${privatecode})
+        list(APPEND ${outfiles} ${serverheader} ${clientheader} ${privatecode})
     endforeach()
     set(${outfiles} ${${outfiles}} PARENT_SCOPE)
 endfunction()

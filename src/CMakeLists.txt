@@ -2,7 +2,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include(xxd-add-resources)
 if(UNIX)
-    include(wayland-gen-client-protocol)
+    include(wayland-gen-protocols)
 endif()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR})
@@ -10,6 +10,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 add_subdirectory(thirdparty)
 add_subdirectory(toolkit)
 add_subdirectory(parser)
+add_subdirectory(tinywl)
 add_subdirectory(demo)
 add_subdirectory(test)
 
