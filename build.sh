@@ -5,7 +5,7 @@ set -e
 # flags
 
 do_clean=0
-do_arch=`uname -m`
+do_arch=`uname -m`-cross
 do_build_debug=0
 do_build_driver=0
 do_preprocess=0
@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
             echo
             echo "Build Options:"
             echo "  -c         clean before build"
-            echo "  -a ARCH    target arch, default '$(uname -m)'"
+            echo "  -a ARCH    target arch, default '$do_arch'"
             echo "  -d         build debug version"
             echo "  -k         build linux driver"
             echo "  -p         preprocess code before build"
