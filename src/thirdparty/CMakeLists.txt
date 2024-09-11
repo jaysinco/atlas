@@ -10,11 +10,11 @@ add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
-add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
 
 if(UNIX)
     add_subdirectory(imgui)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
+    add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
     add_subdirectory(${TC_THIRDPARTY}/wlroots wlroots)
 
     set(COPY_FILE_LIST

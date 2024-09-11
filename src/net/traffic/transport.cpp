@@ -182,7 +182,7 @@ MyErrCode Transport::ping(void* handle, Adaptor const& apt, Ip4 const& ip, Packe
 MyErrCode Transport::queryDns(Ip4 const& server, std::string const& domain, Dns& reply,
                               int timeout_ms)
 {
-    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) {
         ELOG("failed to create udp socket");
         return MyErrCode::kFailed;
