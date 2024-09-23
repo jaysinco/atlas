@@ -27,8 +27,6 @@ public:
     static MyErrCode ip2mac(void* handle, Ip4 const& ip, Mac& mac, bool use_cache = true,
                             int timeout_ms = 5000);
 
-    static MyErrCode mac2ip(void* handle, Mac const& mac, Ip4& ip, int timeout_ms = 5000);
-
     static MyErrCode ping(void* handle, Adaptor const& apt, Ip4 const& ip, Packet& reply,
                           int64_t& cost_ms, int ttl = 128, std::string const& echo = "",
                           bool forbid_slice = false, int timeout_ms = 5000);

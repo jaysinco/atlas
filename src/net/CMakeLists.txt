@@ -30,9 +30,6 @@ target_link_libraries(${TARGET_NAME}-sniff ${TARGET_NAME} ftxui)
 add_executable(${TARGET_NAME}-arp cli/arp.cpp)
 target_link_libraries(${TARGET_NAME}-arp ${TARGET_NAME})
 
-add_executable(${TARGET_NAME}-rarp cli/rarp.cpp)
-target_link_libraries(${TARGET_NAME}-rarp ${TARGET_NAME})
-
 add_executable(${TARGET_NAME}-ping cli/ping.cpp)
 target_link_libraries(${TARGET_NAME}-ping ${TARGET_NAME})
 

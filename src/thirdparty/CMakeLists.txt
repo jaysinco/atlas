@@ -15,7 +15,6 @@ if(UNIX)
     add_subdirectory(imgui)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
     add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
-    add_subdirectory(${TC_THIRDPARTY}/wlroots wlroots)
 
     set(COPY_FILE_LIST
         ${TC_INSTALL_DIR}/lib/libz.so

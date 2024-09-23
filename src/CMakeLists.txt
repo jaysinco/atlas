@@ -21,7 +21,6 @@ add_subdirectory(test)
 
 if(UNIX)
     add_subdirectory(net)
-    add_subdirectory(tinywl)
 endif()
 
 if(NOT TC_CROSS_COMPILE)

@@ -162,32 +162,6 @@ MyErrCode Transport::ip2mac(void* handle, Ip4 const& ip, Mac& mac, bool use_cach
     return ok;
 }
 
-MyErrCode Transport::mac2ip(void* handle, Mac const& mac, Ip4& ip, int timeout_ms)
-{
-    Adaptor apt = Adaptor::fit(ip);
-    if (mac == apt.mac) {
-        ip = apt.ip;
-        return MyErrCode::kOk;
-    }
-    std::atomic<bool> over = false;
-    Packet req = Packet::arp(apt.mac, apt.ip, mac, Ip4::kZeros, false, true);
-    std::thread send_loop([&] {
-        while (!over) {
-            send(handle, req);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-    });
-    Packet reply;
-    auto ok = Transport::request(handle, req, reply, timeout_ms, false);
-    if (ok == MyErrCode::kOk) {
-        Protocol const& prot = *reply.getDetail().layers.back();
-        ip = dynamic_cast<Arp const&>(prot).getDetail().sip;
-    }
-    over = true;
-    send_loop.join();
-    return ok;
-}
-
 MyErrCode Transport::ping(void* handle, Adaptor const& apt, Ip4 const& ip, Packet& reply,
                           int64_t& cost_ms, int ttl, std::string const& echo, bool forbid_slice,
                           int timeout_ms)

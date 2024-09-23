@@ -5,7 +5,7 @@ set -e
 # flags
 
 do_clean=0
-do_arch=`uname -m`-cross
+do_arch=`uname -m`
 do_build_debug=0
 do_build_driver=0
 do_preprocess=0
