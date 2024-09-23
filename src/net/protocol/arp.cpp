@@ -69,7 +69,8 @@ bool Arp::linkTo(Protocol const& rhs) const
 {
     if (type() == rhs.type()) {
         auto p = dynamic_cast<Arp const&>(rhs);
-        return (d_.op == 1 || d_.op == 3) && (p.d_.op == 2 || p.d_.op == 4) && (d_.dip == p.d_.sip);
+        return (d_.op == 1 && p.d_.op == 2 && d_.dip == p.d_.sip) ||
+               (d_.op == 3 && p.d_.op == 4 && d_.dmac == p.d_.smac);
     }
     return false;
 }

@@ -34,7 +34,7 @@ public:
     Detail const& getDetail() const;
 
 private:
-    Detail d_{0};
+    Detail d_{};
     static std::map<uint16_t, Type> type_dict;
     static Detail ntoh(Detail const& d, bool reverse = false);
     static Detail hton(Detail const& d);

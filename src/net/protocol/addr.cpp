@@ -4,12 +4,25 @@
 #include <netdb.h>
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
+#include <regex>
 
 namespace net
 {
 
 Mac const Mac::kZeros = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 Mac const Mac::kBroadcast = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+Mac::Mac(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4, uint8_t c5, uint8_t c6)
+    : b1(c1), b2(c2), b3(c3), b4(c4), b5(c5), b6(c6)
+{
+}
+
+Mac::Mac(std::string const& s)
+{
+    if (fromDashStr(s, this) != MyErrCode::kOk) {
+        MY_THROW("invalid mac: {}", s);
+    }
+}
 
 bool Mac::operator==(Mac const& rhs) const
 {
@@ -28,6 +41,28 @@ std::string Mac::toStr() const
         ss << FSTR("-{:02x}", c[i]);
     }
     return ss.str();
+}
+
+MyErrCode Mac::fromDashStr(std::string const& s, Mac* mac)
+{
+    static std::regex pat(R"((\w{2})-(\w{2})-(\w{2})-(\w{2})-(\w{2})-(\w{2}))");
+    std::smatch res;
+    Mac maddr;
+    if (std::regex_match(s, res, pat)) {
+        maddr.b1 = std::stoi(res.str(1), nullptr, 16);
+        maddr.b2 = std::stoi(res.str(2), nullptr, 16);
+        maddr.b3 = std::stoi(res.str(3), nullptr, 16);
+        maddr.b4 = std::stoi(res.str(4), nullptr, 16);
+        maddr.b5 = std::stoi(res.str(5), nullptr, 16);
+        maddr.b6 = std::stoi(res.str(6), nullptr, 16);
+    } else {
+        DLOG("failed to parse mac: {}", s);
+        return MyErrCode::kFailed;
+    }
+    if (mac) {
+        *mac = maddr;
+    }
+    return MyErrCode::kOk;
 }
 
 Ip4 const Ip4::kZeros = {0x0, 0x0, 0x0, 0x0};
