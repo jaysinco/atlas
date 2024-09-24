@@ -1,4 +1,5 @@
 #include "./common.cuh"
+#include "toolkit/toolkit.h"
 #include <fmt/ostream.h>
 #include <cuda_runtime.h>
 #include "NvInfer.h"

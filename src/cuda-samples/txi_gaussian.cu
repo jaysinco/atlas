@@ -1,5 +1,6 @@
 #include "./common.cuh"
 #include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 #include <cuda_runtime.h>
 #include <cooperative_groups.h>
 #include <vector>
