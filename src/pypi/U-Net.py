@@ -100,3 +100,14 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+
+
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    n_channels = 3
+    n_classes = 1
+    model = UNet(n_channels, n_classes).to(device)
+    X = torch.randn([1, n_channels, 1024, 1024])
+    X = X.to(device)
+    Y = model(X)
+    print(Y)
