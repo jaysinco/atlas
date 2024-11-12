@@ -13,11 +13,11 @@ int main(int argc, char** argv)
     // nested_hello_world(argc, argv);
     // global_variable(argc, argv);
     // test_cufft(argc, argv);
-    // julia_set(argc, argv);
+    julia_set(argc, argv);
     // dot_product(argc, argv);
     // ray_tracing(argc, argv);
     // txi_gaussian(argc, argv);
     // txi_guided(argc, argv);
-    trt_mnist(argc, argv);
+    // trt_mnist(argc, argv);
     return 0;
 }
