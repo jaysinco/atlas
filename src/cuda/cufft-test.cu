@@ -19,7 +19,7 @@ void print_2d(char const* header, cufftComplex* cs, int nx, int ny)
     std::cout << std::endl;
 }
 
-int test_cufft(int argc, char** argv)
+int cufft_test(int argc, char** argv)
 {
     int nx = 1920;
     int ny = 1080;

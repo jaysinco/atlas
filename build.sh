@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -c         clean before build"
             echo "  -a ARCH    target arch, default '$do_arch'"
             echo "  -d         build debug version"
-            echo "  -k         build linux driver"
+            echo "  -k         build linux device driver"
             echo "  -p         preprocess code before build"
             echo "  -z         zip binary after build"
             echo "  -h         print command line options"
@@ -61,7 +61,7 @@ binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
 temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
-driver_src_folder=$source_folder/linux-drivers
+driver_src_folder=$source_folder/ldd
 
 source $tc_toolchain_dir/env.sh
 
