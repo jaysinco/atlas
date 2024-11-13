@@ -194,7 +194,7 @@ int txi_guided(int argc, char** argv)
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
-    auto outfile = FSTR("{}-txi_guided{}", fpath.stem().string(), fpath.extension().string());
+    auto outfile = FSTR("{}-txi_guided-cuda{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
     // free

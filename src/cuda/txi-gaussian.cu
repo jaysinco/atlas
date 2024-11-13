@@ -188,7 +188,8 @@ int txi_gaussian(int argc, char** argv)
 #else
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
 #endif
-    auto outfile = FSTR("{}-txi_gaussian{}", fpath.stem().string(), fpath.extension().string());
+    auto outfile =
+        FSTR("{}-txi_gaussian-cuda{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
     TIMER_END(total, "total")
