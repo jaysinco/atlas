@@ -1,13 +1,5 @@
 CompileFlags:
   CompilationDatabase: out/
-  Add:
-    - -std=c++17
-    - --cuda-path=/usr/local/cuda-12.6
-    - -I/usr/local/cuda-12.6/include
-    - -L/usr/local/cuda-12.6/lib64
-    # - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4
-    # - -IC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/include
-    # - -LC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64
   Remove:
     - -arch=*
     - -rdc=*
@@ -32,3 +24,34 @@ InlayHints:
   Enabled: No
   ParameterNames: Yes
   DeducedTypes: Yes
+
+---
+
+If:
+  PathMatch:
+    - .*\.h
+    - .*\.hpp
+    - .*\.cpp
+    - .*\.cxx
+    - .*\.cc
+
+CompileFlags:
+  Add:
+    - -std=c++17
+
+---
+
+If:
+  PathMatch:
+    - .*\.cuh
+    - .*\.cu
+
+CompileFlags:
+  Add:
+    - -std=c++17
+    - --cuda-path=/usr/local/cuda-12.6
+    - -I/usr/local/cuda-12.6/include
+    - -L/usr/local/cuda-12.6/lib64
+    # - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4
+    # - -IC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/include
+    # - -LC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64

@@ -56,6 +56,8 @@ MyErrCode txiGuided(int argc, char** argv)
     cv::Mat img_in;
     cv::resize(img_file, img_in, cv::Size(frame_width, frame_height));
 
+    TIMER_BEGIN(total)
+
     // write butter
     cl::Event ev_write_image;
     if (auto err = cmd_q.enqueueWriteBuffer(buf_in, CL_FALSE, 0, frame_len, img_in.data, nullptr,
@@ -142,6 +144,8 @@ MyErrCode txiGuided(int argc, char** argv)
         return MyErrCode::kFailed;
     }
     ev_read_image.wait();
+
+    TIMER_END(total, "total")
 
     // write image
     cv::Mat img_out(frame_height, frame_width, CV_8UC3, img_out_data.data());
