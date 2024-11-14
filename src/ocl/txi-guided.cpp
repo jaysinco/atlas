@@ -122,10 +122,10 @@ MyErrCode txiGuided(int argc, char** argv)
         ker_linear_conv.setArg(10, output_mode);
 
         cl::Event ev_linear_conv;
-        std::vector<cl::Event> ev_desp_linear_conv = {ev_calc_ab};
+        std::vector<cl::Event> ev_deps_linear_conv = {ev_calc_ab};
         if (auto err = cmd_q.enqueueNDRangeKernel(
                 ker_linear_conv, cl::NullRange, cl::NDRange(frame_width, frame_height),
-                cl::NullRange, &ev_desp_linear_conv, &ev_linear_conv);
+                cl::NullRange, &ev_deps_linear_conv, &ev_linear_conv);
             err != CL_SUCCESS) {
             ELOG("failed to enqueue linear_conv kernel: {}", err);
             return MyErrCode::kFailed;

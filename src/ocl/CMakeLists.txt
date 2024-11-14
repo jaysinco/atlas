@@ -3,12 +3,14 @@ set(TARGET_NAME ${CURRENT_DIR_NAME})
 
 xxd_add_resources(ocl_samples_xxd_gen_cpp
     data/txi-guided.cl
+    data/spatial-denoise.cl
 )
 
 add_executable(${TARGET_NAME}-samples
     common.cpp
     main.cpp
     txi-guided.cpp
+    spatial-denoise.cpp
     ${ocl_samples_xxd_gen_cpp}
 )
 

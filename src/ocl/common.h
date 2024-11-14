@@ -20,5 +20,6 @@ MyErrCode buildProgram(cl::Context const& ctx, cl::Device const& dev, std::strin
                        cl::Program& prog);
 
 MyErrCode txiGuided(int argc, char** argv);
+MyErrCode spatialDenoise(int argc, char** argv);
 
 }  // namespace ocl

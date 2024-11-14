@@ -8,7 +8,8 @@ int main(int argc, char** argv)
     toolkit::Args args(argc, argv);
     args.parse();
 
-    txiGuided(argc, argv);
+    // txiGuided(argc, argv);
+    spatialDenoise(argc, argv);
 
     return 0;
 }
