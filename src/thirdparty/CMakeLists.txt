@@ -33,6 +33,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libopencv_core.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgcodecs.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgproc.so
+        ${TC_INSTALL_DIR}/lib/libopencv_ximgproc.so
         ${TC_INSTALL_DIR}/lib/libjpeg.so
         ${TC_INSTALL_DIR}/lib/libwebp.so
         ${TC_INSTALL_DIR}/lib/libpng16.so

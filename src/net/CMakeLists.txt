@@ -23,6 +23,11 @@ add_executable(${TARGET_NAME}-lsdev cli/lsdev.cpp)
 target_link_libraries(${TARGET_NAME}-lsdev ${TARGET_NAME})
 
 add_executable(${TARGET_NAME}-sniff
+    cli/sniff/context.cpp
+    cli/sniff/capture-view.cpp
+    cli/sniff/homepage-view.cpp
+    cli/sniff/log-view.cpp
+    cli/sniff/text-view.cpp
     cli/sniff/main.cpp
 )
 target_link_libraries(${TARGET_NAME}-sniff ${TARGET_NAME} ftxui)
