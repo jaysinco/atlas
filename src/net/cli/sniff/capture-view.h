@@ -1,13 +1,28 @@
 #pragma once
 #include <ftxui/component/component_base.hpp>
+#include <ftxui/dom/elements.hpp>
 
 class CaptureView: public ftxui::ComponentBase
 {
 public:
-    CaptureView();
+    explicit CaptureView(int line_per_page);
+    ftxui::Element Render() override;
+
+    void beginPage();
+    void endPage();
+    void nextPage();
+    void prevPage();
+
+private:
+    void updateCurrPage();
+    void startCapture();
+    void stopCapture();
+    ftxui::Element renderPackets();
 
 private:
     ftxui::Component body_;
-    std::vector<std::string> tab_entries_;
-    int tab_selected_;
+    bool is_capturing_;
+    int line_per_page_;
+    int64_t curr_page_;
+    int64_t total_page_;
 };

@@ -30,25 +30,33 @@ LogView::LogView(int line_per_page): line_per_page_(line_per_page)
 ftxui::Element LogView::Render()
 {
     text_view_->clear();
-    {
-        int64_t total_store = Context::instance().getLogSize();
-        total_page_ = std::ceil(total_store / static_cast<float>(line_per_page_));
-        updateCurrPage();
-        for (int i = (curr_page_ - 1) * line_per_page_ + 1; i <= curr_page_ * line_per_page_; ++i) {
-            if (i <= total_store) {
-                toolkit::LogLevel level;
-                std::string_view mesg;
-                Context::instance().getLog(i - 1, level, mesg);
-                text_view_->addText(mesg);
+    int64_t total_store = Context::instance().getLogSize();
+    total_page_ = std::ceil(total_store / static_cast<float>(line_per_page_));
+    updateCurrPage();
+    for (int i = (curr_page_ - 1) * line_per_page_ + 1; i <= curr_page_ * line_per_page_; ++i) {
+        if (i <= total_store) {
+            toolkit::LogLevel level;
+            std::string mesg;
+            if (!Context::instance().getLog(i - 1, level, mesg)) {
+                break;
             }
+            text_view_->addText(mesg);
         }
     }
     return ftxui::ComponentBase::Render();
 }
 
-void LogView::beginPage() { curr_page_ = 1; }
+void LogView::beginPage()
+{
+    curr_page_ = 1;
+    updateCurrPage();
+}
 
-void LogView::endPage() { curr_page_ = total_page_; }
+void LogView::endPage()
+{
+    curr_page_ = total_page_;
+    updateCurrPage();
+}
 
 void LogView::nextPage()
 {

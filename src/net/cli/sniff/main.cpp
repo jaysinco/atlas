@@ -11,6 +11,7 @@ MyErrCode drawTui(toolkit::Args const& args)
 {
     auto opt_ip = args.get<std::string>("ip");
     auto opt_filter = args.get<std::string>("filter");
+    Context::instance().setupCapture(opt_ip, opt_filter);
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
     std::atomic<bool> refresh_ui_continue = true;

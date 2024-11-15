@@ -6,7 +6,7 @@
 HomepageView::HomepageView(): tab_values_({"capture", "log"})
 {
     log_view_ = ftxui::Make<LogView>(20);
-    capture_view_ = ftxui::Make<CaptureView>();
+    capture_view_ = ftxui::Make<CaptureView>(20);
 
     tab_toggle_ = ftxui::Toggle(&tab_values_, &tab_selected_);
     tab_container_ = ftxui::Container::Tab(
