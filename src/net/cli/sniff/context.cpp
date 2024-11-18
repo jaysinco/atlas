@@ -20,6 +20,11 @@ void Context::setupCapture(std::string const& ipstr, std::string const& filter)
 void Context::startCapture()
 {
     cap_should_stop_ = false;
+    {
+        std::lock_guard<std::mutex> packet_guard(lck_packet_);
+        packet_store_.clear();
+        packet_store_.shrink_to_fit();
+    }
     auto task = std::packaged_task<MyErrCode()>([=]() -> MyErrCode {
         auto& apt =
             net::Adaptor::fit(!cap_ipstr_.empty() ? net::Ip4(cap_ipstr_) : net::Ip4::kZeros);
@@ -50,9 +55,6 @@ void Context::stopCapture()
 {
     cap_should_stop_ = true;
     cap_res_.get();
-    std::lock_guard<std::mutex> packet_guard(lck_packet_);
-    packet_store_.clear();
-    packet_store_.shrink_to_fit();
 }
 
 void Context::pushLog(toolkit::LogLevel level, std::string_view mesg)

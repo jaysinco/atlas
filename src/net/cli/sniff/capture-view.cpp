@@ -11,6 +11,15 @@ CaptureView::CaptureView(int line_per_page): line_per_page_(line_per_page)
     total_page_ = 0;
     is_capturing_ = false;
 
+    auto cap_btn_opt = ftxui::ButtonOption::Ascii();
+    cap_btn_opt.transform = [&](ftxui::EntryState const& s) {
+        std::string sep_l = s.focused ? "[" : " ";
+        std::string sep_r = s.focused ? "]" : " ";
+        std::string text = fmt::format("{}{}{}", sep_l, is_capturing_ ? "stop" : "start", sep_r);
+        auto element = ftxui::text(text);
+        return element;
+    };
+
     body_ = ftxui::Container::Vertical({
         ftxui::Container::Horizontal({
             Button(
@@ -22,6 +31,8 @@ CaptureView::CaptureView(int line_per_page): line_per_page_(line_per_page)
                 ">", [&] { nextPage(); }, ftxui::ButtonOption::Ascii()),
             Button(
                 ">>", [&] { endPage(); }, ftxui::ButtonOption::Ascii()),
+            Button(
+                "", [&] { switchCapture(); }, cap_btn_opt),
         }),
         ftxui::Renderer([&] { return renderPackets(); }),
     });
@@ -76,16 +87,15 @@ void CaptureView::prevPage()
 
 void CaptureView::updateCurrPage() { curr_page_ = std::max(1L, std::min(total_page_, curr_page_)); }
 
-void CaptureView::startCapture()
+void CaptureView::switchCapture()
 {
-    Context::instance().startCapture();
-    is_capturing_ = true;
-}
-
-void CaptureView::stopCapture()
-{
-    Context::instance().stopCapture();
-    is_capturing_ = false;
-    curr_page_ = 1;
-    total_page_ = 0;
+    if (!is_capturing_) {
+        curr_page_ = 1;
+        total_page_ = 0;
+        is_capturing_ = true;
+        Context::instance().startCapture();
+    } else {
+        is_capturing_ = false;
+        Context::instance().stopCapture();
+    }
 }

@@ -36,7 +36,24 @@ ftxui::Element HomepageView::Render()
 
 bool HomepageView::OnEvent(ftxui::Event event)
 {
-    if (tab_selected_ == 1) {
+    if (tab_selected_ == 0) {
+        if (event == ftxui::Event::PageDown) {
+            capture_view_->nextPage();
+            return true;
+        } else if (event == ftxui::Event::PageUp) {
+            capture_view_->prevPage();
+            return true;
+        } else if (event == ftxui::Event::Home) {
+            capture_view_->beginPage();
+            return true;
+        } else if (event == ftxui::Event::End) {
+            capture_view_->endPage();
+            return true;
+        } else if (event == ftxui::Event::Character(' ')) {
+            capture_view_->switchCapture();
+            return true;
+        }
+    } else if (tab_selected_ == 1) {
         if (event == ftxui::Event::PageDown) {
             log_view_->nextPage();
             return true;

@@ -12,11 +12,10 @@ public:
     void endPage();
     void nextPage();
     void prevPage();
+    void switchCapture();
 
 private:
     void updateCurrPage();
-    void startCapture();
-    void stopCapture();
     ftxui::Element renderPackets();
 
 private:
