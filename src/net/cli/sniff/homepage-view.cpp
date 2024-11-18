@@ -36,6 +36,14 @@ ftxui::Element HomepageView::Render()
 
 bool HomepageView::OnEvent(ftxui::Event event)
 {
+    if (event == ftxui::Event::Character('s')) {
+        capture_view_->switchCapture();
+        return true;
+    } else if (event == ftxui::Event::Character('c')) {
+        capture_view_->clearCapture();
+        return true;
+    }
+
     if (tab_selected_ == 0) {
         if (event == ftxui::Event::PageDown) {
             capture_view_->nextPage();
@@ -48,9 +56,6 @@ bool HomepageView::OnEvent(ftxui::Event event)
             return true;
         } else if (event == ftxui::Event::End) {
             capture_view_->endPage();
-            return true;
-        } else if (event == ftxui::Event::Character('s')) {
-            capture_view_->switchCapture();
             return true;
         }
     } else if (tab_selected_ == 1) {

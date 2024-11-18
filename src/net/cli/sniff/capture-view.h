@@ -13,15 +13,16 @@ public:
     void nextPage();
     void prevPage();
     void switchCapture();
+    void clearCapture();
 
 private:
     void updateCurrPage();
+    int64_t getTotalPage();
     ftxui::Element renderPackets();
 
 private:
     ftxui::Component body_;
     bool is_capturing_;
-    int line_per_page_;
+    int const line_per_page_;
     int64_t curr_page_;
-    int64_t total_page_;
 };

@@ -13,6 +13,7 @@ public:
     void setupCapture(std::string const& ipstr, std::string const& filter);
     void startCapture();
     void stopCapture();
+    void clearCapture();
     void pushLog(toolkit::LogLevel level, std::string_view mesg);
     bool getLog(int idx, toolkit::LogLevel& level, std::string& mesg);
     int64_t getLogSize();

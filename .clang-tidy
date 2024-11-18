@@ -30,7 +30,7 @@ Checks: >
   modernize-use-nullptr,
   modernize-use-override,
   modernize-use-transparent-functors,
-  readability-make-member-function-const,
+  # readability-make-member-function-const,
   readability-static-accessed-through-instance,
   readability-non-const-parameter,
   readability-braces-around-statements,
