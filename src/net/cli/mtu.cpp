@@ -6,6 +6,7 @@
 int main(int argc, char* argv[])
 {
     MY_TRY
+    toolkit::runAsRoot(argc, argv);
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
     args.optional("max", po::value<int>()->default_value(1500), "high bound for mtu");

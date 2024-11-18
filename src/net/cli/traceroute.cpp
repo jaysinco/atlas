@@ -9,6 +9,7 @@
 int main(int argc, char* argv[])
 {
     MY_TRY
+    toolkit::runAsRoot(argc, argv);
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
     CHECK_ERR_RET_INT(args.parse());

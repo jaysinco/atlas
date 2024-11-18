@@ -49,7 +49,7 @@ bool HomepageView::OnEvent(ftxui::Event event)
         } else if (event == ftxui::Event::End) {
             capture_view_->endPage();
             return true;
-        } else if (event == ftxui::Event::Character(' ')) {
+        } else if (event == ftxui::Event::Character('s')) {
             capture_view_->switchCapture();
             return true;
         }

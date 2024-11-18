@@ -1,5 +1,5 @@
-
 #include "toolkit/logging.h"
+#include "toolkit/toolkit.h"
 #include "toolkit/args.h"
 #include "homepage-view.h"
 #include "context.h"
@@ -41,6 +41,7 @@ MyErrCode drawTui(toolkit::Args const& args)
 int main(int argc, char* argv[])
 {
     MY_TRY
+    toolkit::runAsRoot(argc, argv);
     toolkit::LoggerOption logger_opt;
     logger_opt.logtofile = false;
     logger_opt.logtostderr = false;

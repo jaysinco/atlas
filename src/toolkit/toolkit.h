@@ -34,6 +34,7 @@ std::filesystem::path getLoggingDir();
 std::filesystem::path getDataDir();
 std::filesystem::path getTempDir();
 
+MyErrCode runAsRoot(int argc, char* argv[]);
 MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
 MyErrCode readFile(std::filesystem::path const& path, std::string& content);

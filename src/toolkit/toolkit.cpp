@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <execinfo.h>
+#include <sys/wait.h>
 #elif _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -77,6 +78,40 @@ MyErrCode installCrashHook()
 {
 #ifdef __linux__
     signal(SIGSEGV, handleSIGSEGV);
+    return MyErrCode::kOk;
+#elif _WIN32
+    return MyErrCode::kUnimplemented;
+#endif
+}
+
+MyErrCode runAsRoot(int argc, char* argv[])
+{
+#ifdef __linux__
+    if (getuid() == 0) {
+        return MyErrCode::kOk;
+    }
+    std::string cep = currentExePath().string();
+    pid_t pid = fork();
+    if (pid == 0) {  // child
+        std::vector<char*> args;
+        std::string sudo = "sudo";
+        args.push_back(sudo.data());
+        args.push_back(cep.data());
+        for (int i = 1; i < argc; ++i) {
+            args.push_back(argv[i]);
+        }
+        args.push_back(nullptr);
+        execvp("sudo", args.data());
+        ELOG("failed to exec 'sudo {}': {}", cep, strerror(errno));
+        exit(1);
+    } else if (pid > 0) {  // parent
+        int status;
+        waitpid(pid, &status, 0);
+        exit(0);
+    } else {
+        ELOG("failed to fork {}: {}", cep, strerror(errno));
+        exit(1);
+    }
     return MyErrCode::kOk;
 #elif _WIN32
     return MyErrCode::kUnimplemented;

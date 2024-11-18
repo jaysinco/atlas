@@ -17,6 +17,7 @@ void onInterrupt(int)
 int main(int argc, char* argv[])
 {
     MY_TRY
+    toolkit::runAsRoot(argc, argv);
     toolkit::Args args(argc, argv);
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.optional("attack,a", po::bool_switch(), "deploy arp attack");
