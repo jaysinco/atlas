@@ -248,7 +248,7 @@ int infer(MyLogger& logger, nvinfer1::IHostMemory* plan)
     return 0;
 }
 
-int trt_mnist(int argc, char** argv)
+int trtMnist(int argc, char** argv)
 {
     MyLogger logger;
     nvinfer1::IHostMemory* plan;

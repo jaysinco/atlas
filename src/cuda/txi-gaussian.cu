@@ -11,7 +11,8 @@
 
 namespace cg = cooperative_groups;
 
-__global__ void conv_x(uint8_t* img_in, float* ker, float* img_raw, int w_img, int h_img, int n_ker)
+__global__ void convX(uint8_t const* img_in, float const* ker, float* img_raw, int w_img, int h_img,
+                      int n_ker)
 {
     int w = blockDim.x * blockIdx.x + threadIdx.x;
     int h = blockDim.y * blockIdx.y + threadIdx.y;
@@ -34,8 +35,9 @@ __global__ void conv_x(uint8_t* img_in, float* ker, float* img_raw, int w_img, i
     }
 }
 
-__global__ void conv_y(uint8_t* img_in, float* img_raw, float* ker, uint8_t* img_out, int w_img,
-                       int h_img, int n_ker, float enhance_k, float complex_k, int output_mode)
+__global__ void convY(uint8_t const* img_in, float const* img_raw, float const* ker,
+                      uint8_t* img_out, int w_img, int h_img, int n_ker, float enhance_k,
+                      float complex_k, int output_mode)
 {
     int w = blockDim.x * blockIdx.x + threadIdx.x;
     int h = blockDim.y * blockIdx.y + threadIdx.y;
@@ -69,13 +71,13 @@ __global__ void conv_y(uint8_t* img_in, float* img_raw, float* ker, uint8_t* img
     img_out[(w_img * h * 4) + w * 4 + 3] = 255;
 }
 
-void GetGaussianKernel(int n, double sigmax, float* data)
+void getGaussianKernel(int n, double sigmax, float* data)
 {
     auto gauss = cv::getGaussianKernel(n, sigmax, CV_32F);
     std::memcpy(data, gauss.ptr<float>(), n * sizeof(float));
 }
 
-int txi_gaussian(int argc, char** argv)
+int txiGaussian(int argc, char** argv)
 {
     // parameter
     float sigma = 100;
@@ -145,7 +147,7 @@ int txi_gaussian(int argc, char** argv)
     GetGaussianKernel(win_size, sigma, d_ker);
 #else
     std::vector<float> gaussian_kernel(win_size);
-    GetGaussianKernel(win_size, sigma, gaussian_kernel.data());
+    getGaussianKernel(win_size, sigma, gaussian_kernel.data());
     CHECK(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
                      cudaMemcpyHostToDevice));
 #endif
@@ -162,11 +164,11 @@ int txi_gaussian(int argc, char** argv)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
-    conv_x<<<grid, block>>>(d_img_in, d_ker, d_img_raw, image_width, image_height, win_size);
+    convX<<<grid, block>>>(d_img_in, d_ker, d_img_raw, image_width, image_height, win_size);
     CHECK(cudaGetLastError());
 
-    conv_y<<<grid, block>>>(d_img_in, d_img_raw, d_ker, d_img_out, image_width, image_height,
-                            win_size, enhance_k, complex_k, output_mode);
+    convY<<<grid, block>>>(d_img_in, d_img_raw, d_ker, d_img_out, image_width, image_height,
+                           win_size, enhance_k, complex_k, output_mode);
     CHECK(cudaGetLastError());
 
     CHECK(cudaDeviceSynchronize());

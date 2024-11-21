@@ -5,7 +5,7 @@
 
 #define MY_PI 3.14159265358979323846
 
-void print_2d(char const* header, cufftComplex* cs, int nx, int ny)
+static void print2d(char const* header, cufftComplex* cs, int nx, int ny)
 {
     std::cout << header << std::endl;
     for (int x = 0; x < nx; ++x) {
@@ -19,16 +19,16 @@ void print_2d(char const* header, cufftComplex* cs, int nx, int ny)
     std::cout << std::endl;
 }
 
-int cufft_test(int argc, char** argv)
+int cufftTest(int argc, char** argv)
 {
     int nx = 1920;
     int ny = 1080;
     int ns = nx * ny;
-    cufftComplex *dComplex, *complex;
+    cufftComplex *d_complex, *complex;
 
     // Allocate device memory
     complex = static_cast<cufftComplex*>(malloc(sizeof(cufftComplex) * ns));
-    CHECK(cudaMalloc(&dComplex, sizeof(cufftComplex) * ns));
+    CHECK(cudaMalloc(&d_complex, sizeof(cufftComplex) * ns));
 
     // Input Generation
     for (int x = 0; x < nx; ++x) {
@@ -39,14 +39,14 @@ int cufft_test(int argc, char** argv)
             complex[y + x * ny] = c;
         }
     }
-    // print_2d("=== INPUT ===", complex, nx, ny);
+    print2d("=== INPUT ===", complex, nx, ny);
 
     // Setup the cuFFT plan
     cufftHandle plan = 0;
     CHECK_CUFFT(cufftPlan2d(&plan, nx, ny, CUFFT_C2C));
 
     // Transfer inputs into device memory
-    CHECK(cudaMemcpy(dComplex, complex, sizeof(cufftComplex) * ns, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_complex, complex, sizeof(cufftComplex) * ns, cudaMemcpyHostToDevice));
 
     // warm up
     warmUpGpu();
@@ -55,11 +55,11 @@ int cufft_test(int argc, char** argv)
     cudaEvent_t start, stop;
     CHECK(cudaEventCreate(&start));
     CHECK(cudaEventCreate(&stop));
-    CHECK(cudaEventRecord(start, 0));
+    CHECK(cudaEventRecord(start, nullptr));
 
-    CHECK_CUFFT(cufftExecC2C(plan, dComplex, dComplex, CUFFT_FORWARD));
+    CHECK_CUFFT(cufftExecC2C(plan, d_complex, d_complex, CUFFT_FORWARD));
 
-    CHECK(cudaEventRecord(stop, 0));
+    CHECK(cudaEventRecord(stop, nullptr));
     CHECK(cudaEventSynchronize(stop););
 
     float time_ms;
@@ -70,12 +70,12 @@ int cufft_test(int argc, char** argv)
     ILOG("fft2 {}x{}: {:.3f}ms", nx, ny, time_ms);
 
     // Retrieve the results into host memory
-    CHECK(cudaMemcpy(complex, dComplex, sizeof(cufftComplex) * ns, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(complex, d_complex, sizeof(cufftComplex) * ns, cudaMemcpyDeviceToHost));
 
     // print_2d("=== OUTPUT ===", complex, nx, ny);
 
     free(complex);
-    CHECK(cudaFree(dComplex));
+    CHECK(cudaFree(d_complex));
     CHECK_CUFFT(cufftDestroy(plan));
 
     return 0;

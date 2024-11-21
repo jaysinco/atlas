@@ -23,8 +23,8 @@ __global__ void separate(uint8_t* fin, float* rchan, float* gchan, float* bchan,
     bchan[width * h + w] = pin[0] / 255.0f;
 }
 
-__global__ void calc_ab(float* fin, float* aout, float* bout, int width, int height, int r,
-                        float eps)
+__global__ void calcAb(float const* fin, float* aout, float* bout, int width, int height, int r,
+                       float eps)
 {
     int w = blockDim.x * blockIdx.x + threadIdx.x;
     int h = blockDim.y * blockIdx.y + threadIdx.y;
@@ -56,9 +56,9 @@ __global__ void calc_ab(float* fin, float* aout, float* bout, int width, int hei
     bout[idx] = (1 - a) * fi;
 }
 
-__global__ void linear_conv(float* fin, float* a, float* b, int r, uint8_t* fout, int width,
-                            int height, int color_idx, float enhance_k, float complex_k,
-                            int output_mode)
+__global__ void linearConv(float const* fin, float const* a, float const* b, int r, uint8_t* fout,
+                           int width, int height, int color_idx, float enhance_k, float complex_k,
+                           int output_mode)
 {
     int w = blockDim.x * blockIdx.x + threadIdx.x;
     int h = blockDim.y * blockIdx.y + threadIdx.y;
@@ -98,7 +98,7 @@ __global__ void linear_conv(float* fin, float* a, float* b, int r, uint8_t* fout
     *(pout + 3) = 255;
 }
 
-int txi_guided(int argc, char** argv)
+int txiGuided(int argc, char** argv)
 {
     // parameter
     float eps = 1000;
@@ -171,13 +171,13 @@ int txi_guided(int argc, char** argv)
     for (int color_idx = 0; color_idx < 3; ++color_idx) {
         TIMER_BEGIN(kernel_filter)
 
-        calc_ab<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, image_width, image_height, radius,
-                                 eps);
+        calcAb<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, image_width, image_height, radius,
+                                eps);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
 
-        linear_conv<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, radius, d_img_out, image_width,
-                                     image_height, color_idx, enhance_k, complex_k, output_mode);
+        linearConv<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, radius, d_img_out, image_width,
+                                    image_height, color_idx, enhance_k, complex_k, output_mode);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
 

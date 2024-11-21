@@ -3,17 +3,17 @@
 #include <stdio.h>
 #include <algorithm>
 
-int const N = 33 * 1024;
-int const threadsPerBlock = 256;
-int const blocksPerGrid = std::min(32, (N + threadsPerBlock - 1) / threadsPerBlock);
+int const kN = 33 * 1024;
+int const kThreadsPerBlock = 256;
+int const kBlocksPerGrid = std::min(32, (kN + kThreadsPerBlock - 1) / kThreadsPerBlock);
 
-__global__ void dot(float* a, float* b, float* c)
+__global__ void dot(float const* a, float const* b, float* c)
 {
-    __shared__ float cache[threadsPerBlock];
+    __shared__ float cache[kThreadsPerBlock];
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float temp = 0.0;
-    while (tid < N) {
+    while (tid < kN) {
         temp += a[tid] * b[tid];
         tid += gridDim.x * blockDim.x;
     }
@@ -33,46 +33,46 @@ __global__ void dot(float* a, float* b, float* c)
     }
 }
 
-#define sum_squares(x) (x * (x + 1) * (2 * x + 1) / 6)
+#define SUM_SQUARES(x) (x * (x + 1) * (2 * x + 1) / 6)
 
-int dot_product(int argc, char** argv)
+int dotProduct(int argc, char** argv)
 {
     float *a, *b, c, *partial_c;
     float *dev_a, *dev_b, *dev_partial_c;
 
     // allocate memory on the CPU side
-    a = (float*)malloc(N * sizeof(float));
-    b = (float*)malloc(N * sizeof(float));
-    partial_c = (float*)malloc(blocksPerGrid * sizeof(float));
+    a = static_cast<float*>(malloc(kN * sizeof(float)));
+    b = static_cast<float*>(malloc(kN * sizeof(float)));
+    partial_c = static_cast<float*>(malloc(kBlocksPerGrid * sizeof(float)));
 
     // allocate the memory on the GPU
-    CHECK(cudaMalloc(&dev_a, N * sizeof(float)));
-    CHECK(cudaMalloc(&dev_b, N * sizeof(float)));
-    CHECK(cudaMalloc(&dev_partial_c, blocksPerGrid * sizeof(float)));
+    CHECK(cudaMalloc(&dev_a, kN * sizeof(float)));
+    CHECK(cudaMalloc(&dev_b, kN * sizeof(float)));
+    CHECK(cudaMalloc(&dev_partial_c, kBlocksPerGrid * sizeof(float)));
 
     // fill in the host memory with data
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < kN; i++) {
         a[i] = i;
         b[i] = i * 2;
     }
 
     // copy the arrays ‘a’ and ‘b’ to the GPU
-    CHECK(cudaMemcpy(dev_a, a, N * sizeof(float), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(dev_b, b, N * sizeof(float), cudaMemcpyHostToDevice));
-    dot<<<blocksPerGrid, threadsPerBlock>>>(dev_a, dev_b, dev_partial_c);
+    CHECK(cudaMemcpy(dev_a, a, kN * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(dev_b, b, kN * sizeof(float), cudaMemcpyHostToDevice));
+    dot<<<kBlocksPerGrid, kThreadsPerBlock>>>(dev_a, dev_b, dev_partial_c);
     CHECK(cudaPeekAtLastError());
 
     // copy the array 'c' back from the GPU to the CPU
-    CHECK(cudaMemcpy(partial_c, dev_partial_c, blocksPerGrid * sizeof(float),
+    CHECK(cudaMemcpy(partial_c, dev_partial_c, kBlocksPerGrid * sizeof(float),
                      cudaMemcpyDeviceToHost));
 
     // finish up on the CPU side
     c = 0;
-    for (int i = 0; i < blocksPerGrid; i++) {
+    for (int i = 0; i < kBlocksPerGrid; i++) {
         c += partial_c[i];
     }
 
-    printf("Does GPU value %.6g = %.6g?\n", c, 2 * sum_squares((float)(N - 1)));
+    printf("Does GPU value %.6g = %.6g?\n", c, 2 * SUM_SQUARES((float)(kN - 1)));
 
     // free memory on the GPU side
     CHECK(cudaFree(dev_a));

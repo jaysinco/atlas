@@ -9,7 +9,7 @@ double seconds()
     return micro.count() * 1e-6;
 }
 
-__global__ void warm_up_gpu()
+__global__ void addWarm()
 {
     unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float ia, ib;
@@ -19,6 +19,6 @@ __global__ void warm_up_gpu()
 
 void warmUpGpu()
 {
-    warm_up_gpu<<<10 * 1024 * 1024, 1024>>>();
+    addWarm<<<10 * 1024 * 1024, 1024>>>();
     CHECK(cudaDeviceSynchronize());
 }

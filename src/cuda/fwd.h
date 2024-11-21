@@ -1,17 +1,17 @@
 #pragma once
 #include <cstdint>
 
-int hello_world(int argc, char** argv);
-int check_device(int argc, char** argv);
-int sum_matrix(int argc, char** argv);
-int reduce_integer(int argc, char** argv);
-int nested_hello_world(int argc, char** argv);
-int global_variable(int argc, char** argv);
-int test_cufft(int argc, char** argv);
-int julia_set(int argc, char** argv);
-void fill_julia_set(int image_width, int image_height, uint8_t* pixels);
-int dot_product(int argc, char** argv);
-int ray_tracing(int argc, char** argv);
-int txi_gaussian(int argc, char** argv);
-int txi_guided(int argc, char** argv);
-int trt_mnist(int argc, char** argv);
+int helloWorld(int argc, char** argv);
+int checkDevice(int argc, char** argv);
+int sumMatrix(int argc, char** argv);
+int reduceInteger(int argc, char** argv);
+int nestedHelloWorld(int argc, char** argv);
+int globalVariable(int argc, char** argv);
+int cufftTest(int argc, char** argv);
+int juliaSet(int argc, char** argv);
+void fillJuliaSet(int image_width, int image_height, uint8_t* pixels);
+int dotProduct(int argc, char** argv);
+int rayTracing(int argc, char** argv);
+int txiGaussian(int argc, char** argv);
+int txiGuided(int argc, char** argv);
+int trtMnist(int argc, char** argv);

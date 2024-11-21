@@ -8,25 +8,27 @@
  * lowest nesting layer completes.
  */
 
-__global__ void nestedHelloWorld(int const iSize, int iDepth)
+__global__ void nested(int const i_size, int i_depth)
 {
     int tid = threadIdx.x;
-    printf("Recursion=%d: Hello World from thread %d block %d\n", iDepth, tid, blockIdx.x);
+    printf("Recursion=%d: Hello World from thread %d block %d\n", i_depth, tid, blockIdx.x);
 
     // condition to stop recursive execution
-    if (iSize == 1) return;
+    if (i_size == 1) {
+        return;
+    }
 
     // reduce block size to half
-    int nthreads = iSize >> 1;
+    int nthreads = i_size >> 1;
 
     // thread 0 launches child grid recursively
     if (tid == 0 && nthreads > 0) {
-        nestedHelloWorld<<<1, nthreads>>>(nthreads, ++iDepth);
-        printf("-------> nested execution depth: %d\n", iDepth);
+        nested<<<1, nthreads>>>(nthreads, ++i_depth);
+        printf("-------> nested execution depth: %d\n", i_depth);
     }
 }
 
-int nested_hello_world(int argc, char** argv)
+int nestedHelloWorld(int argc, char** argv)
 {
     int size = 8;
     int blocksize = 8;  // initial block size
@@ -41,7 +43,7 @@ int nested_hello_world(int argc, char** argv)
     dim3 grid((size + block.x - 1) / block.x, 1);
     printf("%s Execution Configuration: grid %d block %d\n", argv[0], grid.x, block.x);
 
-    nestedHelloWorld<<<grid, block>>>(block.x, 0);
+    nested<<<grid, block>>>(block.x, 0);
 
     CHECK(cudaGetLastError());
     CHECK(cudaDeviceReset());
