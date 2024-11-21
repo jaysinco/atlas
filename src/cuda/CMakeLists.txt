@@ -26,6 +26,7 @@ add_executable(${TARGET_NAME}-samples
     ray-tracing.cu
     txi-gaussian.cu
     txi-guided.cu
+    contrast-lg.cu
     $<IF:$<BOOL:${TensorRT_FOUND}>,trt-mnist.cu,>
 )
 

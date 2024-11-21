@@ -56,13 +56,13 @@ __global__ void sumMatrixOnGPU2D(float const* a, float const* b, float* c, int n
     }
 }
 
-int sumMatrix(int argc, char** argv)
+MyErrCode sumMatrix(int argc, char** argv)
 {
     // set up device
     int dev = 0;
     cudaDeviceProp device_prop;
-    CHECK(cudaGetDeviceProperties(&device_prop, dev));
-    CHECK(cudaSetDevice(dev));
+    CHECK_CUDA(cudaGetDeviceProperties(&device_prop, dev));
+    CHECK_CUDA(cudaSetDevice(dev));
 
     // set up data size of matrix
     int nx = 1 << 14;
@@ -95,13 +95,13 @@ int sumMatrix(int argc, char** argv)
 
     // malloc device global memory
     float *d_mat_a, *d_mat_b, *d_mat_c;
-    CHECK(cudaMalloc((void**)&d_mat_a, n_bytes));
-    CHECK(cudaMalloc((void**)&d_mat_b, n_bytes));
-    CHECK(cudaMalloc((void**)&d_mat_c, n_bytes));
+    CHECK_CUDA(cudaMalloc((void**)&d_mat_a, n_bytes));
+    CHECK_CUDA(cudaMalloc((void**)&d_mat_b, n_bytes));
+    CHECK_CUDA(cudaMalloc((void**)&d_mat_c, n_bytes));
 
     // transfer data from host to device
-    CHECK(cudaMemcpy(d_mat_a, h_a, n_bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_mat_b, h_b, n_bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_mat_a, h_a, n_bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_mat_b, h_b, n_bytes, cudaMemcpyHostToDevice));
 
     // invoke kernel at host side
     int dimx = 32;
@@ -116,25 +116,25 @@ int sumMatrix(int argc, char** argv)
     dim3 grid((nx + block.x - 1) / block.x, (ny + block.y - 1) / block.y);
 
     // execute the kernel
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     sumMatrixOnGPU2D<<<grid, block>>>(d_mat_a, d_mat_b, d_mat_c, nx, ny);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
     printf("sumMatrixOnGPU2D <<<(%d,%d), (%d,%d)>>> elapsed %.3f s\n", grid.x, grid.y, block.x,
            block.y, i_elaps);
-    CHECK(cudaGetLastError());
+    CHECK_CUDA(cudaGetLastError());
 
     // copy kernel result back to host side
-    CHECK(cudaMemcpy(gpu_ref, d_mat_c, n_bytes, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(gpu_ref, d_mat_c, n_bytes, cudaMemcpyDeviceToHost));
 
     // check device results
     checkResult(host_ref, gpu_ref, nxy);
 
     // free device global memory
-    CHECK(cudaFree(d_mat_a));
-    CHECK(cudaFree(d_mat_b));
-    CHECK(cudaFree(d_mat_c));
+    CHECK_CUDA(cudaFree(d_mat_a));
+    CHECK_CUDA(cudaFree(d_mat_b));
+    CHECK_CUDA(cudaFree(d_mat_c));
 
     // free host memory
     free(h_a);
@@ -143,8 +143,8 @@ int sumMatrix(int argc, char** argv)
     free(gpu_ref);
 
     // reset device
-    CHECK(cudaDeviceReset());
+    CHECK_CUDA(cudaDeviceReset());
     std::cout << "done!\n";
 
-    return EXIT_SUCCESS;
+    return MyErrCode::kOk;
 }

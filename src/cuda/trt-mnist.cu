@@ -188,13 +188,14 @@ int process(nvinfer1::IExecutionContext* context)
 
     float* d_in;
     float* d_out;
-    CHECK(cudaMalloc(&d_in, sizeof(float) * inputH * inputW));
-    CHECK(cudaMalloc(&d_out, sizeof(float) * 10));
+    CHECK_CUDA(cudaMalloc(&d_in, sizeof(float) * inputH * inputW));
+    CHECK_CUDA(cudaMalloc(&d_out, sizeof(float) * 10));
 
     for (int i = 0; i < inputH * inputW; i++) {
         inData[i] = 1.0 - fileData[i] / 255.0;
     }
-    CHECK(cudaMemcpy(d_in, inData.data(), sizeof(float) * inputH * inputW, cudaMemcpyHostToDevice));
+    CHECK_CUDA(
+        cudaMemcpy(d_in, inData.data(), sizeof(float) * inputH * inputW, cudaMemcpyHostToDevice));
 
     // context->setTensorAddress("Input3", d_in);
     // context->setTensorAddress("Plus214_Output_0", d_out);
@@ -204,13 +205,13 @@ int process(nvinfer1::IExecutionContext* context)
         return false;
     }
 
-    CHECK(cudaMemcpy(outData.data(), d_out, sizeof(float) * 10, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(outData.data(), d_out, sizeof(float) * 10, cudaMemcpyDeviceToHost));
     if (int ret = verifyOutput(outData) != 0) {
         return ret;
     }
 
-    CHECK(cudaFree(d_in));
-    CHECK(cudaFree(d_out));
+    CHECK_CUDA(cudaFree(d_in));
+    CHECK_CUDA(cudaFree(d_out));
 
     return 0;
 }
@@ -248,7 +249,7 @@ int infer(MyLogger& logger, nvinfer1::IHostMemory* plan)
     return 0;
 }
 
-int trtMnist(int argc, char** argv)
+MyErrCode trtMnist(int argc, char** argv)
 {
     MyLogger logger;
     nvinfer1::IHostMemory* plan;
@@ -262,5 +263,5 @@ int trtMnist(int argc, char** argv)
 
     delete plan;
 
-    return 0;
+    return MyErrCode::kOk;
 }

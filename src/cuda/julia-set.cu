@@ -60,29 +60,29 @@ void fillJuliaSet(int image_width, int image_height, uint8_t* pixels)
     int pixels_size = image_width * image_height * channel_num;
 
     uint8_t* d_pixels;
-    CHECK(cudaMalloc(&d_pixels, pixels_size));
+    CHECK_CUDA(cudaMalloc(&d_pixels, pixels_size));
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
     cudaEvent_t start, stop;
-    CHECK(cudaEventCreate(&start));
-    CHECK(cudaEventCreate(&stop));
-    CHECK(cudaEventRecord(start));
+    CHECK_CUDA(cudaEventCreate(&start));
+    CHECK_CUDA(cudaEventCreate(&stop));
+    CHECK_CUDA(cudaEventRecord(start));
     calcJulia<<<grid, block>>>(image_width, image_height, d_pixels);
-    CHECK(cudaPeekAtLastError());
-    CHECK(cudaEventRecord(stop));
-    CHECK(cudaEventSynchronize(stop));
+    CHECK_CUDA(cudaPeekAtLastError());
+    CHECK_CUDA(cudaEventRecord(stop));
+    CHECK_CUDA(cudaEventSynchronize(stop));
     float elapsed_ms;
-    CHECK(cudaEventElapsedTime(&elapsed_ms, start, stop));
+    CHECK_CUDA(cudaEventElapsedTime(&elapsed_ms, start, stop));
     printf("ElapsedTime: %.3f ms\n", elapsed_ms);
-    CHECK(cudaEventDestroy(start))
-    CHECK(cudaEventDestroy(stop))
+    CHECK_CUDA(cudaEventDestroy(start))
+    CHECK_CUDA(cudaEventDestroy(stop))
 
-    CHECK(cudaMemcpy(pixels, d_pixels, pixels_size, cudaMemcpyDeviceToHost));
-    CHECK(cudaFree(d_pixels))
+    CHECK_CUDA(cudaMemcpy(pixels, d_pixels, pixels_size, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaFree(d_pixels))
 }
 
-int juliaSet(int argc, char** argv)
+MyErrCode juliaSet(int argc, char** argv)
 {
     int image_width = 2560;
     int image_height = 1440;
@@ -95,5 +95,5 @@ int juliaSet(int argc, char** argv)
     cv::imwrite((toolkit::getTempDir() / "julia_set.jpg").string(), img);
     delete[] pixels;
 
-    return 0;
+    return MyErrCode::kOk;
 }

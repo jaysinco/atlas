@@ -35,7 +35,7 @@ __global__ void dot(float const* a, float const* b, float* c)
 
 #define SUM_SQUARES(x) (x * (x + 1) * (2 * x + 1) / 6)
 
-int dotProduct(int argc, char** argv)
+MyErrCode dotProduct(int argc, char** argv)
 {
     float *a, *b, c, *partial_c;
     float *dev_a, *dev_b, *dev_partial_c;
@@ -46,9 +46,9 @@ int dotProduct(int argc, char** argv)
     partial_c = static_cast<float*>(malloc(kBlocksPerGrid * sizeof(float)));
 
     // allocate the memory on the GPU
-    CHECK(cudaMalloc(&dev_a, kN * sizeof(float)));
-    CHECK(cudaMalloc(&dev_b, kN * sizeof(float)));
-    CHECK(cudaMalloc(&dev_partial_c, kBlocksPerGrid * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&dev_a, kN * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&dev_b, kN * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&dev_partial_c, kBlocksPerGrid * sizeof(float)));
 
     // fill in the host memory with data
     for (int i = 0; i < kN; i++) {
@@ -57,14 +57,14 @@ int dotProduct(int argc, char** argv)
     }
 
     // copy the arrays ‘a’ and ‘b’ to the GPU
-    CHECK(cudaMemcpy(dev_a, a, kN * sizeof(float), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(dev_b, b, kN * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(dev_a, a, kN * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(dev_b, b, kN * sizeof(float), cudaMemcpyHostToDevice));
     dot<<<kBlocksPerGrid, kThreadsPerBlock>>>(dev_a, dev_b, dev_partial_c);
-    CHECK(cudaPeekAtLastError());
+    CHECK_CUDA(cudaPeekAtLastError());
 
     // copy the array 'c' back from the GPU to the CPU
-    CHECK(cudaMemcpy(partial_c, dev_partial_c, kBlocksPerGrid * sizeof(float),
-                     cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(partial_c, dev_partial_c, kBlocksPerGrid * sizeof(float),
+                          cudaMemcpyDeviceToHost));
 
     // finish up on the CPU side
     c = 0;
@@ -75,14 +75,14 @@ int dotProduct(int argc, char** argv)
     printf("Does GPU value %.6g = %.6g?\n", c, 2 * SUM_SQUARES((float)(kN - 1)));
 
     // free memory on the GPU side
-    CHECK(cudaFree(dev_a));
-    CHECK(cudaFree(dev_b));
-    CHECK(cudaFree(dev_partial_c));
+    CHECK_CUDA(cudaFree(dev_a));
+    CHECK_CUDA(cudaFree(dev_b));
+    CHECK_CUDA(cudaFree(dev_partial_c));
 
     // free memory on the CPU side
     free(a);
     free(b);
     free(partial_c);
 
-    return 0;
+    return MyErrCode::kOk;
 }

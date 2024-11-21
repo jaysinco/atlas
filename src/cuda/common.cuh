@@ -1,9 +1,11 @@
 #pragma once
 #include <chrono>
 #include "toolkit/logging.h"
+#include <cuComplex.h>
+#include <iostream>
 #include "./fwd.h"
 
-#define CHECK(call)                                                           \
+#define CHECK_CUDA(call)                                                      \
     {                                                                         \
         cudaError_t error = call;                                             \
         if (error != cudaSuccess) {                                           \
@@ -29,7 +31,28 @@
                  .count() /                                                                       \
              1000.);
 
-__device__ float clamp(float x, float a, float b);
+template <typename T>
+static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, int xpos, int ypos,
+                    int roi_width, int roi_height)
+{
+    T* host_data = new T[roi_width * roi_height];
+    T* dev_data = data + ypos * data_width + xpos;
+    CHECK_CUDA(cudaMemcpy2D(host_data, sizeof(T) * roi_width, dev_data, sizeof(T) * data_width,
+                            sizeof(T) * roi_width, roi_height,
+                            is_host_ptr ? cudaMemcpyHostToHost : cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaDeviceSynchronize());
 
+    for (int y = 0; y < roi_height; ++y) {
+        for (int x = 0; x < roi_width; ++x) {
+            T& d = host_data[y * roi_width + x];
+            std::cout << d << " ";
+        }
+        std::cout << std::endl;
+    }
+    delete[] host_data;
+}
+
+__device__ float clamp(float x, float a, float b);
+std::ostream& operator<<(std::ostream& os, cuComplex const& cmp);
 double seconds();
 void warmUpGpu();

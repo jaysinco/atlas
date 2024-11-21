@@ -77,7 +77,7 @@ void getGaussianKernel(int n, double sigmax, float* data)
     std::memcpy(data, gauss.ptr<float>(), n * sizeof(float));
 }
 
-int txiGaussian(int argc, char** argv)
+MyErrCode txiGaussian(int argc, char** argv)
 {
     // parameter
     float sigma = 100;
@@ -99,7 +99,7 @@ int txiGaussian(int argc, char** argv)
     cv::Mat img_file = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img_file.data == nullptr) {
         ELOG("failed to load image file: {}", fpath.string());
-        return 1;
+        return MyErrCode::kFailed;
     }
     cv::Mat img;
     cv::resize(img_file, img, cv::Size(target_image_width, target_image_height));
@@ -114,15 +114,15 @@ int txiGaussian(int argc, char** argv)
 
     // buffer alloc
 #if USE_MANAGERD_MEMORY
-    CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-    CHECK(cudaMallocManaged(&d_img_in, image_byte_len, cudaMemAttachHost));
-    CHECK(cudaMallocManaged(&d_ker, win_size * sizeof(float), cudaMemAttachHost));
-    CHECK(cudaMallocManaged(&d_img_out, image_byte_len, cudaMemAttachGlobal));
+    CHECK_CUDA(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
+    CHECK_CUDA(cudaMallocManaged(&d_img_in, image_byte_len, cudaMemAttachHost));
+    CHECK_CUDA(cudaMallocManaged(&d_ker, win_size * sizeof(float), cudaMemAttachHost));
+    CHECK_CUDA(cudaMallocManaged(&d_img_out, image_byte_len, cudaMemAttachGlobal));
 #else
-    CHECK(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
-    CHECK(cudaMalloc(&d_img_in, image_byte_len));
-    CHECK(cudaMalloc(&d_ker, win_size * sizeof(float)));
-    CHECK(cudaMalloc(&d_img_out, image_byte_len));
+    CHECK_CUDA(cudaMalloc(&d_img_raw, image_size * 3 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_img_in, image_byte_len));
+    CHECK_CUDA(cudaMalloc(&d_ker, win_size * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
 #endif
 
     TIMER_BEGIN(total)
@@ -139,7 +139,7 @@ int txiGaussian(int argc, char** argv)
     // copy data in
 #if !USE_MANAGERD_MEMORY
     TIMER_BEGIN(copy_data_in)
-    CHECK(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
     TIMER_END(copy_data_in, FSTR("host to device {} bytes", image_byte_len))
 #endif
 
@@ -148,16 +148,16 @@ int txiGaussian(int argc, char** argv)
 #else
     std::vector<float> gaussian_kernel(win_size);
     getGaussianKernel(win_size, sigma, gaussian_kernel.data());
-    CHECK(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
-                     cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_ker, gaussian_kernel.data(), win_size * sizeof(float),
+                          cudaMemcpyHostToDevice));
 #endif
 
     // process
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
 
 #if USE_MANAGERD_MEMORY
-    // CHECK(cudaStreamAttachMemAsync(nullptr, d_img_in, 0, cudaMemAttachGlobal));
-    // CHECK(cudaStreamAttachMemAsync(nullptr, d_ker, 0, cudaMemAttachGlobal));
+    // CHECK_CUDA(cudaStreamAttachMemAsync(nullptr, d_img_in, 0, cudaMemAttachGlobal));
+    // CHECK_CUDA(cudaStreamAttachMemAsync(nullptr, d_ker, 0, cudaMemAttachGlobal));
 #endif
 
     TIMER_BEGIN(kernel_run)
@@ -165,27 +165,27 @@ int txiGaussian(int argc, char** argv)
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
     convX<<<grid, block>>>(d_img_in, d_ker, d_img_raw, image_width, image_height, win_size);
-    CHECK(cudaGetLastError());
+    CHECK_CUDA(cudaGetLastError());
 
     convY<<<grid, block>>>(d_img_in, d_img_raw, d_ker, d_img_out, image_width, image_height,
                            win_size, enhance_k, complex_k, output_mode);
-    CHECK(cudaGetLastError());
+    CHECK_CUDA(cudaGetLastError());
 
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     TIMER_END(kernel_run, FSTR("kernel run on {}x{}", image_width, image_height))
 
     // copy data out
 #if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
     TIMER_BEGIN(copy_data_out)
-    CHECK(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     TIMER_END(copy_data_out, FSTR("device to host {} bytes", image_byte_len))
 #endif
 
     // write image
 #if USE_MANAGERD_MEMORY
-    // CHECK(cudaStreamAttachMemAsync(nullptr, d_img_out, 0, cudaMemAttachHost));
-    // CHECK(cudaDeviceSynchronize());
+    // CHECK_CUDA(cudaStreamAttachMemAsync(nullptr, d_img_out, 0, cudaMemAttachHost));
+    // CHECK_CUDA(cudaDeviceSynchronize());
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, d_img_out);
 #else
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
@@ -197,11 +197,11 @@ int txiGaussian(int argc, char** argv)
     TIMER_END(total, "total")
 
     // free
-    CHECK(cudaFree(d_img_in));
-    CHECK(cudaFree(d_ker));
-    CHECK(cudaFree(d_img_raw));
-    CHECK(cudaFree(d_img_out));
+    CHECK_CUDA(cudaFree(d_img_in));
+    CHECK_CUDA(cudaFree(d_ker));
+    CHECK_CUDA(cudaFree(d_img_raw));
+    CHECK_CUDA(cudaFree(d_img_out));
     ILOG("done!");
 
-    return 0;
+    return MyErrCode::kOk;
 }

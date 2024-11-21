@@ -28,7 +28,7 @@ __global__ void nested(int const i_size, int i_depth)
     }
 }
 
-int nestedHelloWorld(int argc, char** argv)
+MyErrCode nestedHelloWorld(int argc, char** argv)
 {
     int size = 8;
     int blocksize = 8;  // initial block size
@@ -45,7 +45,7 @@ int nestedHelloWorld(int argc, char** argv)
 
     nested<<<grid, block>>>(block.x, 0);
 
-    CHECK(cudaGetLastError());
-    CHECK(cudaDeviceReset());
-    return 0;
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceReset());
+    return MyErrCode::kOk;
 }

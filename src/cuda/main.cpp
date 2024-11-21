@@ -12,12 +12,13 @@ int main(int argc, char** argv)
     // reduceInteger(argc, argv);
     // nestedHelloWorld(argc, argv);
     // globalVariable(argc, argv);
-    // cufftTest(argc, argv);
+    cufftTest(argc, argv);
     // juliaSet(argc, argv);
     // dotProduct(argc, argv);
     // rayTracing(argc, argv);
-    txiGaussian(argc, argv);
+    // txiGaussian(argc, argv);
     // txiGuided(argc, argv);
     // trtMnist(argc, argv);
+    // contrastLG(argc, argv);
     return 0;
 }

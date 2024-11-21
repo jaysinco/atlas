@@ -458,15 +458,15 @@ __global__ void reduceUnrollWarps(int* g_idata, int* g_odata, unsigned int n)
     }
 }
 
-int reduceInteger(int argc, char** argv)
+MyErrCode reduceInteger(int argc, char** argv)
 {
     // set up device
     int dev = 0;
     cudaDeviceProp device_prop;
-    CHECK(cudaGetDeviceProperties(&device_prop, dev));
+    CHECK_CUDA(cudaGetDeviceProperties(&device_prop, dev));
     printf("%s starting reduction at ", argv[0]);
     printf("device %d: %s ", dev, device_prop.name);
-    CHECK(cudaSetDevice(dev));
+    CHECK_CUDA(cudaSetDevice(dev));
 
     bool b_result = false;
 
@@ -505,8 +505,8 @@ int reduceInteger(int argc, char** argv)
     // allocate device memory
     int* d_idata = nullptr;
     int* d_odata = nullptr;
-    CHECK(cudaMalloc((void**)&d_idata, bytes));
-    CHECK(cudaMalloc((void**)&d_odata, grid.x * sizeof(int)));
+    CHECK_CUDA(cudaMalloc((void**)&d_idata, bytes));
+    CHECK_CUDA(cudaMalloc((void**)&d_odata, grid.x * sizeof(int)));
 
     // cpu reduction
     i_start = seconds();
@@ -515,13 +515,13 @@ int reduceInteger(int argc, char** argv)
     printf("cpu reduce      elapsed %f sec cpu_sum: %d\n", i_elaps, cpu_sum);
 
     // kernel 1: reduceNeighbored
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceNeighbored<<<grid, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x; i++) {
@@ -534,13 +534,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x, block.x);
 
     // kernel 2: reduceNeighbored with less divergence
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceNeighboredLess<<<grid, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x; i++) {
@@ -553,13 +553,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x, block.x);
 
     // kernel 3: reduceInterleaved
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceInterleaved<<<grid, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x; i++) {
@@ -572,13 +572,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x, block.x);
 
     // kernel 4: reduceUnrolling2
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceUnrolling2<<<grid.x / 2, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 2 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 2 * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x / 2; i++) {
@@ -591,13 +591,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x / 2, block.x);
 
     // kernel 5: reduceUnrolling4
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceUnrolling4<<<grid.x / 4, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 4 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 4 * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x / 4; i++) {
@@ -610,13 +610,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x / 4, block.x);
 
     // kernel 6: reduceUnrolling8
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceUnrolling8<<<grid.x / 8, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x / 8; i++) {
@@ -633,13 +633,13 @@ int reduceInteger(int argc, char** argv)
     }
 
     // kernel 8: reduceUnrollWarps8
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceUnrollWarps8<<<grid.x / 8, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x / 8; i++) {
@@ -652,13 +652,13 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x / 8, block.x);
 
     // kernel 9: reduceCompleteUnrollWarsp8
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
     reduceCompleteUnrollWarps8<<<grid.x / 8, block>>>(d_idata, d_odata, size);
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
     gpu_sum = 0;
 
     for (int i = 0; i < grid.x / 8; i++) {
@@ -671,8 +671,8 @@ int reduceInteger(int argc, char** argv)
         i_elaps, gpu_sum, grid.x / 8, block.x);
 
     // kernel 9: reduceCompleteUnroll
-    CHECK(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(d_idata, h_idata, bytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_start = seconds();
 
     switch (blocksize) {
@@ -697,9 +697,9 @@ int reduceInteger(int argc, char** argv)
             break;
     }
 
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
     i_elaps = seconds() - i_start;
-    CHECK(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_odata, d_odata, grid.x / 8 * sizeof(int), cudaMemcpyDeviceToHost));
 
     gpu_sum = 0;
 
@@ -717,11 +717,11 @@ int reduceInteger(int argc, char** argv)
     free(h_odata);
 
     // free device memory
-    CHECK(cudaFree(d_idata));
-    CHECK(cudaFree(d_odata));
+    CHECK_CUDA(cudaFree(d_idata));
+    CHECK_CUDA(cudaFree(d_odata));
 
     // reset device
-    CHECK(cudaDeviceReset());
+    CHECK_CUDA(cudaDeviceReset());
 
     // check the results
     b_result = (gpu_sum == cpu_sum);
@@ -730,5 +730,5 @@ int reduceInteger(int argc, char** argv)
         printf("Test failed!\n");
     }
 
-    return EXIT_SUCCESS;
+    return MyErrCode::kOk;
 }

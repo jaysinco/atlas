@@ -20,5 +20,10 @@ __global__ void addWarm()
 void warmUpGpu()
 {
     addWarm<<<10 * 1024 * 1024, 1024>>>();
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaDeviceSynchronize());
+}
+
+std::ostream& operator<<(std::ostream& os, cuComplex const& cmp)
+{
+    return os << cmp.x << (cmp.y < 0 ? "" : "+") << cmp.y << "i";
 }

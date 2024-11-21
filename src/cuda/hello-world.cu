@@ -8,10 +8,10 @@ __global__ void testPrint()
     printf("Hello World from GPU3!\n");
 }
 
-int helloWorld(int argc, char** argv)
+MyErrCode helloWorld(int argc, char** argv)
 {
     testPrint<<<1, 1>>>();
-    CHECK(cudaPeekAtLastError());
-    CHECK(cudaDeviceSynchronize());
-    return 0;
+    CHECK_CUDA(cudaPeekAtLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
 }

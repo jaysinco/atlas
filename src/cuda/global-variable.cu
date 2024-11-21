@@ -18,22 +18,22 @@ __global__ void checkGlobalVariable()
     dev_data[0] += 2.0f;
 }
 
-int globalVariable(int argc, char** argv)
+MyErrCode globalVariable(int argc, char** argv)
 {
     // initialize the global variable
     float value = 3.14f;
     float* d_ptr;
-    CHECK(cudaGetSymbolAddress((void**)&d_ptr, dev_data));
-    CHECK(cudaMemcpy(d_ptr, &value, sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaGetSymbolAddress((void**)&d_ptr, dev_data));
+    CHECK_CUDA(cudaMemcpy(d_ptr, &value, sizeof(float), cudaMemcpyHostToDevice));
     printf("Host:   copied %f to the global variable\n", value);
 
     // invoke the kernel
     checkGlobalVariable<<<1, 1>>>();
 
     // copy the global variable back to the host
-    CHECK(cudaMemcpy(&value, d_ptr, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&value, d_ptr, sizeof(float), cudaMemcpyDeviceToHost));
     printf("Host:   the value changed by the kernel to %f\n", value);
 
-    CHECK(cudaDeviceSynchronize());
-    return EXIT_SUCCESS;
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
 }

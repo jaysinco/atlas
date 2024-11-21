@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 
-int checkDevice(int argc, char** argv)
+MyErrCode checkDevice(int argc, char** argv)
 {
     printf("%s Starting...\n", argv[0]);
     int device_count = 0;
@@ -64,5 +64,5 @@ int checkDevice(int argc, char** argv)
            device_prop.maxGridSize[1], device_prop.maxGridSize[2]);
     printf(" Maximum memory pitch: %zu bytes\n", device_prop.memPitch);
 
-    return 0;
+    return MyErrCode::kOk;
 }

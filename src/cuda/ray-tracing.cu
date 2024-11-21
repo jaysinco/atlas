@@ -235,7 +235,7 @@ __global__ void render(uint8_t* fb, int max_x, int max_y, Vec3 lower_left_corner
     fb[offset + 0] = 255.99 * c.b();
 }
 
-int rayTracing(int argc, char** argv)
+MyErrCode rayTracing(int argc, char** argv)
 {
     int nx = 1200;
     int ny = 600;
@@ -250,7 +250,7 @@ int rayTracing(int argc, char** argv)
 
     // allocate FB
     uint8_t* fb;
-    CHECK(cudaMallocManaged((void**)&fb, fb_size));
+    CHECK_CUDA(cudaMallocManaged((void**)&fb, fb_size));
 
     clock_t start, stop;
     start = clock();
@@ -260,8 +260,8 @@ int rayTracing(int argc, char** argv)
     dim3 threads(tx, ty);
     render<<<blocks, threads>>>(fb, nx, ny, Vec3(-2.0, -1.0, -1.0), Vec3(4.0, 0.0, 0.0),
                                 Vec3(0.0, 2.0, 0.0), Vec3(0.0, 0.0, 0.0));
-    CHECK(cudaGetLastError());
-    CHECK(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
     stop = clock();
     double timer_seconds = (static_cast<double>(stop - start)) / CLOCKS_PER_SEC;
     std::cerr << "took " << timer_seconds << " seconds.\n";
@@ -269,7 +269,7 @@ int rayTracing(int argc, char** argv)
     // Output FB as Image
     cv::Mat img(ny, nx, CV_8UC3, fb);
     cv::imwrite((toolkit::getTempDir() / "ray_tracing.jpg").string(), img);
-    CHECK(cudaFree(fb));
+    CHECK_CUDA(cudaFree(fb));
 
-    return 0;
+    return MyErrCode::kOk;
 }
