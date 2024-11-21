@@ -6,8 +6,8 @@
 
 MyErrCode cufftTest(int argc, char** argv)
 {
-    int nx = 3;
-    int ny = 2;
+    int nx = 3;  // row
+    int ny = 2;  // col
     int ns = nx * ny;
     cufftComplex *d_complex, *complex;
 
@@ -25,7 +25,7 @@ MyErrCode cufftTest(int argc, char** argv)
         }
     }
     std::cout << "=== INPUT ===" << std::endl;
-    print2D(complex, true, nx, ny, 0, 0, nx, ny);
+    print2D(complex, true, ny, nx, 0, 0, ny, nx);
 
     // Setup the cuFFT plan
     cufftHandle plan = 0;
@@ -59,7 +59,7 @@ MyErrCode cufftTest(int argc, char** argv)
     CHECK_CUDA(cudaMemcpy(complex, d_complex, sizeof(cufftComplex) * ns, cudaMemcpyDeviceToHost));
 
     std::cout << "=== OUTPUT ===" << std::endl;
-    print2D(d_complex, false, nx, ny, 0, 0, nx, ny);
+    print2D(d_complex, false, ny, nx, 0, 0, ny, nx);
 
     free(complex);
     CHECK_CUDA(cudaFree(d_complex));

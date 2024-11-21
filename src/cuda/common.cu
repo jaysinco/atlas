@@ -25,5 +25,5 @@ void warmUpGpu()
 
 std::ostream& operator<<(std::ostream& os, cuComplex const& cmp)
 {
-    return os << cmp.x << (cmp.y < 0 ? "" : "+") << cmp.y << "i";
+    return os << cmp.x << (cmp.y < 0 ? "" : "+") << cmp.y << "j";
 }

@@ -31,7 +31,7 @@ static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cufft
     genRho<<<grid, block>>>(d_rho, scala, num_c, num_r);
     CHECK_CUDA(cudaGetLastError());
 
-    // print2D(d_rho, false, num_c, num_r, 600 - 1, 998 - 1, 10, 10);
+    print2D(d_rho, false, num_c, num_r, 239 - 1, 467 - 1, 10, 10);
 
     CHECK_CUDA(cudaFree(d_rho));
     return MyErrCode::kOk;
