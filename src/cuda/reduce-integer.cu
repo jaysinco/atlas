@@ -9,6 +9,8 @@
  * are also demonstrated, such as unrolling.
  */
 
+using common::seconds;
+
 // Recursive Implementation of Interleaved Pair Approach
 int recursiveReduce(int* data, int const size)
 {

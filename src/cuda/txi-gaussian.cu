@@ -110,7 +110,7 @@ MyErrCode txiGaussian(int argc, char** argv)
     int image_byte_len = image_size * 4 * sizeof(uint8_t);
 
     // warm up
-    warmUpGpu();
+    common::warmUpGpu();
 
     // buffer alloc
 #if USE_MANAGERD_MEMORY

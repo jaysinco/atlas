@@ -35,7 +35,7 @@ MyErrCode cufftTest(int argc, char** argv)
     CHECK_CUDA(cudaMemcpy(d_complex, complex, sizeof(cufftComplex) * ns, cudaMemcpyHostToDevice));
 
     // warm up
-    warmUpGpu();
+    common::warmUpGpu();
 
     // Execute a complex-to-complex 1D FFT
     cudaEvent_t start, stop;

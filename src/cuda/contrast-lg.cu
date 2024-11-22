@@ -51,6 +51,27 @@ static __global__ void genLrt(cuComplex* lrt, int n, int k, float scala, float c
     lrt[ir * nc + ic] = c3;
 }
 
+static __global__ void genDenom(float* denom, cuComplex const* fft_lg, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    cuComplex lg = fft_lg[ir * nc + ic];
+    denom[ir * nc + ic] += pow(lg.x, 2) + pow(lg.y, 2);
+}
+
+static __global__ void addDenom(float* denom, float delta, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    denom[ir * nc + ic] += delta;
+}
+
 static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cuComplex*& d_lrt)
 {
     float* d_rho;
@@ -81,16 +102,26 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
     CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
     CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cuComplex) * (nrsize * 3) * (ncsize * 3)));
 
+    dim3 block(32, 32);
+    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
+
     cufftHandle c2c_plan = 0;
     CHECK_CUFFT(cufftPlan2d(&c2c_plan, nrsize, ncsize, CUFFT_C2C));
 
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < scalas.size(); ++i) {
         cuComplex* f_lg;
         CHECK_ERR_RET(filterLG(nrsize, ncsize, n, k, scalas[i], f_lg));
         CHECK_CUFFT(cufftExecC2C(c2c_plan, f_lg, f_lg, CUFFT_FORWARD));
-
-        // print2D(f_lg, false, ncsize, nrsize, 1868 - 1, 939 - 1, 5, 5);
+        d_mat_lg.push_back(f_lg);
+        genDenom<<<grid, block>>>(d_denom, f_lg, ncsize, nrsize);
+        CHECK_CUDA(cudaGetLastError());
     }
+
+    float denom_max = common::arrayMax(d_denom, nrsize * ncsize);
+    addDenom<<<grid, block>>>(d_denom, denom_max * 0.001, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+
+    // print2D(d_denom, false, ncsize, nrsize, 89 - 1, 1053 - 1, 5, 5);
 
     CHECK_CUFFT(cufftDestroy(c2c_plan));
 
@@ -126,6 +157,9 @@ MyErrCode contrastLG(int argc, char** argv)
     int padded_image_height = image_height * 3;
     int padded_image_size = padded_image_width * padded_image_height;
 
+    ILOG("size={}x{}, padded={}x{}", image_width, image_height, padded_image_width,
+         padded_image_height);
+
     // buffer alloc
     uint8_t* d_img_in;
     uint8_t* d_img_out;
@@ -137,7 +171,7 @@ MyErrCode contrastLG(int argc, char** argv)
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
 
     // warm up
-    warmUpGpu();
+    common::warmUpGpu();
 
     // prepare lg
     CHECK_ERR_RET(

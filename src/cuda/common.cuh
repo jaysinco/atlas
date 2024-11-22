@@ -52,14 +52,16 @@ static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, 
     delete[] host_data;
 }
 
+std::ostream& operator<<(std::ostream& os, cuComplex const& cmp);
+
 namespace common
 {
 
 __device__ float clamp(float x, float a, float b);
 __device__ cuComplex cexpf(cuComplex z);
 
-};  // namespace common
-
-std::ostream& operator<<(std::ostream& os, cuComplex const& cmp);
 double seconds();
 void warmUpGpu();
+float arrayMax(float const* d_data, int len);
+
+};  // namespace common

@@ -142,7 +142,7 @@ MyErrCode txiGuided(int argc, char** argv)
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
 
     // warm up
-    warmUpGpu();
+    common::warmUpGpu();
 
     // image convert
     cv::Mat mat_img_in;

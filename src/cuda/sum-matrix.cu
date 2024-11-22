@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <iostream>
 
+using common::seconds;
+
 void initialData(float* ip, int const size)
 {
     int i;
