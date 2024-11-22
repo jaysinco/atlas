@@ -55,11 +55,13 @@ static __global__ void maxf(float const* data, int len, float* output)
     }
     __syncthreads();
 
+    int curr_size = valid_group_size;
     for (int i = (valid_group_size + 1) / 2; i > 0;) {
-        if (is_valid && lid < i && lid + i < valid_group_size) {
+        if (is_valid && lid < i && lid + i < curr_size) {
             partial_max[lid] = max(partial_max[lid], partial_max[lid + i]);
         }
         __syncthreads();
+        curr_size = i;
         i = (i == 1) ? 0 : (i + 1) / 2;
     }
 
@@ -88,6 +90,93 @@ float arrayMax(float const* d_data, int len)
     }
 
     return max_val;
+}
+
+static __global__ void sumf(float const* data, int len, float* output)
+{
+    extern __shared__ float partial_sum[];
+
+    int lid = threadIdx.x;
+    int global_id = blockIdx.x * blockDim.x + threadIdx.x;
+    int valid_group_size = min(len - blockIdx.x * blockDim.x, blockDim.x);
+    bool is_valid = global_id < len;
+
+    if (is_valid) {
+        partial_sum[lid] = data[global_id];
+    }
+    __syncthreads();
+
+    int curr_size = valid_group_size;
+    for (int i = (valid_group_size + 1) / 2; i > 0;) {
+        if (is_valid && lid < i && lid + i < curr_size) {
+            partial_sum[lid] += partial_sum[lid + i];
+        }
+        __syncthreads();
+        curr_size = i;
+        i = (i == 1) ? 0 : (i + 1) / 2;
+    }
+
+    if (lid == 0) {
+        output[blockIdx.x] = partial_sum[0];
+    }
+}
+
+float arraySum(float const* d_data, int len)
+{
+    int block_size = 1024;
+    int grid_size = (len + block_size - 1) / block_size;
+    float* d_partial_output;
+    CHECK_CUDA(cudaMalloc(&d_partial_output, grid_size * sizeof(float)));
+    sumf<<<grid_size, block_size, block_size * sizeof(float)>>>(d_data, len, d_partial_output);
+    CHECK_CUDA(cudaGetLastError());
+
+    std::vector<float> partial_output(grid_size);
+    CHECK_CUDA(cudaMemcpy(partial_output.data(), d_partial_output, grid_size * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaFree(d_partial_output));
+
+    float sum_val = 0.0;
+    for (auto v: partial_output) {
+        sum_val += v;
+    }
+
+    return sum_val;
+}
+
+static __global__ void gaussianGen(float* ker, float sigma, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    int n1 = pow(static_cast<int>(ic) - nc / 2, 2);
+    int n2 = pow(static_cast<int>(ir) - nr / 2, 2);
+    ker[ir * nc + ic] = exp(-1 * (n1 + n2) / (2 * pow(sigma, 2)));
+}
+
+static __global__ void gaussianNorm(float* ker, float sum, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    ker[ir * nc + ic] /= sum;
+}
+
+MyErrCode getGaussianKernel(int rows, int cols, float sigma, float*& d_ker)
+{
+    CHECK_CUDA(cudaMalloc(&d_ker, sizeof(float) * rows * cols));
+    dim3 block(32, 32);
+    dim3 grid((cols + block.x - 1) / block.x, (rows + block.y - 1) / block.y);
+    gaussianGen<<<grid, block>>>(d_ker, sigma, cols, rows);
+    CHECK_CUDA(cudaGetLastError());
+    float total_sum = arraySum(d_ker, rows * cols);
+    gaussianNorm<<<grid, block>>>(d_ker, total_sum, cols, rows);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
 }
 
 }  // namespace common

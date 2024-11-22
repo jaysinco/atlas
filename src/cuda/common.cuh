@@ -63,5 +63,8 @@ __device__ cuComplex cexpf(cuComplex z);
 double seconds();
 void warmUpGpu();
 float arrayMax(float const* d_data, int len);
+float arraySum(float const* d_data, int len);
+
+MyErrCode getGaussianKernel(int rows, int cols, float sigma, float*& d_ker);
 
 };  // namespace common

@@ -98,15 +98,20 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
                            float scala0, std::vector<cuComplex*>& d_mat_lg, float*& d_denom,
                            cuComplex*& d_hh)
 {
-    CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * nrsize * ncsize));
-    CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
-    CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cuComplex) * (nrsize * 3) * (ncsize * 3)));
-
-    dim3 block(32, 32);
-    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
+    int padded_row = nrsize * 3;
+    int padded_col = ncsize * 3;
 
     cufftHandle c2c_plan = 0;
     CHECK_CUFFT(cufftPlan2d(&c2c_plan, nrsize, ncsize, CUFFT_C2C));
+    cufftHandle r2c_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&r2c_plan, padded_row, padded_col, CUFFT_R2C));
+
+    CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * nrsize * ncsize));
+    CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
+    CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cuComplex) * padded_row * padded_col));
+
+    dim3 block(32, 32);
+    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
 
     for (int i = 0; i < scalas.size(); ++i) {
         cuComplex* f_lg;
@@ -121,9 +126,18 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
     addDenom<<<grid, block>>>(d_denom, denom_max * 0.001, ncsize, nrsize);
     CHECK_CUDA(cudaGetLastError());
 
-    // print2D(d_denom, false, ncsize, nrsize, 89 - 1, 1053 - 1, 5, 5);
+    float* d_gau_ker;
+    CHECK_ERR_RET(common::getGaussianKernel(padded_row, padded_col, scala0, d_gau_ker));
+    print2D(d_gau_ker, false, padded_col, padded_row, 5756 - 1, 3236 - 1, 5, 5);
+
+    ILOG("max={}", common::arrayMax(d_gau_ker, padded_col * padded_row));
+
+    CHECK_CUFFT(cufftExecR2C(r2c_plan, d_gau_ker, d_hh));
+    print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
 
     CHECK_CUFFT(cufftDestroy(c2c_plan));
+    CHECK_CUFFT(cufftDestroy(r2c_plan));
+    CHECK_CUDA(cudaFree(d_gau_ker));
 
     return MyErrCode::kOk;
 }
