@@ -1,6 +1,21 @@
 #include "./common.cuh"
 
+namespace common
+{
+
 __device__ float clamp(float x, float a, float b) { return max(a, min(b, x)); }
+
+__device__ cuComplex cexpf(cuComplex z)
+{
+    cuComplex res;
+    float t = expf(z.x);
+    sincosf(z.y, &res.y, &res.x);
+    res.x *= t;
+    res.y *= t;
+    return res;
+}
+
+}  // namespace common
 
 double seconds()
 {
@@ -9,7 +24,7 @@ double seconds()
     return micro.count() * 1e-6;
 }
 
-__global__ void addWarm()
+static __global__ void addWarm()
 {
     unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float ia, ib;

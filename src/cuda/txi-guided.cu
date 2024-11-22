@@ -94,7 +94,7 @@ __global__ void linearConv(float const* fin, float const* a, float const* b, int
     }
 
     uchar* pout = fout + (width * h * 4) + w * 4;
-    *(pout + color_idx) = clamp(round(qo * 255), 0.0, 255.0);
+    *(pout + color_idx) = common::clamp(round(qo * 255), 0.0, 255.0);
     *(pout + 3) = 255;
 }
 

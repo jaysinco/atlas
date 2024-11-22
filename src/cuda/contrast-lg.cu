@@ -6,8 +6,9 @@
 #include <opencv2/imgcodecs.hpp>
 #include <cufft.h>
 #include <cublas_v2.h>
+#include <cmath>
 
-__global__ void genRho(float* rho, float scala, int nc, int nr)
+static __global__ void genRho(float* rho, float scala, int nc, int nr)
 {
     unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
@@ -19,30 +20,80 @@ __global__ void genRho(float* rho, float scala, int nc, int nr)
     rho[ir * nc + ic] = sqrt(static_cast<float>(a * a + b * b)) / scala;
 }
 
-static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cufftComplex*& d_lrt)
+static __global__ void genTheta(float* theta, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    int a = -nc / 2 + ic;
+    int b = nr / 2 - ir;
+    theta[ir * nc + ic] = atan2(static_cast<float>(-b), static_cast<float>(-a));
+}
+
+static __global__ void genLrt(cuComplex* lrt, int n, int k, float scala, float const* theta,
+                              float const* rho, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+
+    float rho1 = rho[ir * nc + ic];
+    float theta1 = theta[ir * nc + ic];
+    float c1 = pow(-1, k) * pow(2, n + 1) / 2 * pow(M_PI, n / 2.0) / scala;
+    float c2 = c1 * pow(rho1, n) * exp(-1 * M_PI * pow(rho1, 2));
+    cuComplex c3 = common::cexpf(make_cuComplex(0, n * theta1));
+    c3.x *= c2;
+    c3.y *= c2;
+    lrt[ir * nc + ic] = c3;
+}
+
+static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cuComplex*& d_lrt)
 {
     float* d_rho;
     float* d_theta;
-    CHECK_CUDA(cudaMalloc(&d_lrt, sizeof(cufftComplex) * num_r * num_c));
+    CHECK_CUDA(cudaMalloc(&d_lrt, sizeof(cuComplex) * num_r * num_c));
     CHECK_CUDA(cudaMalloc(&d_rho, sizeof(float) * num_r * num_c));
+    CHECK_CUDA(cudaMalloc(&d_theta, sizeof(float) * num_r * num_c));
 
     dim3 block(32, 32);
     dim3 grid((num_c + block.x - 1) / block.x, (num_r + block.y - 1) / block.y);
     genRho<<<grid, block>>>(d_rho, scala, num_c, num_r);
     CHECK_CUDA(cudaGetLastError());
-
-    print2D(d_rho, false, num_c, num_r, 239 - 1, 467 - 1, 10, 10);
+    genTheta<<<grid, block>>>(d_theta, num_c, num_r);
+    CHECK_CUDA(cudaGetLastError());
+    genLrt<<<grid, block>>>(d_lrt, n, k, scala, d_theta, d_rho, num_c, num_r);
+    CHECK_CUDA(cudaGetLastError());
 
     CHECK_CUDA(cudaFree(d_rho));
+    CHECK_CUDA(cudaFree(d_theta));
     return MyErrCode::kOk;
 }
 
 static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& scalas, int n, int k,
-                           float scala0, std::vector<cufftComplex*>& d_mat_lg, float*& d_denom,
-                           cufftComplex*& d_hh)
+                           float scala0, std::vector<cuComplex*>& d_mat_lg, float*& d_denom,
+                           cuComplex*& d_hh)
 {
-    cufftComplex* f_lg;
-    CHECK_ERR_RET(filterLG(nrsize, ncsize, n, k, scalas.at(0), f_lg));
+    CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * nrsize * ncsize));
+    CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
+    CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cuComplex) * (nrsize * 3) * (ncsize * 3)));
+
+    cufftHandle c2c_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&c2c_plan, nrsize, ncsize, CUFFT_C2C));
+
+    for (int i = 0; i < 1; ++i) {
+        cuComplex* f_lg;
+        CHECK_ERR_RET(filterLG(nrsize, ncsize, n, k, scalas[i], f_lg));
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, f_lg, f_lg, CUFFT_FORWARD));
+
+        // print2D(f_lg, false, ncsize, nrsize, 1868 - 1, 939 - 1, 5, 5);
+    }
+
+    CHECK_CUFFT(cufftDestroy(c2c_plan));
+
     return MyErrCode::kOk;
 }
 
@@ -78,14 +129,12 @@ MyErrCode contrastLG(int argc, char** argv)
     // buffer alloc
     uint8_t* d_img_in;
     uint8_t* d_img_out;
-    std::vector<cufftComplex*> d_mat_lg;
+    std::vector<cuComplex*> d_mat_lg;
     float* d_denom;
-    cufftComplex* d_hh;
+    cuComplex* d_hh;
 
     CHECK_CUDA(cudaMalloc(&d_img_in, image_byte_len));
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
-    CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * image_size));
-    CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cufftComplex) * padded_image_size));
 
     // warm up
     warmUpGpu();

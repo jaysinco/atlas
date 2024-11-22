@@ -45,14 +45,21 @@ static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, 
     for (int y = 0; y < roi_height; ++y) {
         for (int x = 0; x < roi_width; ++x) {
             T& d = host_data[y * roi_width + x];
-            std::cout << d << " ";
+            std::cout << std::fixed << std::showpoint << std::setprecision(5) << d << "\t";
         }
         std::cout << std::endl;
     }
     delete[] host_data;
 }
 
+namespace common
+{
+
 __device__ float clamp(float x, float a, float b);
+__device__ cuComplex cexpf(cuComplex z);
+
+};  // namespace common
+
 std::ostream& operator<<(std::ostream& os, cuComplex const& cmp);
 double seconds();
 void warmUpGpu();

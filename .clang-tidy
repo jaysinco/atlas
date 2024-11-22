@@ -15,7 +15,7 @@ Checks: >
   google-readability-casting,
   modernize-avoid-bind,
   modernize-concat-nested-namespaces,
-  modernize-loop-convert,
+  # modernize-loop-convert,
   modernize-make-shared,
   modernize-make-unique,
   modernize-redundant-void-arg,

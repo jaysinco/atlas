@@ -65,7 +65,7 @@ __global__ void convY(uint8_t const* img_in, float const* img_raw, float const* 
         } else {  // complex
             out = enhance_k * (raw - sum) + complex_k * sum + (1 - complex_k) * raw;
         }
-        img_out[idx] = clamp(round(out * 255), 0.0f, 255.0f);
+        img_out[idx] = common::clamp(round(out * 255), 0.0f, 255.0f);
     }
 
     img_out[(w_img * h * 4) + w * 4 + 3] = 255;
