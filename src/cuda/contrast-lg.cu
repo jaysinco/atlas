@@ -72,6 +72,16 @@ static __global__ void addDenom(float* denom, float delta, int nc, int nr)
     denom[ir * nc + ic] += delta;
 }
 
+static __global__ void genCMap(float* cmap, float degree, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    cmap[ir * nc + ic] = degree;
+}
+
 static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cuComplex*& d_lrt)
 {
     float* d_rho;
@@ -109,6 +119,7 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
     CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * nrsize * ncsize));
     CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
     CHECK_CUDA(cudaMalloc(&d_hh, sizeof(cuComplex) * padded_row * padded_col));
+    CHECK_CUDA(cudaDeviceSynchronize());
 
     dim3 block(32, 32);
     dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
@@ -128,17 +139,33 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
 
     float* d_gau_ker;
     CHECK_ERR_RET(common::getGaussianKernel(padded_row, padded_col, scala0, d_gau_ker));
-    print2D(d_gau_ker, false, padded_col, padded_row, 5756 - 1, 3236 - 1, 5, 5);
+    // print2D(d_gau_ker, false, padded_col, padded_row, 5756 - 1, 3236 - 1, 5, 5);
 
-    ILOG("max={}", common::arrayMax(d_gau_ker, padded_col * padded_row));
+    // ILOG("max={}", common::arrayMax(d_gau_ker, padded_col * padded_row));
 
     CHECK_CUFFT(cufftExecR2C(r2c_plan, d_gau_ker, d_hh));
-    print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
+    // print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
 
     CHECK_CUFFT(cufftDestroy(c2c_plan));
     CHECK_CUFFT(cufftDestroy(r2c_plan));
     CHECK_CUDA(cudaFree(d_gau_ker));
 
+    return MyErrCode::kOk;
+}
+
+static MyErrCode fillCMap(int nrsize, int ncsize, float* d_cmap, float degree)
+{
+    dim3 block(32, 32);
+    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
+    genCMap<<<grid, block>>>(d_cmap, degree, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+    return MyErrCode::kOk;
+}
+
+static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* d_img_out,
+                            float* d_cmap, std::vector<cuComplex*> const& d_mat_lg, float* d_denom,
+                            std::vector<float> const& scalas, cuComplex* d_hh)
+{
     return MyErrCode::kOk;
 }
 
@@ -169,7 +196,6 @@ MyErrCode contrastLG(int argc, char** argv)
     int image_byte_len = image_size * 3 * sizeof(uint8_t);
     int padded_image_width = image_width * 3;
     int padded_image_height = image_height * 3;
-    int padded_image_size = padded_image_width * padded_image_height;
 
     ILOG("size={}x{}, padded={}x{}", image_width, image_height, padded_image_width,
          padded_image_height);
@@ -177,30 +203,35 @@ MyErrCode contrastLG(int argc, char** argv)
     // buffer alloc
     uint8_t* d_img_in;
     uint8_t* d_img_out;
+    float* d_cmap;
     std::vector<cuComplex*> d_mat_lg;
     float* d_denom;
     cuComplex* d_hh;
 
     CHECK_CUDA(cudaMalloc(&d_img_in, image_byte_len));
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
+    CHECK_CUDA(cudaMalloc(&d_cmap, image_size * sizeof(float)));
 
     // warm up
     common::warmUpGpu();
 
-    // prepare lg
+    // prepare
+    TIMER_BEGIN(prepare)
+    CHECK_ERR_RET(fillCMap(image_height, image_width, d_cmap, degree));
     CHECK_ERR_RET(
         prepareLG(image_height, image_width, scalas, nn, k, scala0, d_mat_lg, d_denom, d_hh));
+    CHECK_CUDA(cudaDeviceSynchronize());
+    TIMER_END(prepare, "prepare")
 
-    TIMER_BEGIN(total)
-
-    // copy data in
+    // process
+    TIMER_BEGIN(process)
     CHECK_CUDA(cudaMemcpy(d_img_in, img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-
-    // copy data out
+    CHECK_ERR_RET(multiscale(image_height, image_width, d_img_in, d_img_out, d_cmap, d_mat_lg,
+                             d_denom, scalas, d_hh));
     std::vector<uint8_t> vec_img_out(image_byte_len);
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-
-    TIMER_END(total, "total")
+    CHECK_CUDA(cudaDeviceSynchronize());
+    TIMER_END(process, "process")
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC3, vec_img_out.data());
@@ -215,6 +246,8 @@ MyErrCode contrastLG(int argc, char** argv)
     }
     CHECK_CUDA(cudaFree(d_denom));
     CHECK_CUDA(cudaFree(d_hh));
+    CHECK_CUDA(cudaFree(d_cmap));
+
     ILOG("done!");
 
     return MyErrCode::kOk;
