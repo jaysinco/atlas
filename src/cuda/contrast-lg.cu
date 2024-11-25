@@ -186,7 +186,8 @@ static __global__ void rgb2ntsc(uint8_t const* img_in, int yiq_idx, float* yiq, 
     yiq[ir * nc + ic] = v;
 }
 
-static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq_idx, float* d_yiq)
+static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq_idx, float* d_yiq,
+                              cuComplex* d_hh)
 {
     int padded_row = nrsize * 3;
     int padded_col = ncsize * 3;
@@ -196,15 +197,32 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     dim3 padded_grid((padded_col + block.x - 1) / block.x, (padded_row + block.y - 1) / block.y);
 
     float* d_padded_yiq;
+    cuComplex* d_fft_yiq;
+    float* d_padded_lp;
+    CHECK_CUDA(cudaMalloc(&d_fft_yiq, sizeof(cuComplex) * padded_row * padded_col));
+    CHECK_CUDA(cudaMalloc(&d_padded_lp, sizeof(float) * padded_row * padded_col));
+
+    cufftHandle r2c_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&r2c_plan, padded_row, padded_col, CUFFT_R2C));
+    cufftHandle c2r_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&c2r_plan, padded_row, padded_col, CUFFT_C2R));
 
     rgb2ntsc<<<grid, block>>>(d_img_in, yiq_idx, d_yiq, ncsize, nrsize);
     CHECK_CUDA(cudaGetLastError());
     CHECK_ERR_RET(common::padArrayRepBoth(d_yiq, ncsize, nrsize, d_padded_yiq, ncsize, nrsize));
+    CHECK_CUFFT(cufftExecR2C(r2c_plan, d_padded_yiq, d_fft_yiq));
+    CHECK_ERR_RET(common::arrayMul(d_fft_yiq, d_hh, padded_row * padded_col));
+    CHECK_CUFFT(cufftExecC2R(c2r_plan, d_fft_yiq, d_padded_lp));
 
     // print2D(d_yiq, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 5);
-    // print2D(d_padded_yiq, false, padded_col, padded_row, 1920 - 1, 1080 - 1, 5, 5);
+    // print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 10, 10);
 
+    CHECK_CUFFT(cufftDestroy(r2c_plan));
+    CHECK_CUFFT(cufftDestroy(c2r_plan));
     CHECK_CUDA(cudaFree(d_padded_yiq));
+    CHECK_CUDA(cudaFree(d_fft_yiq));
+    CHECK_CUDA(cudaFree(d_padded_lp));
+
     return MyErrCode::kOk;
 }
 
@@ -238,7 +256,7 @@ static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* 
     CHECK_CUDA(cudaMalloc(&d_ii, nrsize * ncsize * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_qq, nrsize * ncsize * sizeof(float)));
 
-    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy));
+    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy, d_hh));
     // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 1, d_ii));
     // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 2, d_qq));
 

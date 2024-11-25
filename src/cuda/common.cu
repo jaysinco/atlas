@@ -143,6 +143,44 @@ float arraySum(float const* d_data, int len)
     return sum_val;
 }
 
+static __global__ void arrayMulComplexCuda(cuComplex* a1, cuComplex const* a2, int len)
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= len) {
+        return;
+    }
+    a1[tid] = cuCmulf(a1[tid], a2[tid]);
+}
+
+MyErrCode arrayMul(cuComplex* d_a1, cuComplex const* d_a2, int len)
+{
+    int block_size = 1024;
+    int grid_size = (len + block_size - 1) / block_size;
+    arrayMulComplexCuda<<<grid_size, block_size>>>(d_a1, d_a2, len);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
+static __global__ void arrayMulCuda(float* a1, float const* a2, int len)
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= len) {
+        return;
+    }
+    a1[tid] *= a2[tid];
+}
+
+MyErrCode arrayMul(float* d_a1, float const* d_a2, int len)
+{
+    int block_size = 1024;
+    int grid_size = (len + block_size - 1) / block_size;
+    arrayMulCuda<<<grid_size, block_size>>>(d_a1, d_a2, len);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
 static __global__ void gaussianGen(float* ker, float sigma, int nc, int nr)
 {
     unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
