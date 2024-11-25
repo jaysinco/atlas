@@ -179,4 +179,35 @@ MyErrCode getGaussianKernel(int rows, int cols, float sigma, float*& d_ker)
     return MyErrCode::kOk;
 }
 
+static __global__ void padarray(float const* arr, int nc, int nr, float* padded_arr,
+                                int padding_col, int padding_row)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    int pc = nc + 2 * padding_col;
+    int pr = nr + 2 * padding_row;
+    if (ic >= pc || ir >= pr) {
+        return;
+    }
+    int remap_c = ic - padding_col;
+    int remap_r = ir - padding_row;
+    remap_c = max(0, min(nc - 1, remap_c));
+    remap_r = max(0, min(nr - 1, remap_r));
+    padded_arr[ir * pc + ic] = arr[remap_r * nc + remap_c];
+}
+
+MyErrCode padArrayRepBoth(float* d_arr, int nc, int nr, float*& d_padded_arr, int padding_col,
+                          int padding_row)
+{
+    int pc = nc + 2 * padding_col;
+    int pr = nr + 2 * padding_row;
+    CHECK_CUDA(cudaMalloc(&d_padded_arr, sizeof(float) * pc * pr));
+    dim3 block(32, 32);
+    dim3 grid((pc + block.x - 1) / block.x, (pr + block.y - 1) / block.y);
+    padarray<<<grid, block>>>(d_arr, nc, nr, d_padded_arr, padding_col, padding_row);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
 }  // namespace common

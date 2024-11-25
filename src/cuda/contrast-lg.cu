@@ -162,10 +162,95 @@ static MyErrCode fillCMap(int nrsize, int ncsize, float* d_cmap, float degree)
     return MyErrCode::kOk;
 }
 
+static __global__ void rgb2ntsc(uint8_t const* img_in, int yiq_idx, float* yiq, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    float b = img_in[ir * nc * 3 + ic * 3 + 0] / 255.0;
+    float g = img_in[ir * nc * 3 + ic * 3 + 1] / 255.0;
+    float r = img_in[ir * nc * 3 + ic * 3 + 2] / 255.0;
+
+    float v = 0;
+    if (yiq_idx == 0) {
+        v = 0.299 * r + 0.587 * g + 0.114 * b;
+        v = log(v + 1);
+    } else if (yiq_idx == 1) {
+        v = 0.596 * r - 0.274 * g - 0.322 * b;
+    } else if (yiq_idx == 2) {
+        v = 0.211 * r - 0.523 * g + 0.312 * b;
+    }
+
+    yiq[ir * nc + ic] = v;
+}
+
+static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq_idx, float* d_yiq)
+{
+    int padded_row = nrsize * 3;
+    int padded_col = ncsize * 3;
+
+    dim3 block(32, 32);
+    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
+    dim3 padded_grid((padded_col + block.x - 1) / block.x, (padded_row + block.y - 1) / block.y);
+
+    float* d_padded_yiq;
+
+    rgb2ntsc<<<grid, block>>>(d_img_in, yiq_idx, d_yiq, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_ERR_RET(common::padArrayRepBoth(d_yiq, ncsize, nrsize, d_padded_yiq, ncsize, nrsize));
+
+    // print2D(d_yiq, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 5);
+    // print2D(d_padded_yiq, false, padded_col, padded_row, 1920 - 1, 1080 - 1, 5, 5);
+
+    CHECK_CUDA(cudaFree(d_padded_yiq));
+    return MyErrCode::kOk;
+}
+
+static __global__ void ntsc2rgb(float const* yy, float const* ii, float const* qq, uint8_t* img_out,
+                                int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    float y = exp(yy[ir * nc + ic]) - 1;
+    float i = ii[ir * nc + ic];
+    float q = qq[ir * nc + ic];
+    float r = y + 0.956 * i + 0.621 * q;
+    float g = y - 0.272 * i - 0.647 * q;
+    float b = y - 1.106 * i + 1.703 * q;
+    img_out[ir * nc * 3 + ic * 3 + 0] = round(common::clamp(b, 0.0, 1.0) * 255.0);
+    img_out[ir * nc * 3 + ic * 3 + 1] = round(common::clamp(g, 0.0, 1.0) * 255.0);
+    img_out[ir * nc * 3 + ic * 3 + 2] = round(common::clamp(r, 0.0, 1.0) * 255.0);
+}
+
 static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* d_img_out,
                             float* d_cmap, std::vector<cuComplex*> const& d_mat_lg, float* d_denom,
                             std::vector<float> const& scalas, cuComplex* d_hh)
 {
+    float* d_yy;
+    float* d_ii;
+    float* d_qq;
+    CHECK_CUDA(cudaMalloc(&d_yy, nrsize * ncsize * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_ii, nrsize * ncsize * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_qq, nrsize * ncsize * sizeof(float)));
+
+    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy));
+    // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 1, d_ii));
+    // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 2, d_qq));
+
+    dim3 block(32, 32);
+    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
+    ntsc2rgb<<<grid, block>>>(d_yy, d_ii, d_qq, d_img_out, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+
+    CHECK_CUDA(cudaFree(d_yy));
+    CHECK_CUDA(cudaFree(d_ii));
+    CHECK_CUDA(cudaFree(d_qq));
+
     return MyErrCode::kOk;
 }
 
