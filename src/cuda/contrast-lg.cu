@@ -113,8 +113,8 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
 
     cufftHandle c2c_plan = 0;
     CHECK_CUFFT(cufftPlan2d(&c2c_plan, nrsize, ncsize, CUFFT_C2C));
-    cufftHandle r2c_plan = 0;
-    CHECK_CUFFT(cufftPlan2d(&r2c_plan, padded_row, padded_col, CUFFT_R2C));
+    cufftHandle c2c_pad_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&c2c_pad_plan, padded_row, padded_col, CUFFT_C2C));
 
     CHECK_CUDA(cudaMalloc(&d_denom, sizeof(float) * nrsize * ncsize));
     CHECK_CUDA(cudaMemset(d_denom, 0, sizeof(float) * nrsize * ncsize));
@@ -137,17 +137,17 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
     addDenom<<<grid, block>>>(d_denom, denom_max * 0.001, ncsize, nrsize);
     CHECK_CUDA(cudaGetLastError());
 
-    float* d_gau_ker;
+    cuComplex* d_gau_ker;
     CHECK_ERR_RET(common::getGaussianKernel(padded_row, padded_col, scala0, d_gau_ker));
-    // print2D(d_gau_ker, false, padded_col, padded_row, 5756 - 1, 3236 - 1, 5, 5);
+    // print2D(d_gau_ker, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
 
-    // ILOG("max={}", common::arrayMax(d_gau_ker, padded_col * padded_row));
+    // ILOG("======");
 
-    CHECK_CUFFT(cufftExecR2C(r2c_plan, d_gau_ker, d_hh));
+    CHECK_CUFFT(cufftExecC2C(c2c_pad_plan, d_gau_ker, d_hh, CUFFT_FORWARD));
     // print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
 
     CHECK_CUFFT(cufftDestroy(c2c_plan));
-    CHECK_CUFFT(cufftDestroy(r2c_plan));
+    CHECK_CUFFT(cufftDestroy(c2c_pad_plan));
     CHECK_CUDA(cudaFree(d_gau_ker));
 
     return MyErrCode::kOk;
@@ -196,32 +196,30 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
     dim3 padded_grid((padded_col + block.x - 1) / block.x, (padded_row + block.y - 1) / block.y);
 
-    float* d_padded_yiq;
+    cuComplex* d_padded_yiq;
     cuComplex* d_fft_yiq;
-    float* d_padded_lp;
+    cuComplex* d_lp_yiq;
     CHECK_CUDA(cudaMalloc(&d_fft_yiq, sizeof(cuComplex) * padded_row * padded_col));
-    CHECK_CUDA(cudaMalloc(&d_padded_lp, sizeof(float) * padded_row * padded_col));
+    CHECK_CUDA(cudaMalloc(&d_lp_yiq, sizeof(cuComplex) * padded_row * padded_col));
 
-    cufftHandle r2c_plan = 0;
-    CHECK_CUFFT(cufftPlan2d(&r2c_plan, padded_row, padded_col, CUFFT_R2C));
-    cufftHandle c2r_plan = 0;
-    CHECK_CUFFT(cufftPlan2d(&c2r_plan, padded_row, padded_col, CUFFT_C2R));
+    cufftHandle c2c_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&c2c_plan, padded_row, padded_col, CUFFT_C2C));
 
+    // process
     rgb2ntsc<<<grid, block>>>(d_img_in, yiq_idx, d_yiq, ncsize, nrsize);
     CHECK_CUDA(cudaGetLastError());
     CHECK_ERR_RET(common::padArrayRepBoth(d_yiq, ncsize, nrsize, d_padded_yiq, ncsize, nrsize));
-    CHECK_CUFFT(cufftExecR2C(r2c_plan, d_padded_yiq, d_fft_yiq));
+    CHECK_CUFFT(cufftExecC2C(c2c_plan, d_padded_yiq, d_fft_yiq, CUFFT_FORWARD));
     CHECK_ERR_RET(common::arrayMul(d_fft_yiq, d_hh, padded_row * padded_col));
-    CHECK_CUFFT(cufftExecC2R(c2r_plan, d_fft_yiq, d_padded_lp));
+    CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_yiq, d_lp_yiq, CUFFT_INVERSE));
+    CHECK_ERR_RET(common::arrayDiv(d_lp_yiq, padded_row * padded_col, padded_row * padded_col));
 
-    // print2D(d_yiq, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 5);
-    // print2D(d_hh, false, padded_col, padded_row, 1 - 1, 1 - 1, 10, 10);
+    // print2D(d_lp_yiq, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
 
-    CHECK_CUFFT(cufftDestroy(r2c_plan));
-    CHECK_CUFFT(cufftDestroy(c2r_plan));
+    CHECK_CUFFT(cufftDestroy(c2c_plan));
     CHECK_CUDA(cudaFree(d_padded_yiq));
     CHECK_CUDA(cudaFree(d_fft_yiq));
-    CHECK_CUDA(cudaFree(d_padded_lp));
+    CHECK_CUDA(cudaFree(d_lp_yiq));
 
     return MyErrCode::kOk;
 }
