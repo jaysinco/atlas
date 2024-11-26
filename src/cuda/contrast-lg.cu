@@ -72,16 +72,6 @@ static __global__ void addDenom(float* denom, float delta, int nc, int nr)
     denom[ir * nc + ic] += delta;
 }
 
-static __global__ void genCMap(float* cmap, float degree, int nc, int nr)
-{
-    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
-    if (ic >= nc || ir >= nr) {
-        return;
-    }
-    cmap[ir * nc + ic] = degree;
-}
-
 static MyErrCode filterLG(int num_r, int num_c, int n, int k, float scala, cuComplex*& d_lrt)
 {
     float* d_rho;
@@ -153,15 +143,6 @@ static MyErrCode prepareLG(int nrsize, int ncsize, std::vector<float> const& sca
     return MyErrCode::kOk;
 }
 
-static MyErrCode fillCMap(int nrsize, int ncsize, float* d_cmap, float degree)
-{
-    dim3 block(32, 32);
-    dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);
-    genCMap<<<grid, block>>>(d_cmap, degree, ncsize, nrsize);
-    CHECK_CUDA(cudaGetLastError());
-    return MyErrCode::kOk;
-}
-
 static __global__ void rgb2ntsc(uint8_t const* img_in, int yiq_idx, float* yiq, int nc, int nr)
 {
     unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
@@ -186,8 +167,23 @@ static __global__ void rgb2ntsc(uint8_t const* img_in, int yiq_idx, float* yiq, 
     yiq[ir * nc + ic] = v;
 }
 
+static __global__ void subLp(float const* d_yiq, cuComplex const* d_lp, cuComplex* d_fft, int nc,
+                             int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+
+    cuComplex lp = d_lp[(ir + nr) * 3 * nc + (ic + nc)];
+    float yiq = d_yiq[ir * nc + ic];
+    d_fft[ir * nc + ic] = make_cuComplex(yiq - lp.x, 0);
+}
+
 static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq_idx, float* d_yiq,
-                              cuComplex* d_hh)
+                              cuComplex* d_hh, std::vector<float> const& scalas,
+                              std::vector<cuComplex*> const& d_mat_lg, float degree)
 {
     int padded_row = nrsize * 3;
     int padded_col = ncsize * 3;
@@ -199,27 +195,51 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     cuComplex* d_padded_yiq;
     cuComplex* d_fft_yiq;
     cuComplex* d_lp_yiq;
+    cuComplex* d_fft_out;
+    cuComplex* d_out_sum;
     CHECK_CUDA(cudaMalloc(&d_fft_yiq, sizeof(cuComplex) * padded_row * padded_col));
     CHECK_CUDA(cudaMalloc(&d_lp_yiq, sizeof(cuComplex) * padded_row * padded_col));
+    CHECK_CUDA(cudaMalloc(&d_fft_out, sizeof(cuComplex) * nrsize * ncsize));
+    CHECK_CUDA(cudaMalloc(&d_out_sum, sizeof(cuComplex) * nrsize * ncsize));
+    CHECK_CUDA(cudaMemset(d_out_sum, 0, sizeof(cuComplex) * nrsize * ncsize));
 
+    cufftHandle c2c_pad_plan = 0;
+    CHECK_CUFFT(cufftPlan2d(&c2c_pad_plan, padded_row, padded_col, CUFFT_C2C));
     cufftHandle c2c_plan = 0;
-    CHECK_CUFFT(cufftPlan2d(&c2c_plan, padded_row, padded_col, CUFFT_C2C));
+    CHECK_CUFFT(cufftPlan2d(&c2c_plan, nrsize, ncsize, CUFFT_C2C));
 
     // process
     rgb2ntsc<<<grid, block>>>(d_img_in, yiq_idx, d_yiq, ncsize, nrsize);
     CHECK_CUDA(cudaGetLastError());
     CHECK_ERR_RET(common::padArrayRepBoth(d_yiq, ncsize, nrsize, d_padded_yiq, ncsize, nrsize));
-    CHECK_CUFFT(cufftExecC2C(c2c_plan, d_padded_yiq, d_fft_yiq, CUFFT_FORWARD));
+    CHECK_CUFFT(cufftExecC2C(c2c_pad_plan, d_padded_yiq, d_fft_yiq, CUFFT_FORWARD));
     CHECK_ERR_RET(common::arrayMul(d_fft_yiq, d_hh, padded_row * padded_col));
-    CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_yiq, d_lp_yiq, CUFFT_INVERSE));
+    CHECK_CUFFT(cufftExecC2C(c2c_pad_plan, d_fft_yiq, d_lp_yiq, CUFFT_INVERSE));
     CHECK_ERR_RET(common::arrayDiv(d_lp_yiq, padded_row * padded_col, padded_row * padded_col));
+    CHECK_ERR_RET(common::fftshift2(d_lp_yiq, padded_col, padded_row));
+    subLp<<<grid, block>>>(d_yiq, d_lp_yiq, d_fft_out, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_FORWARD));
 
-    // print2D(d_lp_yiq, false, padded_col, padded_row, 1 - 1, 1 - 1, 5, 5);
+    for (int i = 0; i < 1; ++i) {
+        CHECK_ERR_RET(common::arrayMul(d_fft_out, d_mat_lg.at(i), nrsize * ncsize));
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_INVERSE));
+        CHECK_ERR_RET(common::arrayDiv(d_fft_out, nrsize * ncsize, nrsize * ncsize));
+        CHECK_ERR_RET(common::arrayMul(d_fft_out,
+                                       1.0f / scalas.at(i) * degree / (yiq_idx == 0 ? 1.0 : 1.01),
+                                       nrsize * ncsize));
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_FORWARD));
+    }
 
+    print2D(d_fft_out, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 8);
+
+    CHECK_CUFFT(cufftDestroy(c2c_pad_plan));
     CHECK_CUFFT(cufftDestroy(c2c_plan));
     CHECK_CUDA(cudaFree(d_padded_yiq));
     CHECK_CUDA(cudaFree(d_fft_yiq));
     CHECK_CUDA(cudaFree(d_lp_yiq));
+    CHECK_CUDA(cudaFree(d_fft_out));
+    CHECK_CUDA(cudaFree(d_out_sum));
 
     return MyErrCode::kOk;
 }
@@ -244,7 +264,7 @@ static __global__ void ntsc2rgb(float const* yy, float const* ii, float const* q
 }
 
 static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* d_img_out,
-                            float* d_cmap, std::vector<cuComplex*> const& d_mat_lg, float* d_denom,
+                            float degree, std::vector<cuComplex*> const& d_mat_lg, float* d_denom,
                             std::vector<float> const& scalas, cuComplex* d_hh)
 {
     float* d_yy;
@@ -254,7 +274,7 @@ static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* 
     CHECK_CUDA(cudaMalloc(&d_ii, nrsize * ncsize * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_qq, nrsize * ncsize * sizeof(float)));
 
-    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy, d_hh));
+    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy, d_hh, scalas, d_mat_lg, degree));
     // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 1, d_ii));
     // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 2, d_qq));
 
@@ -304,21 +324,18 @@ MyErrCode contrastLG(int argc, char** argv)
     // buffer alloc
     uint8_t* d_img_in;
     uint8_t* d_img_out;
-    float* d_cmap;
     std::vector<cuComplex*> d_mat_lg;
     float* d_denom;
     cuComplex* d_hh;
 
     CHECK_CUDA(cudaMalloc(&d_img_in, image_byte_len));
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
-    CHECK_CUDA(cudaMalloc(&d_cmap, image_size * sizeof(float)));
 
     // warm up
     common::warmUpGpu();
 
     // prepare
     TIMER_BEGIN(prepare)
-    CHECK_ERR_RET(fillCMap(image_height, image_width, d_cmap, degree));
     CHECK_ERR_RET(
         prepareLG(image_height, image_width, scalas, nn, k, scala0, d_mat_lg, d_denom, d_hh));
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -327,7 +344,7 @@ MyErrCode contrastLG(int argc, char** argv)
     // process
     TIMER_BEGIN(process)
     CHECK_CUDA(cudaMemcpy(d_img_in, img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    CHECK_ERR_RET(multiscale(image_height, image_width, d_img_in, d_img_out, d_cmap, d_mat_lg,
+    CHECK_ERR_RET(multiscale(image_height, image_width, d_img_in, d_img_out, degree, d_mat_lg,
                              d_denom, scalas, d_hh));
     std::vector<uint8_t> vec_img_out(image_byte_len);
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
@@ -347,7 +364,6 @@ MyErrCode contrastLG(int argc, char** argv)
     }
     CHECK_CUDA(cudaFree(d_denom));
     CHECK_CUDA(cudaFree(d_hh));
-    CHECK_CUDA(cudaFree(d_cmap));
 
     ILOG("done!");
 

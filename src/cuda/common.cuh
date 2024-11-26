@@ -33,7 +33,7 @@
 
 template <typename T>
 static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, int xpos, int ypos,
-                    int roi_width, int roi_height)
+                    int roi_width, int roi_height, int precision = 5)
 {
     T* host_data = new T[roi_width * roi_height];
     T* dev_data = data + ypos * data_width + xpos;
@@ -45,7 +45,7 @@ static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, 
     for (int y = 0; y < roi_height; ++y) {
         for (int x = 0; x < roi_width; ++x) {
             T& d = host_data[y * roi_width + x];
-            std::cout << std::fixed << std::showpoint << std::setprecision(5) << d << "\t";
+            std::cout << std::fixed << std::showpoint << std::setprecision(precision) << d << "\t";
         }
         std::cout << std::endl;
     }
@@ -67,6 +67,7 @@ float arraySum(float const* d_data, int len);
 MyErrCode real2complex(float const* d_a1, cuComplex* d_a2, int len);
 MyErrCode arrayMul(float* d_a1, float const* d_a2, int len);
 MyErrCode arrayMul(cuComplex* d_a1, cuComplex const* d_a2, int len);
+MyErrCode arrayMul(cuComplex* d_a1, float a2, int len);
 MyErrCode arrayDiv(cuComplex* d_a1, float a2, int len);
 MyErrCode getGaussianKernel(int rows, int cols, float sigma, float*& d_ker);
 MyErrCode getGaussianKernel(int rows, int cols, float sigma, cuComplex*& d_ker);
@@ -74,5 +75,7 @@ MyErrCode padArrayRepBoth(float* d_arr, int nc, int nr, float*& d_padded_arr, in
                           int padding_row);
 MyErrCode padArrayRepBoth(float* d_arr, int nc, int nr, cuComplex*& d_padded_arr, int padding_col,
                           int padding_row);
+MyErrCode fftshift2(float* d_data, int nc, int nr);
+MyErrCode fftshift2(cuComplex* d_data, int nc, int nr);
 
 };  // namespace common

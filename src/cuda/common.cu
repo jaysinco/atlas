@@ -181,6 +181,25 @@ MyErrCode arrayMul(cuComplex* d_a1, cuComplex const* d_a2, int len)
     return MyErrCode::kOk;
 }
 
+static __global__ void arrayMulCuda(cuComplex* a1, float a2, int len)
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= len) {
+        return;
+    }
+    a1[tid] = make_cuComplex(a1[tid].x * a2, a1[tid].y * a2);
+}
+
+MyErrCode arrayMul(cuComplex* d_a1, float a2, int len)
+{
+    int block_size = 1024;
+    int grid_size = (len + block_size - 1) / block_size;
+    arrayMulCuda<<<grid_size, block_size>>>(d_a1, a2, len);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
 static __global__ void arrayDivCuda(cuComplex* a1, float a2, int len)
 {
     unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -326,5 +345,41 @@ MyErrCode padArrayRepBoth(float* d_arr, int nc, int nr, cuComplex*& d_padded_arr
     CHECK_CUDA(cudaDeviceSynchronize());
     return MyErrCode::kOk;
 }
+
+template <typename T>
+static __global__ void fftshiftCuda(T* data, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc / 2 || ir >= nr) {
+        return;
+    }
+    int rr, rc;
+    if (ir < nr / 2) {
+        rr = ir + nr / 2;
+        rc = ic + nc / 2;
+    } else {
+        rr = ir - nr / 2;
+        rc = ic + nc / 2;
+    }
+    T temp = data[ir * nc + ic];
+    data[ir * nc + ic] = data[rr * nc + rc];
+    data[rr * nc + rc] = temp;
+}
+
+template <typename T>
+MyErrCode fftshift2Impl(T* d_data, int nc, int nr)
+{
+    dim3 block(32, 32);
+    dim3 grid((nc / 2 + block.x - 1) / block.x, (nr + block.y - 1) / block.y);
+    fftshiftCuda<<<grid, block>>>(d_data, nc, nr);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
+MyErrCode fftshift2(float* d_data, int nc, int nr) { return fftshift2Impl(d_data, nc, nr); }
+
+MyErrCode fftshift2(cuComplex* d_data, int nc, int nr) { return fftshift2Impl(d_data, nc, nr); }
 
 }  // namespace common
