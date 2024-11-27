@@ -67,6 +67,7 @@ float arraySum(float const* d_data, int len);
 MyErrCode real2complex(float const* d_a1, cuComplex* d_a2, int len);
 MyErrCode arrayMul(float* d_a1, float const* d_a2, int len);
 MyErrCode arrayMul(cuComplex* d_a1, cuComplex const* d_a2, int len);
+MyErrCode arrayMul(cuComplex const* d_a1, cuComplex const* d_a2, cuComplex* d_out, int len);
 MyErrCode arrayMul(cuComplex* d_a1, float a2, int len);
 MyErrCode arrayDiv(cuComplex* d_a1, float a2, int len);
 MyErrCode getGaussianKernel(int rows, int cols, float sigma, float*& d_ker);

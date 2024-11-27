@@ -181,9 +181,47 @@ static __global__ void subLp(float const* d_yiq, cuComplex const* d_lp, cuComple
     d_fft[ir * nc + ic] = make_cuComplex(yiq - lp.x, 0);
 }
 
-static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq_idx, float* d_yiq,
-                              cuComplex* d_hh, std::vector<float> const& scalas,
-                              std::vector<cuComplex*> const& d_mat_lg, float degree)
+static __global__ void genEdge(cuComplex* fft_edge, cuComplex const* mat_lg, float const* denom,
+                               int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+
+    cuComplex edge = fft_edge[ir * nc + ic];
+    cuComplex lg = cuConjf(mat_lg[ir * nc + ic]);
+    float deno = denom[ir * nc + ic];
+    cuComplex temp = cuCmulf(edge, lg);
+    fft_edge[ir * nc + ic] = make_cuComplex(temp.x / deno, temp.y / deno);
+}
+
+static __global__ void addToOut(float* out_sum, cuComplex const* out_f, float scala, int nc, int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    out_sum[ir * nc + ic] += scala * out_f[ir * nc + ic].x;
+}
+
+static __global__ void addOutLp(float const* out_sum, cuComplex const* lp, float* yiq, int nc,
+                                int nr)
+{
+    unsigned int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int ir = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nc || ir >= nr) {
+        return;
+    }
+    yiq[ir * nc + ic] = out_sum[ir * nc + ic] + lp[(ir + nr) * 3 * nc + (ic + nc)].x;
+}
+
+static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t const* d_img_in, int yiq_idx,
+                              float* d_yiq, cuComplex const* d_hh, std::vector<float> const& scalas,
+                              std::vector<cuComplex*> const& d_mat_lg, float degree,
+                              float const* d_denom)
 {
     int padded_row = nrsize * 3;
     int padded_col = ncsize * 3;
@@ -196,12 +234,14 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     cuComplex* d_fft_yiq;
     cuComplex* d_lp_yiq;
     cuComplex* d_fft_out;
-    cuComplex* d_out_sum;
+    cuComplex* d_fft_edge;
+    float* d_out_sum;
     CHECK_CUDA(cudaMalloc(&d_fft_yiq, sizeof(cuComplex) * padded_row * padded_col));
     CHECK_CUDA(cudaMalloc(&d_lp_yiq, sizeof(cuComplex) * padded_row * padded_col));
     CHECK_CUDA(cudaMalloc(&d_fft_out, sizeof(cuComplex) * nrsize * ncsize));
-    CHECK_CUDA(cudaMalloc(&d_out_sum, sizeof(cuComplex) * nrsize * ncsize));
-    CHECK_CUDA(cudaMemset(d_out_sum, 0, sizeof(cuComplex) * nrsize * ncsize));
+    CHECK_CUDA(cudaMalloc(&d_fft_edge, sizeof(cuComplex) * nrsize * ncsize));
+    CHECK_CUDA(cudaMalloc(&d_out_sum, sizeof(float) * nrsize * ncsize));
+    CHECK_CUDA(cudaMemset(d_out_sum, 0, sizeof(float) * nrsize * ncsize));
 
     cufftHandle c2c_pad_plan = 0;
     CHECK_CUFFT(cufftPlan2d(&c2c_pad_plan, padded_row, padded_col, CUFFT_C2C));
@@ -221,17 +261,28 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_FORWARD));
 
-    for (int i = 0; i < 1; ++i) {
-        CHECK_ERR_RET(common::arrayMul(d_fft_out, d_mat_lg.at(i), nrsize * ncsize));
-        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_INVERSE));
-        CHECK_ERR_RET(common::arrayDiv(d_fft_out, nrsize * ncsize, nrsize * ncsize));
-        CHECK_ERR_RET(common::arrayMul(d_fft_out,
+    for (int i = 0; i < scalas.size(); ++i) {
+        CHECK_ERR_RET(common::arrayMul(d_fft_out, d_mat_lg.at(i), d_fft_edge, nrsize * ncsize));
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_edge, d_fft_edge, CUFFT_INVERSE));
+        CHECK_ERR_RET(common::arrayDiv(d_fft_edge, nrsize * ncsize, nrsize * ncsize));
+        CHECK_ERR_RET(common::arrayMul(d_fft_edge,
                                        1.0f / scalas.at(i) * degree / (yiq_idx == 0 ? 1.0 : 1.01),
                                        nrsize * ncsize));
-        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_out, d_fft_out, CUFFT_FORWARD));
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_edge, d_fft_edge, CUFFT_FORWARD));
+        genEdge<<<grid, block>>>(d_fft_edge, d_mat_lg.at(i), d_denom, ncsize, nrsize);
+        CHECK_CUDA(cudaGetLastError());
+        CHECK_CUFFT(cufftExecC2C(c2c_plan, d_fft_edge, d_fft_edge, CUFFT_INVERSE));
+        CHECK_ERR_RET(common::arrayDiv(d_fft_edge, nrsize * ncsize, nrsize * ncsize));
+        addToOut<<<grid, block>>>(d_out_sum, d_fft_edge, scalas.at(i), ncsize, nrsize);
+        CHECK_CUDA(cudaGetLastError());
     }
 
-    print2D(d_fft_out, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 8);
+    addOutLp<<<grid, block>>>(d_out_sum, d_lp_yiq, d_yiq, ncsize, nrsize);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    // ILOG("================");
+    // print2D(d_yiq, false, ncsize, nrsize, 1 - 1, 1 - 1, 5, 8, 10);
 
     CHECK_CUFFT(cufftDestroy(c2c_pad_plan));
     CHECK_CUFFT(cufftDestroy(c2c_plan));
@@ -239,6 +290,7 @@ static MyErrCode scaleChannel(int nrsize, int ncsize, uint8_t* d_img_in, int yiq
     CHECK_CUDA(cudaFree(d_fft_yiq));
     CHECK_CUDA(cudaFree(d_lp_yiq));
     CHECK_CUDA(cudaFree(d_fft_out));
+    CHECK_CUDA(cudaFree(d_fft_edge));
     CHECK_CUDA(cudaFree(d_out_sum));
 
     return MyErrCode::kOk;
@@ -274,9 +326,12 @@ static MyErrCode multiscale(int nrsize, int ncsize, uint8_t* d_img_in, uint8_t* 
     CHECK_CUDA(cudaMalloc(&d_ii, nrsize * ncsize * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_qq, nrsize * ncsize * sizeof(float)));
 
-    CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy, d_hh, scalas, d_mat_lg, degree));
-    // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 1, d_ii));
-    // CHECK_ERR_RET(scaleChannel(nrsize, ncsize, d_img_in, 2, d_qq));
+    CHECK_ERR_RET(
+        scaleChannel(nrsize, ncsize, d_img_in, 0, d_yy, d_hh, scalas, d_mat_lg, degree, d_denom));
+    CHECK_ERR_RET(
+        scaleChannel(nrsize, ncsize, d_img_in, 1, d_ii, d_hh, scalas, d_mat_lg, degree, d_denom));
+    CHECK_ERR_RET(
+        scaleChannel(nrsize, ncsize, d_img_in, 2, d_qq, d_hh, scalas, d_mat_lg, degree, d_denom));
 
     dim3 block(32, 32);
     dim3 grid((ncsize + block.x - 1) / block.x, (nrsize + block.y - 1) / block.y);

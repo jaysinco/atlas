@@ -162,6 +162,26 @@ MyErrCode real2complex(float const* d_a1, cuComplex* d_a2, int len)
     return MyErrCode::kOk;
 }
 
+static __global__ void arrayMulComplexCuda(cuComplex const* a1, cuComplex const* a2, cuComplex* out,
+                                           int len)
+{
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= len) {
+        return;
+    }
+    out[tid] = cuCmulf(a1[tid], a2[tid]);
+}
+
+MyErrCode arrayMul(cuComplex const* d_a1, cuComplex const* d_a2, cuComplex* d_out, int len)
+{
+    int block_size = 1024;
+    int grid_size = (len + block_size - 1) / block_size;
+    arrayMulComplexCuda<<<grid_size, block_size>>>(d_a1, d_a2, d_out, len);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    return MyErrCode::kOk;
+}
+
 static __global__ void arrayMulComplexCuda(cuComplex* a1, cuComplex const* a2, int len)
 {
     unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
