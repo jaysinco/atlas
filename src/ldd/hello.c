@@ -113,7 +113,7 @@ static int __init myInit(void)
     }
     memset(my_devices, 0, nr_devs * sizeof(struct my_dev));
 
-    my_class = class_create(THIS_MODULE, "hello_dev");
+    my_class = class_create("hello_dev");
     if (my_class == NULL) {
         printk(KERN_WARNING "failed to create class\n");
     }

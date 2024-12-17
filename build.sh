@@ -7,9 +7,13 @@ set -e
 do_clean=0
 do_arch=`uname -m`
 do_build_debug=0
-do_build_driver=0
 do_preprocess=0
 do_zip=0
+
+do_build_none=0
+do_build_core=0
+do_build_ldd=0
+do_build_flt=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -21,22 +25,37 @@ while [[ $# -gt 0 ]]; do
             echo "  -c         clean before build"
             echo "  -a ARCH    target arch, default '$do_arch'"
             echo "  -d         build debug version"
-            echo "  -k         build linux device driver"
             echo "  -p         preprocess code before build"
             echo "  -z         zip binary after build"
             echo "  -h         print command line options"
+            echo
+            echo "Build Targets:"
+            echo "  none       empty target"
+            echo "  core       cpp backend"
+            echo "  ldd        linux device driver"
+            echo "  flt        flutter ui"
             echo
             exit 0
             ;;
         -c) do_clean=1 && shift ;;
         -a) do_arch=$2 && shift && shift ;;
         -d) do_build_debug=1 && shift ;;
-        -k) do_build_driver=1 && shift ;;
         -p) do_preprocess=1 && shift ;;
         -z) do_zip=1 && shift ;;
+      none) do_build_none=1 && shift ;;
+      core) do_build_core=1 && shift ;;
+       ldd) do_build_ldd=1 && shift ;;
+       flt) do_build_flt=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
     esac
 done
+
+if [ $do_build_none -eq 0 -a $do_build_core -eq 0 -a $do_build_ldd -eq 0 -a $do_build_flt -eq 0 ]; then
+    do_build_core=1
+    if [[ $(type -P "flutter") ]]; then
+        do_build_flt=0
+    fi
+fi
 
 # build
 
@@ -61,19 +80,39 @@ binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
 temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
-driver_src_folder=$source_folder/ldd
+ldd_src_folder=$source_folder/ldd
+flt_src_folder=$source_folder/flt
 
 source $tc_toolchain_dir/env.sh
 
 function clean_build() {
-    rm -rf $build_folder
-    rm -rf $binary_folder
+    rm -rf $git_root/out
+    rm -rf $git_root/bin
+    rm -rf $flt_src_folder/.idea
+    rm -rf $flt_src_folder/*.iml
+    rm -rf $flt_src_folder/.dart_tool
+    rm -rf $flt_src_folder/build
 }
 
 function preprocess_code() {
     find $source_folder -iname *.h -or -iname *.cpp | xargs clang-format -i \
     && find $source_folder -iname *.h -or -iname *.cpp | xargs clang-tidy \
         --quiet --warnings-as-errors="*" -p $build_folder
+}
+
+function zip_binary() {
+    if [ "$os" == "linux" ]; then
+        tar -czf \
+            $git_root/bin/$tuple_name.tar.gz \
+            -C $git_root/bin \
+            $tuple_name
+    else
+        pushd $git_root/bin
+        zip -rq \
+            $git_root/bin/$tuple_name.zip \
+            $tuple_name
+        popd
+    fi
 }
 
 function cmake_build() {
@@ -111,27 +150,33 @@ function linux_driver_build() {
             --output $build_folder/../compile_commands.json \
             --append \
             -- \
-            make -C $driver_src_folder \
+            make -C $ldd_src_folder \
         && \
-        mv $driver_src_folder/*.ko $binary_folder/
+        mv $ldd_src_folder/*.ko $binary_folder/
     fi
 }
 
-function zip_binary() {
-    if [ "$os" == "linux" ]; then
-        tar -czf \
-            $git_root/bin/$tuple_name.tar.gz \
-            -C $git_root/bin \
-            $tuple_name
-    else
-        pushd $git_root/bin
-        zip -rq \
-            $git_root/bin/$tuple_name.zip \
-            $tuple_name
+function flutter_build() {
+    if [ $TC_CROSS_COMPILE -eq 0 ]; then
+        export PUB_HOSTED_URL=https://pub.flutter-io.cn
+        export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+
+        if [ ! -d $flt_src_folder ]; then
+            flutter create --template=app --platforms=linux --project-name=flt $flt_src_folder
+        fi \
+        && \
+        pushd $flt_src_folder \
+        && \
+        flutter pub get \
+        && \
+        flutter build linux \
+            --${build_type,,} \
+            --target-platform=linux-x64 \
+            --no-pub \
+        && \
         popd
     fi
 }
-
 
 if [ $do_clean -eq 1 ]; then
     clean_build
@@ -141,10 +186,16 @@ if [ $do_preprocess -eq 1 ]; then
     preprocess_code
 fi \
 && \
-cmake_build \
+if [ $do_build_core -eq 1 ]; then
+    cmake_build
+fi \
 && \
-if [ $do_build_driver -eq 1 ]; then
+if [ $do_build_ldd -eq 1 ]; then
     linux_driver_build
+fi \
+&& \
+if [ $do_build_flt -eq 1 ]; then
+    flutter_build
 fi \
 && \
 if [ $do_zip -eq 1 ]; then
