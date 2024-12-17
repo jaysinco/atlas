@@ -3,5 +3,4 @@
         "{bin,out}": true,
     },
     "python.defaultInterpreterPath": "${workspaceFolder}/src/pypi/myenv/bin/python",
-    "dart.runPubGetOnPubspecChanges": "never",
 }

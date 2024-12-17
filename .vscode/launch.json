@@ -40,5 +40,11 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/src/pypi",
         },
+        {
+            "name": "Flutter: Launch",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/flt/lib/main.dart"
+        },
     ]
 }
