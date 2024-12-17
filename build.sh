@@ -157,12 +157,17 @@ function linux_driver_build() {
 }
 
 function flutter_build() {
-    if [ $TC_CROSS_COMPILE -eq 0 ]; then
+    if [ "$os" == "linux" -a $TC_CROSS_COMPILE -eq 0 ]; then
         export PUB_HOSTED_URL=https://pub.flutter-io.cn
         export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+        bundle_dir=$flt_src_folder/build/linux/x64/${build_type,,}/bundle
 
         if [ ! -d $flt_src_folder ]; then
-            flutter create --template=app --platforms=linux --project-name=flt $flt_src_folder
+            flutter create \
+                --template=app \
+                --platforms=linux \
+                --project-name=flt \
+                $flt_src_folder
         fi \
         && \
         pushd $flt_src_folder \
@@ -173,6 +178,8 @@ function flutter_build() {
             --${build_type,,} \
             --target-platform=linux-x64 \
             --no-pub \
+        && \
+        rsync -r $bundle_dir/* $binary_folder \
         && \
         popd
     fi

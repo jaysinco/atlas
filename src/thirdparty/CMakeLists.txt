@@ -55,7 +55,7 @@ if(UNIX)
 
     file(COPY
         ${COPY_FILE_LIST}
-        DESTINATION ${MY_RUNTIME_DIR}
+        DESTINATION ${MY_RUNTIME_DIR}/lib
         FOLLOW_SYMLINK_CHAIN
     )
 elseif(WIN32)
