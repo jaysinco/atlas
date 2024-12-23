@@ -114,36 +114,86 @@ class TestLayoutRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Flex(
-          direction: Axis.horizontal,
-          children: [
-            Expanded(
-              flex: 1,
-              child: Container(
-                height: 30,
-                color: Colors.red,
+    return Scaffold(
+      body: Column(
+        children: [
+          Flex(
+            direction: Axis.horizontal,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 30,
+                  color: Colors.red,
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 30,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: SizedBox(
+              height: 100,
+              child: Flex(
+                direction: Axis.vertical,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      color: Colors.red,
+                    ),
+                  ),
+                  Spacer(
+                    flex: 1,
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Container(
-                height: 30,
-                color: Colors.green,
+          ),
+          Container(
+            height: 50,
+            alignment: Alignment.bottomRight,
+            color: Colors.yellow,
+            child: Text("sadasdss"),
+          ),
+          SizedBox(
+            height: 200,
+            child: Scrollbar(
+              child: ListView.builder(
+                primary: true,
+                itemCount: 100,
+                itemExtent: 20,
+                itemBuilder: (BuildContext context, int index) {
+                  return ListTile(
+                    title: Text("$index"),
+                  );
+                },
               ),
             ),
-          ],
-        ),
-        Spacer(
-          flex: 1,
-        ),
-        ElevatedButton(
+          ),
+          Spacer(
+            flex: 1,
+          ),
+          ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
             },
-            child: Icon(Icons.arrow_back))
-      ],
+            child: Icon(Icons.arrow_back),
+          ),
+        ],
+      ),
     );
   }
 }
