@@ -121,7 +121,7 @@ class TestLayoutRoute extends StatelessWidget {
             direction: Axis.horizontal,
             children: [
               Expanded(
-                flex: 2,
+                flex: 4,
                 child: Container(
                   height: 30,
                   color: Colors.red,

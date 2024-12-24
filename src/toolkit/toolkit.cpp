@@ -91,27 +91,17 @@ MyErrCode runAsRoot(int argc, char* argv[])
         return MyErrCode::kOk;
     }
     std::string cep = currentExePath().string();
-    pid_t pid = fork();
-    if (pid == 0) {  // child
-        std::vector<char*> args;
-        std::string sudo = "sudo";
-        args.push_back(sudo.data());
-        args.push_back(cep.data());
-        for (int i = 1; i < argc; ++i) {
-            args.push_back(argv[i]);
-        }
-        args.push_back(nullptr);
-        execvp("sudo", args.data());
-        ELOG("failed to exec 'sudo {}': {}", cep, strerror(errno));
-        exit(1);
-    } else if (pid > 0) {  // parent
-        int status;
-        waitpid(pid, &status, 0);
-        exit(0);
-    } else {
-        ELOG("failed to fork {}: {}", cep, strerror(errno));
-        exit(1);
+    std::vector<char*> args;
+    std::string sudo = "sudo";
+    args.push_back(sudo.data());
+    args.push_back(cep.data());
+    for (int i = 1; i < argc; ++i) {
+        args.push_back(argv[i]);
     }
+    args.push_back(nullptr);
+    execvp("sudo", args.data());
+    ELOG("failed to exec 'sudo {}': {}", cep, strerror(errno));
+    exit(1);
     return MyErrCode::kOk;
 #elif _WIN32
     return MyErrCode::kUnimplemented;
