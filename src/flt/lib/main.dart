@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:english_words/english_words.dart';
 
 class StatelessContainer extends StatelessWidget {
   final double width;
@@ -162,26 +163,9 @@ class TestLayoutRoute extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            height: 50,
-            alignment: Alignment.bottomRight,
-            color: Colors.yellow,
-            child: Text("sadasdss"),
-          ),
           SizedBox(
-            height: 200,
-            child: Scrollbar(
-              child: ListView.builder(
-                primary: true,
-                itemCount: 100,
-                itemExtent: 20,
-                itemBuilder: (BuildContext context, int index) {
-                  return ListTile(
-                    title: Text("$index"),
-                  );
-                },
-              ),
-            ),
+            height: 150,
+            child: InfiniteListView(),
           ),
           Spacer(
             flex: 1,
@@ -195,6 +179,75 @@ class TestLayoutRoute extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class InfiniteListView extends StatefulWidget {
+  const InfiniteListView({super.key});
+
+  @override
+  State<InfiniteListView> createState() => _InfiniteListViewState();
+}
+
+class _InfiniteListViewState extends State<InfiniteListView> {
+  static const loadingTag = "##loading##"; //表尾标记
+
+  final _words = <String>[loadingTag];
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _retrieveData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+      controller: _controller,
+      child: ListView.separated(
+        controller: _controller,
+        itemCount: _words.length,
+        itemBuilder: (context, index) {
+          if (_words[index] == loadingTag) {
+            if (_words.length - 1 < 100) {
+              _retrieveData();
+              return Container(
+                padding: const EdgeInsets.all(16.0),
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: 24.0,
+                  height: 24.0,
+                  child: CircularProgressIndicator(strokeWidth: 2.0),
+                ),
+              );
+            } else {
+              return Container(
+                alignment: Alignment.center,
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "No More",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              );
+            }
+          }
+          return ListTile(title: Text(_words[index]));
+        },
+        separatorBuilder: (context, index) => Divider(height: .0),
+      ),
+    );
+  }
+
+  void _retrieveData() {
+    Future.delayed(Duration(seconds: 2)).then((e) {
+      setState(() {
+        _words.insertAll(
+          _words.length - 1,
+          generateWordPairs().take(20).map((e) => e.asPascalCase).toList(),
+        );
+      });
+    });
   }
 }
 
