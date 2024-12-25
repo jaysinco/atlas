@@ -93,6 +93,15 @@ class _ScreenState extends State<Screen> {
                 child: Text("test_layout"),
               ),
             ),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 5),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, "test_scroll");
+                },
+                child: Text("test_scroll"),
+              ),
+            ),
           ],
         ),
       ),
@@ -163,12 +172,9 @@ class TestLayoutRoute extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(
-            height: 150,
+          Expanded(
+            flex: 2,
             child: InfiniteListView(),
-          ),
-          Spacer(
-            flex: 1,
           ),
           ElevatedButton(
             onPressed: () {
@@ -301,6 +307,74 @@ class TestInputRoute extends StatelessWidget {
   }
 }
 
+class TestScrollRoute extends StatefulWidget {
+  const TestScrollRoute({super.key});
+
+  @override
+  State<TestScrollRoute> createState() {
+    return _TestScrollRouteState();
+  }
+}
+
+class _TestScrollRouteState extends State<TestScrollRoute> {
+  final ScrollController _controller = ScrollController(keepScrollOffset: true);
+  bool showToTopBtn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      if (_controller.offset < 1000 && showToTopBtn) {
+        setState(() {
+          showToTopBtn = false;
+        });
+      } else if (_controller.offset >= 1000 && showToTopBtn == false) {
+        setState(() {
+          showToTopBtn = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("滚动控制")),
+      body: Scrollbar(
+        controller: _controller,
+        child: ListView.builder(
+            key: PageStorageKey("test_scroll"),
+            itemCount: 100,
+            itemExtent: 50.0,
+            controller: _controller,
+            itemBuilder: (context, index) {
+              return ListTile(
+                title: Text("$index"),
+              );
+            }),
+      ),
+      floatingActionButton: !showToTopBtn
+          ? null
+          : FloatingActionButton(
+              child: Icon(Icons.arrow_upward),
+              onPressed: () {
+                _controller.animateTo(
+                  .0,
+                  duration: Duration(milliseconds: 1000),
+                  curve: Curves.ease,
+                );
+              },
+            ),
+    );
+  }
+}
+
 void main() {
   runApp(
     MaterialApp(
@@ -309,6 +383,7 @@ void main() {
         "/": (context) => Screen(),
         "test_input": (context) => TestInputRoute(),
         "test_layout": (context) => TestLayoutRoute(),
+        "test_scroll": (context) => TestScrollRoute(),
       },
     ),
   );
