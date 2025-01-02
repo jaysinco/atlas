@@ -163,7 +163,7 @@ function flutter_build() {
         bundle_dir=$flt_src_folder/build/linux/x64/${build_type,,}/bundle
 
         if [ ! -d $flt_src_folder ]; then
-            flutter create \
+            flutter --no-version-check create \
                 --template=app \
                 --platforms=linux \
                 --project-name=flt \
@@ -172,9 +172,9 @@ function flutter_build() {
         && \
         pushd $flt_src_folder \
         && \
-        flutter pub get \
+        flutter --no-version-check pub get \
         && \
-        flutter build linux \
+        flutter --no-version-check build linux \
             --${build_type,,} \
             --target-platform=linux-x64 \
             --no-pub \
