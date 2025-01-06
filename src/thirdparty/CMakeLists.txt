@@ -43,14 +43,16 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/liblzma.so
         ${TC_INSTALL_DIR}/lib/libzstd.so
         ${TC_INSTALL_DIR}/lib/libcurl.so
-        # ${TC_INSTALL_DIR}/lib/libpcap.so
         ${TC_INSTALL_DIR}/lib/libftxui-screen.so
         ${TC_INSTALL_DIR}/lib/libftxui-dom.so
         ${TC_INSTALL_DIR}/lib/libftxui-component.so
     )
 
     if(TC_CROSS_COMPILE)
-        list(APPEND COPY_FILE_LIST ${TC_INSTALL_DIR}/../lib/libstdc++.so.6)
+        list(APPEND COPY_FILE_LIST
+            ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
+            ${TC_INSTALL_DIR}/lib/libpcap.so
+        )
     endif()
 
     file(COPY
