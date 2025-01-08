@@ -5,7 +5,8 @@
 
 #define FSTR(...) (toolkit::format(__VA_ARGS__))
 #define TOSTR(v) (FSTR("{}", v))
-#define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, toolkit::filename(__FILE__), __LINE__, ##__VA_ARGS__))
+#define MY_VA_ARGS(...) , ##__VA_ARGS__
+#define LOG_FSTR(f, ...) (FSTR("[{}:{}] " f, toolkit::filename(__FILE__), __LINE__ MY_VA_ARGS(__VA_ARGS__)))
 #define MY_THROW(...) throw std::runtime_error(LOG_FSTR(__VA_ARGS__))
 
 #define DEFINE_FORMATTER(type, x)                                   \
