@@ -10,6 +10,11 @@ target_link_libraries(${TARGET_NAME}-https-server toolkit uwebsockets zlib opens
 add_executable(${TARGET_NAME}-https-client misc-https-client.cpp)
 target_link_libraries(${TARGET_NAME}-https-client toolkit libcpr)
 
+if (UNIX AND NOT TC_CROSS_COMPILE)
+    add_executable(${TARGET_NAME}-asm misc-asm.cpp)
+    target_link_libraries(${TARGET_NAME}-asm toolkit)
+endif()
+
 file(COPY
     data/cert.pem
     data/key.pem
