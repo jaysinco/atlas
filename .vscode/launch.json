@@ -5,7 +5,7 @@
             "name": "C++: Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/x86_64-debug/misc-asm",
+            "program": "${workspaceFolder}/bin/x86_64-debug/asm",
             "args": [],
             "environment": [],
             "cwd": "${workspaceFolder}/bin/x86_64-debug",
