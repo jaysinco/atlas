@@ -7,3 +7,4 @@ add_executable(${TARGET_NAME} main.cpp)
 target_link_libraries(${TARGET_NAME} toolkit)
 
 add_executable(${TARGET_NAME}-cpuid cpuid.s)
+add_executable(${TARGET_NAME}-printf printf.s)
