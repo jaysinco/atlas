@@ -8,3 +8,4 @@ target_link_libraries(${TARGET_NAME} toolkit)
 
 add_executable(${TARGET_NAME}-cpuid cpuid.s)
 add_executable(${TARGET_NAME}-printf printf.s)
+add_executable(${TARGET_NAME}-stack-trace stack-trace.s)
