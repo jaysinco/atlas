@@ -108,4 +108,22 @@ MyErrCode runAsRoot(int argc, char* argv[])
 #endif
 }
 
+MyErrCode execsh(std::string const& cmd, std::string& ret)
+{
+#ifdef __linux__
+    std::array<char, 128> buffer;
+    std::shared_ptr<FILE> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) {
+        ELOG("failed to popen '{}'", cmd);
+        return MyErrCode::kFailed;
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        ret += buffer.data();
+    }
+    return MyErrCode::kOk;
+#elif _WIN32
+    return MyErrCode::kUnimplemented;
+#endif
+}
+
 }  // namespace toolkit

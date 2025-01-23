@@ -13,14 +13,15 @@ struct Mac
     Mac() = default;
     Mac(Mac const&) = default;
     Mac(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4, uint8_t c5, uint8_t c6);
-    explicit Mac(std::string const& s);
+    explicit Mac(std::string const& s, bool use_colon = false);
 
-    std::string toStr() const;
+    std::string toStr(bool use_colon = false) const;
 
     bool operator==(Mac const& rhs) const;
     bool operator!=(Mac const& rhs) const;
 
     static MyErrCode fromDashStr(std::string const& s, Mac* mac = nullptr);
+    static MyErrCode fromColonStr(std::string const& s, Mac* mac = nullptr);
 
     static Mac const kZeros;
     static Mac const kBroadcast;

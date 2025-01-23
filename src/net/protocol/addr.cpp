@@ -17,9 +17,10 @@ Mac::Mac(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4, uint8_t c5, uint8_t c6)
 {
 }
 
-Mac::Mac(std::string const& s)
+Mac::Mac(std::string const& s, bool use_colon)
 {
-    if (fromDashStr(s, this) != MyErrCode::kOk) {
+    MyErrCode err = use_colon ? fromColonStr(s, this) : fromDashStr(s, this);
+    if (err != MyErrCode::kOk) {
         MY_THROW("invalid mac: {}", s);
     }
 }
@@ -32,13 +33,13 @@ bool Mac::operator==(Mac const& rhs) const
 
 bool Mac::operator!=(Mac const& rhs) const { return !(*this == rhs); }
 
-std::string Mac::toStr() const
+std::string Mac::toStr(bool use_colon) const
 {
     auto c = reinterpret_cast<uint8_t const*>(this);
     std::ostringstream ss;
     ss << FSTR("{:02x}", c[0]);
     for (int i = 1; i < 6; ++i) {
-        ss << FSTR("-{:02x}", c[i]);
+        ss << FSTR("{}{:02x}", (use_colon ? ":" : "-"), c[i]);
     }
     return ss.str();
 }
@@ -46,6 +47,28 @@ std::string Mac::toStr() const
 MyErrCode Mac::fromDashStr(std::string const& s, Mac* mac)
 {
     static std::regex pat(R"((\w{2})-(\w{2})-(\w{2})-(\w{2})-(\w{2})-(\w{2}))");
+    std::smatch res;
+    Mac maddr;
+    if (std::regex_match(s, res, pat)) {
+        maddr.b1 = std::stoi(res.str(1), nullptr, 16);
+        maddr.b2 = std::stoi(res.str(2), nullptr, 16);
+        maddr.b3 = std::stoi(res.str(3), nullptr, 16);
+        maddr.b4 = std::stoi(res.str(4), nullptr, 16);
+        maddr.b5 = std::stoi(res.str(5), nullptr, 16);
+        maddr.b6 = std::stoi(res.str(6), nullptr, 16);
+    } else {
+        DLOG("failed to parse mac: {}", s);
+        return MyErrCode::kFailed;
+    }
+    if (mac) {
+        *mac = maddr;
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Mac::fromColonStr(std::string const& s, Mac* mac)
+{
+    static std::regex pat(R"((\w{2}):(\w{2}):(\w{2}):(\w{2}):(\w{2}):(\w{2}))");
     std::smatch res;
     Mac maddr;
     if (std::regex_match(s, res, pat)) {

@@ -90,6 +90,9 @@ MyErrCode Transport::recv(void* handle, std::function<bool(Packet&& p)> callback
 
 MyErrCode Transport::send(void* handle, Packet const& pac)
 {
+    if (pac.getDetail().layers.empty()) {
+        return MyErrCode::kOk;
+    }
     auto hndl = reinterpret_cast<pcap_t*>(handle);
     std::vector<uint8_t> bytes;
     CHECK_ERR_RET(pac.encode(bytes));
@@ -160,6 +163,19 @@ MyErrCode Transport::ip2mac(void* handle, Ip4 const& ip, Mac& mac, bool use_cach
     over = true;
     send_loop.join();
     return ok;
+}
+
+MyErrCode Transport::mac2ip(Mac const& mac, Ip4& ip)
+{
+    std::string ipstr;
+    CHECK_ERR_RET(toolkit::execsh(
+        FSTR("arp-scan --localnet | grep {} | awk '{{print $1}}'", mac.toStr(true)), ipstr));
+    if (ipstr.empty()) {
+        ELOG("failed to find ip for {}", mac);
+        return MyErrCode::kFailed;
+    }
+    ip = Ip4(ipstr.substr(0, ipstr.size() - 1));
+    return MyErrCode::kOk;
 }
 
 MyErrCode Transport::ping(void* handle, Adaptor const& apt, Ip4 const& ip, Packet& reply,
