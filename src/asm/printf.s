@@ -1,3 +1,4 @@
+.intel_syntax noprefix
 .section .data
 output:
     .asciz "The value is %d\n"
@@ -6,21 +7,21 @@ values:
 .section .text
 .global asmPrintf
 asmPrintf:
-    subq $24, %rsp
-    mov %r12, (%rsp)
-    mov %rbx, 8(%rsp)
-    mov $0, %r12
-    lea values(%rip), %rbx
+    sub rsp, 24
+    mov [rsp], r12
+    mov [rsp + 8], rbx
+    xor r12, r12
+    lea rbx, [values + rip]
 loop:
-    mov (%rbx, %r12, 4), %eax
-    lea output(%rip), %rdi
-    mov %eax, %esi
-    xor %eax, %eax
+    mov eax, [rbx + r12 * 4]
+    lea rdi, [output + rip]
+    mov esi, eax
+    xor eax, eax
     call printf
-    inc %r12
-    cmp $11, %r12
+    inc r12
+    cmp r12, 11
     jl loop
-    mov (%rsp), %r12
-    mov 8(%rsp), %rbx
-    addq $24, %rsp
+    mov r12, [rsp]
+    mov rbx, [rsp + 8]
+    add rsp, 24
     ret

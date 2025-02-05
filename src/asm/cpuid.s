@@ -1,18 +1,19 @@
+.intel_syntax noprefix
 .section .data
 output:
     .ascii "The processor Vendor ID is 'xxxxxxxxxxxx'\n"
 .section .text
 .global asmCpuid
 asmCpuid:
-    subq $8, %rsp
-    mov %rbx, (%rsp)
-    movl $0, %eax
+    sub rsp, 8
+    mov [rsp], rbx
+    mov eax, 0
     cpuid
-    lea output(%rip), %rdi
-    movl %ebx, 28(%rdi)
-    movl %edx, 32(%rdi)
-    movl %ecx, 36(%rdi)
+    lea rdi, [output + rip]
+    mov [rdi + 28], ebx
+    mov [rdi + 32], edx
+    mov [rdi + 36], ecx
     call printf
-    mov (%rsp), %rbx
-    addq $8, %rsp
+    mov rbx, [rsp]
+    add rsp, 8
     ret
