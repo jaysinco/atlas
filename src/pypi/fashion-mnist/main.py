@@ -27,10 +27,12 @@ def train(device, learning_rate, batch_size, epochs):
     for name, param in model.named_parameters():
         print(f"Layer: {name} Size: {param.size()}")
 
+    curr_file_dir = os.path.dirname(os.path.realpath(__file__))
+    data_root_dir = os.path.join(curr_file_dir, "data")
     train_data = datasets.FashionMNIST(
-        root="data", train=True, download=True, transform=transforms.ToTensor())
+        root=data_root_dir, train=True, download=True, transform=transforms.ToTensor())
     test_data = datasets.FashionMNIST(
-        root="data", train=False, download=True, transform=transforms.ToTensor())
+        root=data_root_dir, train=False, download=True, transform=transforms.ToTensor())
 
     train_dataloader = DataLoader(train_data, batch_size=batch_size)
     test_dataloader = DataLoader(test_data, batch_size=batch_size)
@@ -86,7 +88,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     learning_rate = 1e-3
     batch_size = 64
-    epochs = 30
+    epochs = 5
     num_cores = 1
 
     # inter-op parallelism

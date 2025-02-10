@@ -51,11 +51,10 @@ if [ ! -d "$venv_dir" ]; then
     source $venv_script_dir/activate \
     && \
     pip3 install \
-        -i https://mirrors.aliyun.com/pypi/simple \
-        -f https://mirror.sjtu.edu.cn/pytorch-wheels/torch_stable.html \
-        torch==2.3.1+$torch_type \
-        torchvision==0.18.1+$torch_type \
-        torchaudio==2.3.1+$torch_type
+        -i https://download.pytorch.org/whl/$torch_type \
+        torch==2.* \
+        torchvision==0.* \
+        torchaudio==2.*
 else
     source $venv_script_dir/activate
 fi \
