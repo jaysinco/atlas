@@ -2,3 +2,5 @@ ipython
 numpy
 matplotlib
 opencv-python
+onnx
+onnxscript

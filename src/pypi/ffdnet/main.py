@@ -37,11 +37,10 @@ class FFDNet(nn.Module):
         self.m_up = nn.PixelShuffle(upscale_factor=sf)
 
     def forward(self, x, sigma: torch.Tensor):
-
         h, w = x.size()[-2:]
-        paddingBottom = int(np.ceil(h/2)*2-h)
-        paddingRight = int(np.ceil(w/2)*2-w)
-        x = torch.nn.ReplicationPad2d((0, paddingRight, 0, paddingBottom))(x)
+        # paddingBottom = int(np.ceil(h/2)*2-h)
+        # paddingRight = int(np.ceil(w/2)*2-w)
+        # x = torch.nn.ReplicationPad2d((0, paddingRight, 0, paddingBottom))(x)
 
         x = self.m_down(x)
         # m = torch.ones(sigma.size()[0], sigma.size()[1], x.size()[-2], x.size()[-1]).type_as(x).mul(sigma)
@@ -118,9 +117,5 @@ if __name__ == '__main__':
     imshow(img_bef, img_aft)
     # cv2.imwrite(os.path.join(data_dir, "out.jpg"), img_aft[:, :, [2, 1, 0]])
 
-
-    # x = torch.randn((1,3,1232,1080))
-    # noise_level_img = 15
-    # sigma = torch.full((1,1,1,1), noise_level_img/255.)
-    # x = model(x, sigma)
-    # print(x.shape)
+    onnx_path = os.path.join(data_dir, "ffdnet_color_clip.onnx")
+    torch.onnx.export(model, (img_L, sigma), onnx_path, verbose=False, opset_version=12)
