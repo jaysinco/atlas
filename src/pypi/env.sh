@@ -33,7 +33,7 @@ case "$OSTYPE" in
     msys*)    os=windows ;;
 esac
 
-venv_name=myenv
+venv_name=.pyenv
 venv_dir=$script_dir/$venv_name
 venv_script_name=$([ "$os" == "linux" ] && echo "bin" || echo "Scripts")
 venv_script_dir=$venv_dir/$venv_script_name
