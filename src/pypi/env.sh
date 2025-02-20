@@ -33,6 +33,7 @@ case "$OSTYPE" in
     msys*)    os=windows ;;
 esac
 
+py_version=3.13.2
 venv_name=.pyenv
 venv_dir=$script_dir/$venv_name
 venv_script_name=$([ "$os" == "linux" ] && echo "bin" || echo "Scripts")
@@ -46,7 +47,7 @@ if [ $do_clean -eq 1 ]; then
 fi \
 && \
 if [ ! -d "$venv_dir" ]; then
-    python -m venv $venv_name \
+    ~/.pyenv/versions/$py_version/bin/python -m venv $venv_name \
     && \
     source $venv_script_dir/activate \
     && \
