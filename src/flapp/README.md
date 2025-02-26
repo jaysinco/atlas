@@ -1,4 +1,4 @@
-# flt
+# flapp
 
 A new Flutter project.
 

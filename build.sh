@@ -13,7 +13,7 @@ do_zip=0
 do_build_none=0
 do_build_core=0
 do_build_ldd=0
-do_build_flt=0
+do_build_flapp=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -33,7 +33,7 @@ while [[ $# -gt 0 ]]; do
             echo "  none       empty target"
             echo "  core       cpp backend"
             echo "  ldd        linux device driver"
-            echo "  flt        flutter ui"
+            echo "  flapp      flutter mock app"
             echo
             exit 0
             ;;
@@ -45,15 +45,15 @@ while [[ $# -gt 0 ]]; do
       none) do_build_none=1 && shift ;;
       core) do_build_core=1 && shift ;;
        ldd) do_build_ldd=1 && shift ;;
-       flt) do_build_flt=1 && shift ;;
+       flapp) do_build_flapp=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
     esac
 done
 
-if [ $do_build_none -eq 0 -a $do_build_core -eq 0 -a $do_build_ldd -eq 0 -a $do_build_flt -eq 0 ]; then
+if [ $do_build_none -eq 0 -a $do_build_core -eq 0 -a $do_build_ldd -eq 0 -a $do_build_flapp -eq 0 ]; then
     do_build_core=1
     if [[ $(type -P "flutter") ]]; then
-        do_build_flt=0
+        do_build_flapp=0
     fi
 fi
 
@@ -81,17 +81,19 @@ log_folder=$binary_folder/logs
 temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
 ldd_src_folder=$source_folder/ldd
-flt_src_folder=$source_folder/flt
+flapp_src_folder=$source_folder/flapp
+deep_src_folder=$source_folder/deep
 
 source $tc_toolchain_dir/env.sh
 
 function clean_build() {
     rm -rf $git_root/out
     rm -rf $git_root/bin
-    rm -rf $flt_src_folder/.idea
-    rm -rf $flt_src_folder/*.iml
-    rm -rf $flt_src_folder/.dart_tool
-    rm -rf $flt_src_folder/build
+    rm -rf $flapp_src_folder/.idea
+    rm -rf $flapp_src_folder/*.iml
+    rm -rf $flapp_src_folder/.dart_tool
+    rm -rf $flapp_src_folder/build
+    rm -rf $deep_src_folder/.temp
 }
 
 function preprocess_code() {
@@ -160,17 +162,17 @@ function flutter_build() {
     if [ "$os" == "linux" -a $TC_CROSS_COMPILE -eq 0 ]; then
         export PUB_HOSTED_URL=https://pub.flutter-io.cn
         export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
-        bundle_dir=$flt_src_folder/build/linux/x64/${build_type,,}/bundle
+        bundle_dir=$flapp_src_folder/build/linux/x64/${build_type,,}/bundle
 
-        if [ ! -d $flt_src_folder ]; then
+        if [ ! -d $flapp_src_folder ]; then
             flutter --no-version-check create \
                 --template=app \
                 --platforms=linux \
-                --project-name=flt \
-                $flt_src_folder
+                --project-name=flapp \
+                $flapp_src_folder
         fi \
         && \
-        pushd $flt_src_folder \
+        pushd $flapp_src_folder \
         && \
         flutter --no-version-check pub get \
         && \
@@ -201,7 +203,7 @@ if [ $do_build_ldd -eq 1 ]; then
     linux_driver_build
 fi \
 && \
-if [ $do_build_flt -eq 1 ]; then
+if [ $do_build_flapp -eq 1 ]; then
     flutter_build
 fi \
 && \

@@ -44,7 +44,7 @@
             "name": "Flutter: Launch",
             "type": "dart",
             "request": "launch",
-            "program": "${workspaceFolder}/src/flt/lib/main.dart"
+            "program": "${workspaceFolder}/src/flapp/lib/main.dart"
         },
     ]
 }
