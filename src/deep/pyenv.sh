@@ -53,16 +53,16 @@ if [ ! -d "$venv_dir" ]; then
     && \
     pip3 install \
         -i https://download.pytorch.org/whl/$torch_type \
-        torch==2.* \
-        torchvision==0.* \
-        torchaudio==2.*
+        torch==2.6 \
+        torchvision==0.21 \
+        torchaudio==2.6
 else
     source $venv_script_dir/activate
 fi \
 && \
 pip3 install \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    -r $script_dir/requirements.txt \
+    -r $script_dir/pydeps.txt \
 && \
 if [ "$os" == "linux" ]; then
     /usr/bin/fish -C "source $venv_script_dir/activate.fish"

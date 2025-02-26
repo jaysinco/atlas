@@ -28,11 +28,11 @@ def train(device, learning_rate, batch_size, epochs):
         print(f"Layer: {name} Size: {param.size()}")
 
     curr_file_dir = os.path.dirname(os.path.realpath(__file__))
-    data_root_dir = os.path.join(curr_file_dir, "data")
+    temp_dir = os.path.join(curr_file_dir, "../.temp")
     train_data = datasets.FashionMNIST(
-        root=data_root_dir, train=True, download=True, transform=transforms.ToTensor())
+        root=temp_dir, train=True, download=True, transform=transforms.ToTensor())
     test_data = datasets.FashionMNIST(
-        root=data_root_dir, train=False, download=True, transform=transforms.ToTensor())
+        root=temp_dir, train=False, download=True, transform=transforms.ToTensor())
 
     train_dataloader = DataLoader(train_data, batch_size=batch_size)
     test_dataloader = DataLoader(test_data, batch_size=batch_size)

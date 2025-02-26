@@ -38,7 +38,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/src/pypi",
+            "cwd": "${workspaceFolder}/src/deep",
         },
         {
             "name": "Flutter: Launch",

@@ -95,9 +95,10 @@ def tensor2uint(img: torch.Tensor):
 
 
 if __name__ == '__main__':
-    noise_level = 8
+    noise_level = 16
     curr_file_dir = os.path.dirname(os.path.realpath(__file__))
-    data_dir = os.path.join(curr_file_dir, "data")
+    data_dir = os.path.join(curr_file_dir, "../data")
+    temp_dir = os.path.join(curr_file_dir, "../.temp")
 
     model = FFDNet(in_nc=3, out_nc=3, nc=96, nb=12, act_mode='R')
     print(describe_model(model))
@@ -106,7 +107,7 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(model_path), strict=True)
     model.eval()
 
-    img_path = os.path.join(data_dir, "4.jpg")
+    img_path = os.path.join(data_dir, "noisy.jpg")
     img_bef = imread_uint(img_path, n_channels=3)
     img_L = np.float32(img_bef/255.)
     img_L = torch.from_numpy(np.ascontiguousarray(img_L)).permute(2, 0, 1).float().unsqueeze(0)
@@ -114,8 +115,8 @@ if __name__ == '__main__':
     img_E = model(img_L, sigma)
     img_aft = tensor2uint(img_E)
 
-    imshow(img_bef, img_aft)
-    # cv2.imwrite(os.path.join(data_dir, "out.jpg"), img_aft[:, :, [2, 1, 0]])
+    # imshow(img_bef, img_aft)
+    cv2.imwrite(os.path.join(temp_dir, "denoised.jpg"), img_aft[:, :, [2, 1, 0]])
 
-    onnx_path = os.path.join(data_dir, "ffdnet_color_clip.onnx")
+    onnx_path = os.path.join(temp_dir, "ffdnet_color_clip.onnx")
     torch.onnx.export(model, (img_L, sigma), onnx_path, verbose=False)
