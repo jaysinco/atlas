@@ -99,6 +99,8 @@ if __name__ == '__main__':
     curr_file_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(curr_file_dir, "../data")
     temp_dir = os.path.join(curr_file_dir, "../.temp")
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
     model = FFDNet(in_nc=3, out_nc=3, nc=96, nb=12, act_mode='R')
     print(describe_model(model))

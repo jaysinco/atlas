@@ -89,10 +89,12 @@ source $tc_toolchain_dir/env.sh
 function clean_build() {
     rm -rf $git_root/out
     rm -rf $git_root/bin
+    rm -rf $flapp_src_folder/build
     rm -rf $flapp_src_folder/.idea
     rm -rf $flapp_src_folder/*.iml
-    rm -rf $flapp_src_folder/.dart_tool
-    rm -rf $flapp_src_folder/build
+    if [ $do_build_flapp -eq 1 ]; then
+        rm -rf $flapp_src_folder/.dart_tool
+    fi
     rm -rf $deep_src_folder/.temp
 }
 
