@@ -43,7 +43,7 @@ find_path(
 string(FIND ${TensorRT_INCLUDE_DIR} "NOTFOUND" _include_dir_notfound)
 if(NOT _include_dir_notfound EQUAL -1)
   if(TensorRT_FIND_REQUIRED)
-    message(FATAL_ERROR "Fail to find TensorRT, please set TensorRT_ROOT. Include path not found.")
+    message(FATAL_ERROR "Failed to find TensorRT, please set TensorRT_ROOT. Include path not found.")
   endif()
   return()
 endif()

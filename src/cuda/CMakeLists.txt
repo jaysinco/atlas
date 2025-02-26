@@ -1,6 +1,13 @@
 get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 set(TARGET_NAME ${CURRENT_DIR_NAME})
 
+find_package(CUDAToolkit)
+if(NOT CUDAToolkit_FOUND)
+    return()
+endif()
+
+enable_language(CUDA)
+
 set(CMAKE_CUDA_ARCHITECTURES 86)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_SEPARABLE_COMPILATION TRUE)

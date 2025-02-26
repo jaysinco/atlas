@@ -18,6 +18,21 @@
 #define LOG_FUNC_DETAILED(level, ...) \
     toolkit::logPrint(level, __FILE__, __LINE__, FSTR(__VA_ARGS__))
 
+#ifdef TLOG
+#undef TLOG
+#endif
+#ifdef DLOG
+#undef DLOG
+#endif
+#ifdef ILOG
+#undef ILOG
+#endif
+#ifdef WLOG
+#undef WLOG
+#endif
+#ifdef ELOG
+#undef ELOG
+#endif
 #define TLOG(...) (LOG_FUNC(toolkit::LogLevel::kTRACE, __VA_ARGS__))
 #define DLOG(...) (LOG_FUNC(toolkit::LogLevel::kDEBUG, __VA_ARGS__))
 #define ILOG(...) (LOG_FUNC(toolkit::LogLevel::kINFO, __VA_ARGS__))
