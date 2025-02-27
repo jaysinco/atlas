@@ -255,10 +255,10 @@ MyErrCode trtMnist(int argc, char** argv)
     nvinfer1::IHostMemory* plan;
 
     if (int ret = build(logger, plan) != 0) {
-        return ret;
+        return MyErrCode::kFailed;
     }
     if (int ret = infer(logger, plan) != 0) {
-        return ret;
+        return MyErrCode::kFailed;
     }
 
     delete plan;
