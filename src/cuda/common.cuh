@@ -1,6 +1,7 @@
 #pragma once
+#undef __noinline__
 #include <chrono>
-#include "toolkit/logging.h"
+#include "toolkit/timer.h"
 #include <cuComplex.h>
 #include <iostream>
 #include "./fwd.h"
@@ -22,14 +23,6 @@
             exit(1);                           \
         }                                      \
     }
-
-#define TIMER_BEGIN(x) auto timer_##x = std::chrono::system_clock::now();
-#define TIMER_END(x, desc)                                                                        \
-    ILOG("{}, elapsed={:.1f}ms", (desc),                                                          \
-         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - \
-                                                               timer_##x)                         \
-                 .count() /                                                                       \
-             1000.);
 
 template <typename T>
 static void print2D(T* data, bool is_host_ptr, int data_width, int data_height, int xpos, int ypos,

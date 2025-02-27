@@ -1,5 +1,6 @@
 #include "./common.h"
 #include "toolkit/toolkit.h"
+#include "toolkit/timer.h"
 #include <opencv2/ximgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <vector>
@@ -55,8 +56,9 @@ MyErrCode txiGuided(int argc, char** argv)
     }
     cv::Mat img_in;
     cv::resize(img_file, img_in, cv::Size(frame_width, frame_height));
+    std::vector<uint8_t> img_out_data(frame_len);
 
-    TIMER_BEGIN(total)
+    MY_TIMER_BEGIN(INFO, "total")
 
     // write butter
     cl::Event ev_write_image;
@@ -135,7 +137,6 @@ MyErrCode txiGuided(int argc, char** argv)
     }
 
     // read butter
-    std::vector<uint8_t> img_out_data(frame_len);
     cl::Event ev_read_image;
     if (auto err = cmd_q.enqueueReadBuffer(buf_out, CL_FALSE, 0, frame_len, img_out_data.data(),
                                            nullptr, &ev_read_image);
@@ -145,7 +146,7 @@ MyErrCode txiGuided(int argc, char** argv)
     }
     ev_read_image.wait();
 
-    TIMER_END(total, "total")
+    MY_TIMER_END
 
     // write image
     cv::Mat img_out(frame_height, frame_width, CV_8UC3, img_out_data.data());

@@ -2,7 +2,6 @@
 #include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
 #include <cuda_runtime.h>
-#include <cooperative_groups.h>
 #include <vector>
 #include <opencv2/ximgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -146,14 +145,15 @@ MyErrCode txiGuided(int argc, char** argv)
 
     // image convert
     cv::Mat mat_img_in;
-    cv::cvtColor(img, mat_img_in, cv::COLOR_BGR2BGRA);
+    cv::cvtColor(cv::InputArray{img}, cv::OutputArray{mat_img_in}, cv::COLOR_BGR2BGRA);
+    std::vector<uint8_t> vec_img_out(image_byte_len);
 
-    TIMER_BEGIN(total)
+    MY_TIMER_BEGIN(INFO, "total")
 
     // copy data in
-    TIMER_BEGIN(copy_data_in)
+    MY_TIMER_BEGIN(INFO, FSTR("host to device {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    TIMER_END(copy_data_in, FSTR("host to device {} bytes", image_byte_len))
+    MY_TIMER_END
 
     // process
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -161,15 +161,15 @@ MyErrCode txiGuided(int argc, char** argv)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
-    TIMER_BEGIN(kernel_sep)
+    MY_TIMER_BEGIN(INFO, FSTR("kernel separate on {}x{}", image_width, image_height))
     separate<<<grid, block>>>(d_img_in, d_r, d_g, d_b, image_width, image_height);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
-    TIMER_END(kernel_sep, FSTR("kernel separate on {}x{}", image_width, image_height))
+    MY_TIMER_END
 
     float* buf_arr[3] = {d_b, d_g, d_r};
     for (int color_idx = 0; color_idx < 3; ++color_idx) {
-        TIMER_BEGIN(kernel_filter)
+        MY_TIMER_BEGIN(INFO, FSTR("kernel filter on {}x{}", image_width, image_height))
 
         calcAb<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, image_width, image_height, radius,
                                 eps);
@@ -181,16 +181,15 @@ MyErrCode txiGuided(int argc, char** argv)
         CHECK_CUDA(cudaGetLastError());
         CHECK_CUDA(cudaDeviceSynchronize());
 
-        TIMER_END(kernel_filter, FSTR("kernel filter on {}x{}", image_width, image_height))
+        MY_TIMER_END
     }
 
     // copy data out
-    std::vector<uint8_t> vec_img_out(image_byte_len);
-    TIMER_BEGIN(copy_data_out)
+    MY_TIMER_BEGIN(INFO, FSTR("device to host {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    TIMER_END(copy_data_out, FSTR("device to host {} bytes", image_byte_len))
+    MY_TIMER_END
 
-    TIMER_END(total, "total")
+    MY_TIMER_END
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());

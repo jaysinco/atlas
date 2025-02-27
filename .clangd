@@ -49,9 +49,9 @@ If:
 CompileFlags:
   Add:
     - -std=c++17
-    - --cuda-path=/usr/local/cuda-12.6
-    - -I/usr/local/cuda-12.6/include
-    - -L/usr/local/cuda-12.6/lib64
+    - --cuda-path=/usr/local/cuda
+    - -I/usr/local/cuda/include
+    - -L/usr/local/cuda/lib64
     # - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4
     # - -IC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/include
     # - -LC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.4/lib/x64

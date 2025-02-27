@@ -390,21 +390,21 @@ MyErrCode contrastLG(int argc, char** argv)
     common::warmUpGpu();
 
     // prepare
-    TIMER_BEGIN(prepare)
+    MY_TIMER_BEGIN(INFO, "prepare")
     CHECK_ERR_RET(
         prepareLG(image_height, image_width, scalas, nn, k, scala0, d_mat_lg, d_denom, d_hh));
     CHECK_CUDA(cudaDeviceSynchronize());
-    TIMER_END(prepare, "prepare")
+    MY_TIMER_END
 
     // process
-    TIMER_BEGIN(process)
+    std::vector<uint8_t> vec_img_out(image_byte_len);
+    MY_TIMER_BEGIN(INFO, "process")
     CHECK_CUDA(cudaMemcpy(d_img_in, img_in.data, image_byte_len, cudaMemcpyHostToDevice));
     CHECK_ERR_RET(multiscale(image_height, image_width, d_img_in, d_img_out, degree, d_mat_lg,
                              d_denom, scalas, d_hh));
-    std::vector<uint8_t> vec_img_out(image_byte_len);
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaDeviceSynchronize());
-    TIMER_END(process, "process")
+    MY_TIMER_END
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC3, vec_img_out.data());

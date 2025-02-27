@@ -13,10 +13,8 @@ namespace toolkit
 class AutoCpuTimer: public boost::timer::cpu_timer
 {
 public:
-    AutoCpuTimer(std::string const& desc, toolkit::LogLevel level = toolkit::LogLevel::kINFO,
-                 int16_t places = 3,
-                 std::string const& format = "%ws wall, %us user + %ss system = %ts CPU (%p%)")
-        : desc_(desc), level_(level), places_(places), format_(format)
+    AutoCpuTimer(std::string const& desc, toolkit::LogLevel level = toolkit::LogLevel::kINFO)
+        : desc_(desc), level_(level)
     {
         start();
     }
@@ -24,14 +22,13 @@ public:
     ~AutoCpuTimer()
     {
         stop();
-        LOG_FUNC(level_, "time of {}: {}", desc_, format(places_, format_));
+        auto tm = elapsed();
+        LOG_FUNC(level_, "elapsed {:.1f}ms, {}", tm.wall * 1e-6, desc_);
     }
 
 private:
     std::string desc_;
     toolkit::LogLevel level_;
-    int16_t places_;
-    std::string format_;
 };
 
 }  // namespace toolkit

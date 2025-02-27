@@ -2,14 +2,11 @@
 #include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
 #include <cuda_runtime.h>
-#include <cooperative_groups.h>
 #include <vector>
 #include <opencv2/ximgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 
 #define USE_MANAGERD_MEMORY 0
-
-namespace cg = cooperative_groups;
 
 __global__ void convX(uint8_t const* img_in, float const* ker, float* img_raw, int w_img, int h_img,
                       int n_ker)
@@ -125,7 +122,7 @@ MyErrCode txiGaussian(int argc, char** argv)
     CHECK_CUDA(cudaMalloc(&d_img_out, image_byte_len));
 #endif
 
-    TIMER_BEGIN(total)
+    MY_TIMER_BEGIN(INFO, "total")
 
 // image convert
 #if USE_MANAGERD_MEMORY
@@ -138,9 +135,9 @@ MyErrCode txiGaussian(int argc, char** argv)
 
     // copy data in
 #if !USE_MANAGERD_MEMORY
-    TIMER_BEGIN(copy_data_in)
+    MY_TIMER_BEGIN(INFO, FSTR("host to device {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    TIMER_END(copy_data_in, FSTR("host to device {} bytes", image_byte_len))
+    MY_TIMER_END
 #endif
 
 #if USE_MANAGERD_MEMORY
@@ -160,7 +157,7 @@ MyErrCode txiGaussian(int argc, char** argv)
     // CHECK_CUDA(cudaStreamAttachMemAsync(nullptr, d_ker, 0, cudaMemAttachGlobal));
 #endif
 
-    TIMER_BEGIN(kernel_run)
+    MY_TIMER_BEGIN(INFO, FSTR("kernel run on {}x{}", image_width, image_height))
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
@@ -172,14 +169,14 @@ MyErrCode txiGaussian(int argc, char** argv)
     CHECK_CUDA(cudaGetLastError());
 
     CHECK_CUDA(cudaDeviceSynchronize());
-    TIMER_END(kernel_run, FSTR("kernel run on {}x{}", image_width, image_height))
+    MY_TIMER_END
 
     // copy data out
 #if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
-    TIMER_BEGIN(copy_data_out)
+    MY_TIMER_BEGIN(INFO, FSTR("device to host {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    TIMER_END(copy_data_out, FSTR("device to host {} bytes", image_byte_len))
+    MY_TIMER_END
 #endif
 
     // write image
@@ -194,7 +191,7 @@ MyErrCode txiGaussian(int argc, char** argv)
         FSTR("{}-txi_gaussian-cuda{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
-    TIMER_END(total, "total")
+    MY_TIMER_END
 
     // free
     CHECK_CUDA(cudaFree(d_img_in));
