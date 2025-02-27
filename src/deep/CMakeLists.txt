@@ -7,17 +7,19 @@ if(NOT Torch_FOUND)
     return()
 endif()
 
-add_executable(${TARGET_NAME}
+add_executable(${TARGET_NAME}-samples
     main.cpp
+    linear-regression.cpp
 )
 
-target_link_libraries(${TARGET_NAME}
+target_link_libraries(${TARGET_NAME}-samples
     ${TORCH_LIBRARIES}
     toolkit
+    boost
 )
 
 if(UNIX)
-    set_target_properties(${TARGET_NAME} PROPERTIES
+    set_target_properties(${TARGET_NAME}-samples PROPERTIES
         INSTALL_RPATH "${CMAKE_INSTALL_RPATH}:$ENV{LIBTORCH_HOME}/lib"
     )
 endif()

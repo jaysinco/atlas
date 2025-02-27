@@ -1,8 +1,7 @@
-#include <fmt/ostream.h>
-#include <torch/all.h>
 #include "toolkit/args.h"
-#include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
+#include "toolkit/logging.h"
+#include "fwd.h"
 
 int main(int argc, char** argv)
 {
@@ -10,7 +9,8 @@ int main(int argc, char** argv)
     toolkit::Args args(argc, argv);
     args.parse();
 
-    ILOG("CUDA is available: {}", torch::cuda::is_available());
-    torch::Tensor tensor = torch::rand({2, 3});
-    ILOG("\n{}", fmt::streamed(tensor));
+    MY_TRY
+    CHECK_ERR_RET_INT(linearRegression(argc, argv));
+    MY_CATCH_RET_INT
+    return 0;
 }

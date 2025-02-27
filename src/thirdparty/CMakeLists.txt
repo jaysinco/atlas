@@ -22,6 +22,8 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libspdlog.so
         ${TC_INSTALL_DIR}/lib/libCatch2.so
         ${TC_INSTALL_DIR}/lib/libboost_program_options.so
+        ${TC_INSTALL_DIR}/lib/libboost_timer.so
+        ${TC_INSTALL_DIR}/lib/libboost_chrono.so
         ${TC_INSTALL_DIR}/lib/libcharset.so.1
         ${TC_INSTALL_DIR}/lib/libiconv.so.2
         ${TC_INSTALL_DIR}/lib/libsqlite3.so.0
