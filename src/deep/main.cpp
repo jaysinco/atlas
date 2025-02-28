@@ -10,7 +10,8 @@ int main(int argc, char** argv)
     args.parse();
 
     MY_TRY
-    CHECK_ERR_RET_INT(linearRegression(argc, argv));
+    // CHECK_ERR_RET_INT(linearRegression(argc, argv));
+    CHECK_ERR_RET_INT(fashionMnist(argc, argv));
     MY_CATCH_RET_INT
     return 0;
 }

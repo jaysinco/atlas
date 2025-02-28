@@ -70,6 +70,8 @@ elseif(WIN32)
         ${TC_INSTALL_DIR}/bin/spdlog.dll
         ${TC_INSTALL_DIR}/bin/Catch2.dll
         ${TC_INSTALL_DIR}/bin/boost_program_options.dll
+        ${TC_INSTALL_DIR}/bin/boost_timer.dll
+        ${TC_INSTALL_DIR}/bin/boost_chrono.dll
         ${TC_INSTALL_DIR}/bin/charset-1.dll
         ${TC_INSTALL_DIR}/bin/iconv-2.dll
         ${TC_INSTALL_DIR}/bin/cpr.dll

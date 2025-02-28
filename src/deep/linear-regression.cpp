@@ -1,13 +1,4 @@
-#include "fwd.h"
-#include <torch/all.h>
-#include <fmt/ostream.h>
-#include <boost/timer/timer.hpp>
-#include "toolkit/timer.h"
-
-template <>
-struct fmt::formatter<torch::Tensor>: fmt::ostream_formatter
-{
-};
+#include "common.h"
 
 struct TensorDataset: public torch::data::Dataset<TensorDataset>
 {
@@ -51,7 +42,7 @@ MyErrCode linearRegression(int argc, char** argv)
     auto loss = torch::nn::MSELoss();
     auto optimizer = torch::optim::SGD(net->parameters(), lr);
 
-    MY_TIMER_BEGIN(INFO, "linear regression")
+    MY_TIMER_BEGIN(INFO, "process")
     for (int i = 0; i < n_epoch; ++i) {
         for (auto& batch: *loader) {
             auto l = loss->forward(net->forward(batch.data), batch.target);
@@ -61,7 +52,7 @@ MyErrCode linearRegression(int argc, char** argv)
         }
         ILOG("epoch {}, loss={}", i, loss->forward(net->forward(x), y).item<double>());
     }
-    MY_TIMER_END
+    MY_TIMER_END()
 
     ILOG("w = \n{}", layer0->weight.data());
     ILOG("b = \n{}", layer0->bias.data());

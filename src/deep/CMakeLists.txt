@@ -8,8 +8,10 @@ if(NOT Torch_FOUND)
 endif()
 
 add_executable(${TARGET_NAME}-samples
+    common.cpp
     main.cpp
     linear-regression.cpp
+    fashion-mnist.cpp
 )
 
 target_link_libraries(${TARGET_NAME}-samples

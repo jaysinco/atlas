@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
       none) do_build_none=1 && shift ;;
       core) do_build_core=1 && shift ;;
        ldd) do_build_ldd=1 && shift ;;
-       flapp) do_build_flapp=1 && shift ;;
+     flapp) do_build_flapp=1 && shift ;;
          *) echo "unknown argument: $1" && exit 1 ;;
     esac
 done
@@ -82,7 +82,6 @@ temp_folder=$binary_folder/temp
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
 ldd_src_folder=$source_folder/ldd
 flapp_src_folder=$source_folder/flapp
-deep_src_folder=$source_folder/deep
 
 source $tc_toolchain_dir/env.sh
 
@@ -95,7 +94,6 @@ function clean_build() {
     if [ $do_build_flapp -eq 1 ]; then
         rm -rf $flapp_src_folder/.dart_tool
     fi
-    rm -rf $deep_src_folder/.temp
 }
 
 function preprocess_code() {

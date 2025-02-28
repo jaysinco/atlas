@@ -137,7 +137,7 @@ MyErrCode txiGaussian(int argc, char** argv)
 #if !USE_MANAGERD_MEMORY
     MY_TIMER_BEGIN(INFO, FSTR("host to device {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    MY_TIMER_END
+    MY_TIMER_END()
 #endif
 
 #if USE_MANAGERD_MEMORY
@@ -169,14 +169,14 @@ MyErrCode txiGaussian(int argc, char** argv)
     CHECK_CUDA(cudaGetLastError());
 
     CHECK_CUDA(cudaDeviceSynchronize());
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // copy data out
 #if !USE_MANAGERD_MEMORY
     std::vector<uint8_t> vec_img_out(image_byte_len);
     MY_TIMER_BEGIN(INFO, FSTR("device to host {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    MY_TIMER_END
+    MY_TIMER_END()
 #endif
 
     // write image
@@ -191,7 +191,7 @@ MyErrCode txiGaussian(int argc, char** argv)
         FSTR("{}-txi_gaussian-cuda{}", fpath.stem().string(), fpath.extension().string());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // free
     CHECK_CUDA(cudaFree(d_img_in));

@@ -394,7 +394,7 @@ MyErrCode contrastLG(int argc, char** argv)
     CHECK_ERR_RET(
         prepareLG(image_height, image_width, scalas, nn, k, scala0, d_mat_lg, d_denom, d_hh));
     CHECK_CUDA(cudaDeviceSynchronize());
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // process
     std::vector<uint8_t> vec_img_out(image_byte_len);
@@ -404,7 +404,7 @@ MyErrCode contrastLG(int argc, char** argv)
                              d_denom, scalas, d_hh));
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaDeviceSynchronize());
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC3, vec_img_out.data());

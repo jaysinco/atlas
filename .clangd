@@ -20,6 +20,9 @@ CompileFlags:
     - -ftrivial-auto-var-init=*
     - -fmin-function-alignment=*
 
+Diagnostics:
+  UnusedIncludes: None
+
 InlayHints:
   Enabled: No
   ParameterNames: Yes

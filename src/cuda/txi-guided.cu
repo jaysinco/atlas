@@ -153,7 +153,7 @@ MyErrCode txiGuided(int argc, char** argv)
     // copy data in
     MY_TIMER_BEGIN(INFO, FSTR("host to device {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // process
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -165,7 +165,7 @@ MyErrCode txiGuided(int argc, char** argv)
     separate<<<grid, block>>>(d_img_in, d_r, d_g, d_b, image_width, image_height);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
-    MY_TIMER_END
+    MY_TIMER_END()
 
     float* buf_arr[3] = {d_b, d_g, d_r};
     for (int color_idx = 0; color_idx < 3; ++color_idx) {
@@ -181,15 +181,15 @@ MyErrCode txiGuided(int argc, char** argv)
         CHECK_CUDA(cudaGetLastError());
         CHECK_CUDA(cudaDeviceSynchronize());
 
-        MY_TIMER_END
+        MY_TIMER_END()
     }
 
     // copy data out
     MY_TIMER_BEGIN(INFO, FSTR("device to host {} bytes", image_byte_len))
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
-    MY_TIMER_END
+    MY_TIMER_END()
 
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());

@@ -5,7 +5,7 @@
 #define MY_TIMER_BEGIN(level, desc) \
     {                               \
         toolkit::AutoCpuTimer MY_CONCAT(_my_timer_, __LINE__)(desc, toolkit::LogLevel::k##level);
-#define MY_TIMER_END }
+#define MY_TIMER_END() }
 
 namespace toolkit
 {

@@ -152,7 +152,7 @@ MyErrCode spatialDenoise(int argc, char** argv)
     }
     ev_read_image.wait();
 
-    MY_TIMER_END
+    MY_TIMER_END()
 
     // write image
     cv::Mat img_out(frame_height, frame_width, CV_8UC3, img_out_data.data());
