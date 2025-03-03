@@ -111,6 +111,7 @@ if __name__ == '__main__':
 
     img_path = os.path.join(data_dir, "noisy.jpg")
     img_bef = imread_uint(img_path, n_channels=3)
+    # img_bef = img_bef[0:int(1056/3), 0:1200]
     img_L = np.float32(img_bef/255.)
     img_L = torch.from_numpy(np.ascontiguousarray(img_L)).permute(2, 0, 1).float().unsqueeze(0)
     sigma = torch.full((1,1,1,1), noise_level/255.).type_as(img_L)
