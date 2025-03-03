@@ -164,7 +164,7 @@ void train(int curr_epoch, Net& model, torch::Device device, DataLoader& data_lo
         loss.backward();
         optimizer.step();
 
-        if (batch_idx++ % 200 == 0) {
+        if (batch_idx++ % 100 == 0) {
             ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, batch_idx * batch.data.size(0),
                  dataset_size, loss.template item<float>());
         }
@@ -212,7 +212,7 @@ void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
     {
         torch::NoGradGuard no_grad;
         model.eval();
-        auto data = example.data.unsqueeze(0).to(torch::kFloat).to(device);
+        auto data = example.data.unsqueeze(0).to(torch::kFloat).to(device) / 255.0f;
         auto output = model.forward(data);
         predict = output.argmax(1).item<int>();
     }
@@ -256,7 +256,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     auto train_dataset = train_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                              .map(torch::data::transforms::Stack<>());
     auto train_loader = torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
-        std::move(train_dataset), 64);
+        std::move(train_dataset), 250);
 
     auto test_dataset = test_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                             .map(torch::data::transforms::Stack<>());
@@ -268,7 +268,6 @@ MyErrCode fashionMnist(int argc, char** argv)
     torch::optim::RMSprop optimizer(model.parameters(),
                                     torch::optim::RMSpropOptions(0.0005).weight_decay(1e-6));
 
-    testOne(model, device, test_raw_dataset);
     MY_TIMER_BEGIN(INFO, "process")
     test(0, model, device, *test_loader, test_dataset_size);
     for (size_t epoch = 1; epoch <= 10; ++epoch) {
@@ -276,7 +275,10 @@ MyErrCode fashionMnist(int argc, char** argv)
         test(epoch, model, device, *test_loader, test_dataset_size);
     }
     MY_TIMER_END()
-    testOne(model, device, test_raw_dataset);
+
+    for (int i = 0; i < 1; ++i) {
+        testOne(model, device, test_raw_dataset);
+    }
 
     ILOG("save model to {}", saved_model_path.string());
     torch::serialize::OutputArchive oa;
