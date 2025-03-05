@@ -159,15 +159,18 @@ function linux_driver_build() {
 }
 
 function flutter_build() {
-    if [ "$os" == "linux" -a $TC_CROSS_COMPILE -eq 0 ]; then
+    if [ $TC_CROSS_COMPILE -eq 0 ]; then
         export PUB_HOSTED_URL=https://pub.flutter-io.cn
         export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
-        bundle_dir=$flapp_src_folder/build/linux/x64/${build_type,,}/bundle
+        bundle_dir=$([ "$os" == "linux" ] && \
+            echo "$flapp_src_folder/build/$os/x64/${build_type,,}/bundle" || \
+            echo "$flapp_src_folder/build/$os/x64/runner/$build_type")
+        fl_opt=$([ "$os" == "linux" ] && echo "--target-platform=linux-x64" || echo "")
 
         if [ ! -d $flapp_src_folder ]; then
             flutter --no-version-check create \
                 --template=app \
-                --platforms=linux \
+                --platforms=linux,windows \
                 --project-name=flapp \
                 $flapp_src_folder
         fi \
@@ -176,10 +179,10 @@ function flutter_build() {
         && \
         flutter --no-version-check pub get \
         && \
-        flutter --no-version-check build linux \
+        flutter --no-version-check build $os \
             --${build_type,,} \
-            --target-platform=linux-x64 \
             --no-pub \
+            $fl_opt \
         && \
         rsync -r $bundle_dir/* $binary_folder \
         && \
