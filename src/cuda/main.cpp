@@ -21,9 +21,9 @@ int main(int argc, char** argv)
     // CHECK_ERR_RET_INT(dotProduct(argc, argv));
     // CHECK_ERR_RET_INT(rayTracing(argc, argv));
     // CHECK_ERR_RET_INT(txiGaussian(argc, argv));
-    CHECK_ERR_RET_INT(txiGuided(argc, argv));
+    // CHECK_ERR_RET_INT(txiGuided(argc, argv));
     // CHECK_ERR_RET_INT(trtMnist(argc, argv));
-    // CHECK_ERR_RET_INT(contrastLG(argc, argv));
+    CHECK_ERR_RET_INT(contrastLG(argc, argv));
     MY_CATCH_RET_INT
     return 0;
 }

@@ -36,9 +36,8 @@ std::string format(Ts&&... args)
 {
     if constexpr (sizeof...(Ts) == 1) {
         return std::string(std::forward<Ts>(args)...);
-    } else {
-        return fmt::format(std::forward<Ts>(args)...);
     }
+    return fmt::format(std::forward<Ts>(args)...);
 }
 
 inline std::string filename(char const* name)

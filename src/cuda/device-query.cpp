@@ -101,8 +101,8 @@ int main(int argc, char** argv)
         sprintf_s(msg, sizeof(msg),
                   "  Total amount of global memory:                 %.0f MBytes "
                   "(%llu bytes)\n",
-                  static_cast<float>(deviceProp.totalGlobalMem / 1048576.0f),
-                  (unsigned long long)deviceProp.totalGlobalMem);
+                  static_cast<float>(device_prop.totalGlobalMem / 1048576.0f),
+                  static_cast<unsigned long long>(device_prop.totalGlobalMem));
 #else
         snprintf(msg, sizeof(msg),
                  "  Total amount of global memory:                 %.0f MBytes "
@@ -202,8 +202,8 @@ int main(int argc, char** argv)
                device_prop.ECCEnabled ? "Enabled" : "Disabled");
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
         printf("  CUDA Device Driver Mode (TCC or WDDM):         %s\n",
-               deviceProp.tccDriver ? "TCC (Tesla Compute Cluster Driver)"
-                                    : "WDDM (Windows Display Driver Model)");
+               device_prop.tccDriver ? "TCC (Tesla Compute Cluster Driver)"
+                                     : "WDDM (Windows Display Driver Model)");
 #endif
         printf("  Device supports Unified Addressing (UVA):      %s\n",
                device_prop.unifiedAddressing ? "Yes" : "No");
@@ -284,7 +284,7 @@ int main(int argc, char** argv)
     // driver version
     s_profile_string += ", CUDA Driver Version = ";
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-    sprintf_s(cTemp, 10, "%d.%d", driverVersion / 1000, (driverVersion % 100) / 10);
+    sprintf_s(c_temp, 10, "%d.%d", driver_version / 1000, (driver_version % 100) / 10);
 #else
     snprintf(c_temp, sizeof(c_temp), "%d.%d", driver_version / 1000, (driver_version % 100) / 10);
 #endif
@@ -293,7 +293,7 @@ int main(int argc, char** argv)
     // Runtime version
     s_profile_string += ", CUDA Runtime Version = ";
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-    sprintf_s(cTemp, 10, "%d.%d", runtimeVersion / 1000, (runtimeVersion % 100) / 10);
+    sprintf_s(c_temp, 10, "%d.%d", runtime_version / 1000, (runtime_version % 100) / 10);
 #else
     snprintf(c_temp, sizeof(c_temp), "%d.%d", runtime_version / 1000, (runtime_version % 100) / 10);
 #endif
@@ -302,7 +302,7 @@ int main(int argc, char** argv)
     // Device count
     s_profile_string += ", NumDevs = ";
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-    sprintf_s(cTemp, 10, "%d", deviceCount);
+    sprintf_s(c_temp, 10, "%d", device_count);
 #else
     snprintf(c_temp, sizeof(c_temp), "%d", device_count);
 #endif

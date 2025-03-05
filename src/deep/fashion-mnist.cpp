@@ -244,7 +244,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     if (std::filesystem::exists(saved_model_path)) {
         ILOG("load model from {}", saved_model_path.string());
         torch::serialize::InputArchive ia;
-        ia.load_from(saved_model_path);
+        ia.load_from(saved_model_path.string());
         model->load(ia);
     }
 
@@ -279,7 +279,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     ILOG("save model to {}", saved_model_path.string());
     torch::serialize::OutputArchive oa;
     model->save(oa);
-    oa.save_to(saved_model_path);
+    oa.save_to(saved_model_path.string());
 
     return MyErrCode::kOk;
 }

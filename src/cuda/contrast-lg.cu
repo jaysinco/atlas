@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include "./common.cuh"
 #include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
@@ -6,7 +8,6 @@
 #include <opencv2/imgcodecs.hpp>
 #include <cufft.h>
 #include <cublas_v2.h>
-#include <cmath>
 
 static __global__ void genRho(float* rho, float scala, int nc, int nr)
 {
