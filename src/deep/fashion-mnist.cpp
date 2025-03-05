@@ -1,7 +1,6 @@
 #include "common.h"
 #include <filesystem>
 #include <random>
-#include "toolkit/toolkit.h"
 
 class FashionMnistDataset: public torch::data::Dataset<FashionMnistDataset>
 {
@@ -195,7 +194,7 @@ void test(int curr_epoch, Net& model, torch::Device device, DataLoader& data_loa
 
 void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
 {
-    static const std::map<unsigned, std::string> kLabelDesc = {
+    static std::map<unsigned, std::string> const kLabelDesc = {
         {0, "T-shirt"}, {1, "Trouser"}, {2, "Pullover"}, {3, "Dress"}, {4, "Coat"},
         {5, "Sandal"},  {6, "Shirt"},   {7, "Sneaker"},  {8, "Bag"},   {9, "Ankle boot"},
     };
@@ -227,6 +226,9 @@ void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
 
 MyErrCode fashionMnist(int argc, char** argv)
 {
+    toolkit::Args args(argc, argv);
+    args.parse();
+
     torch::manual_seed(1);
 
     auto data_root = CURR_FILE_DIR() / ".temp" / "FashionMNIST" / "raw";
@@ -255,12 +257,13 @@ MyErrCode fashionMnist(int argc, char** argv)
 
     auto train_dataset = train_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                              .map(torch::data::transforms::Stack<>());
-    auto train_loader = torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
+    auto train_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
         std::move(train_dataset), 250);
 
     auto test_dataset = test_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                             .map(torch::data::transforms::Stack<>());
-    auto test_loader = torch::data::make_data_loader(std::move(test_dataset), 1000);
+    auto test_loader = torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
+        std::move(test_dataset), 1000);
 
     size_t const train_dataset_size = train_raw_dataset.size().value();
     size_t const test_dataset_size = test_raw_dataset.size().value();

@@ -14,6 +14,9 @@ struct TensorDataset: public torch::data::Dataset<TensorDataset>
 
 MyErrCode linearRegression(int argc, char** argv)
 {
+    toolkit::Args args(argc, argv);
+    args.parse();
+
     torch::manual_seed(1);
 
     std::vector<float> w_v{2.0, -3.4, 5.8, 4.2, 9.9};
