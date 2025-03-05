@@ -117,8 +117,7 @@ int build(MyLogger& logger, nvinfer1::IHostMemory*& plan)
     if (!builder) {
         return -1;
     }
-    nvinfer1::INetworkDefinition* network = builder->createNetworkV2(
-        1U << static_cast<int>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH));
+    nvinfer1::INetworkDefinition* network = builder->createNetworkV2(0);
     if (!network) {
         return -1;
     }

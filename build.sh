@@ -133,7 +133,7 @@ function cmake_build() {
     && \
     pushd $build_folder \
     && \
-    cmake $git_root -G "Ninja" \
+    cmake $git_root -G "Ninja" -Wno-dev \
         -DCMAKE_BUILD_TYPE=$build_type \
         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$binary_folder \
         $tc_opt \
