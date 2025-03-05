@@ -2,6 +2,9 @@
 #include <filesystem>
 #include <random>
 
+namespace
+{
+
 class FashionMnistDataset: public torch::data::Dataset<FashionMnistDataset>
 {
 public:
@@ -84,80 +87,68 @@ private:
     torch::Tensor target_;
 };
 
-struct Net: torch::nn::Module
+struct FashionMnistNetImpl: torch::nn::Module
 {
-    Net()
-        : conv1_1(register_module(
-              "conv1_1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 32, 3).padding(1)))),
-          conv1_2(register_module(
-              "conv1_2", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 32, 3).padding(1)))),
-          batch_norm1_1(register_module("batch_norm1_1", torch::nn::BatchNorm2d(32))),
-          batch_norm1_2(register_module("batch_norm1_2", torch::nn::BatchNorm2d(32))),
-          max_pool1(register_module("max_pool1",
-                                    torch::nn::MaxPool2d(torch::nn::MaxPool2dOptions({2, 2})))),
-          dropout1(register_module("dropout1", torch::nn::Dropout(0.25))),
-          conv2_1(register_module(
-              "conv2_1", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 64, 3).padding(1)))),
-          conv2_2(register_module(
-              "conv2_2", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).padding(1)))),
-          batch_norm2_1(register_module("batch_norm2_1", torch::nn::BatchNorm2d(64))),
-          batch_norm2_2(register_module("batch_norm2_2", torch::nn::BatchNorm2d(64))),
-          max_pool2(register_module("max_pool2",
-                                    torch::nn::MaxPool2d(torch::nn::MaxPool2dOptions({2, 2})))),
-          dropout2(register_module("dropout2", torch::nn::Dropout(0.25))),
-          fc1(register_module("fc1", torch::nn::Linear(64 * (28 / 4) * (28 / 4), 512))),
-          batch_norm3(register_module("batch_norm3", torch::nn::BatchNorm1d(512))),
-          dropout3(register_module("dropout3", torch::nn::Dropout(0.5))),
-          fc2(register_module("fc2", torch::nn::Linear(512, 10)))
-    {
-    }
+    ADD_NN_MOD(conv1_1, Conv2d, Conv2dOptions(1, 32, 3).padding(1));
+    ADD_NN_MOD(batch_norm1_1, BatchNorm2d, BatchNorm2dOptions(32));
+    ADD_NN_MOD(conv1_2, Conv2d, Conv2dOptions(32, 32, 3).padding(1));
+    ADD_NN_MOD(batch_norm1_2, BatchNorm2d, BatchNorm2dOptions(32));
+    ADD_NN_MOD(max_pool1, MaxPool2d, MaxPool2dOptions({2, 2}));
+    ADD_NN_MOD(dropout1, Dropout, DropoutOptions(0.25));
+
+    ADD_NN_MOD(conv2_1, Conv2d, Conv2dOptions(32, 64, 3).padding(1));
+    ADD_NN_MOD(batch_norm2_1, BatchNorm2d, BatchNorm2dOptions(64));
+    ADD_NN_MOD(conv2_2, Conv2d, Conv2dOptions(64, 64, 3).padding(1));
+    ADD_NN_MOD(batch_norm2_2, BatchNorm2d, BatchNorm2dOptions(64));
+    ADD_NN_MOD(max_pool2, MaxPool2d, MaxPool2dOptions({2, 2}));
+    ADD_NN_MOD(dropout2, Dropout, DropoutOptions(0.25));
+
+    ADD_NN_MOD(fc1, Linear, LinearOptions(64 * (28 / 4) * (28 / 4), 512));
+    ADD_NN_MOD(batch_norm3, BatchNorm1d, BatchNorm1dOptions(512));
+    ADD_NN_MOD(dropout3, Dropout, DropoutOptions(0.5));
+    ADD_NN_MOD(fc2, Linear, LinearOptions(512, 10));
 
     torch::Tensor forward(torch::Tensor x)
     {
-        x = torch::relu(conv1_1->forward(x));
-        x = batch_norm1_1->forward(x);
-        x = torch::relu(conv1_2->forward(x));
-        x = batch_norm1_2->forward(x);
-        x = max_pool1->forward(x);
-        x = dropout1->forward(x);
+        x = torch::relu(conv1_1(x));
+        x = batch_norm1_1(x);
+        x = torch::relu(conv1_2(x));
+        x = batch_norm1_2(x);
+        x = max_pool1(x);
+        x = dropout1(x);
 
-        x = torch::relu(conv2_1->forward(x));
-        x = batch_norm2_1->forward(x);
-        x = torch::relu(conv2_2->forward(x));
-        x = batch_norm2_2->forward(x);
-        x = max_pool2->forward(x);
-        x = dropout2->forward(x);
+        x = torch::relu(conv2_1(x));
+        x = batch_norm2_1(x);
+        x = torch::relu(conv2_2(x));
+        x = batch_norm2_2(x);
+        x = max_pool2(x);
+        x = dropout2(x);
 
         x = x.view({x.size(0), -1});
-        x = torch::relu(fc1->forward(x));
-        x = batch_norm3->forward(x);
-        x = dropout3->forward(x);
+        x = torch::relu(fc1(x));
+        x = batch_norm3(x);
+        x = dropout3(x);
 
-        x = fc2->forward(x);
+        x = fc2(x);
         x = torch::log_softmax(x, 1);
 
         return x;
     }
-
-    torch::nn::Conv2d conv1_1, conv1_2, conv2_1, conv2_2;
-    torch::nn::BatchNorm2d batch_norm1_1, batch_norm1_2, batch_norm2_1, batch_norm2_2;
-    torch::nn::MaxPool2d max_pool1, max_pool2;
-    torch::nn::Dropout dropout1, dropout2, dropout3;
-    torch::nn::Linear fc1, fc2;
-    torch::nn::BatchNorm1d batch_norm3;
 };
 
+TORCH_MODULE(FashionMnistNet);
+
 template <typename DataLoader>
-void train(int curr_epoch, Net& model, torch::Device device, DataLoader& data_loader,
+void train(int curr_epoch, FashionMnistNet& model, torch::Device device, DataLoader& data_loader,
            torch::optim::Optimizer& optimizer, size_t dataset_size)
 {
-    model.train();
+    model->train();
     size_t batch_idx = 0;
     for (auto& batch: data_loader) {
         auto data = batch.data.to(device);
         auto targets = batch.target.to(device);
         optimizer.zero_grad();
-        auto output = model.forward(data);
+        auto output = model(data);
         auto loss = torch::nll_loss(output, targets);
         AT_ASSERT(!std::isnan(loss.template item<float>()));
         loss.backward();
@@ -171,17 +162,17 @@ void train(int curr_epoch, Net& model, torch::Device device, DataLoader& data_lo
 }
 
 template <typename DataLoader>
-void test(int curr_epoch, Net& model, torch::Device device, DataLoader& data_loader,
+void test(int curr_epoch, FashionMnistNet& model, torch::Device device, DataLoader& data_loader,
           size_t dataset_size)
 {
     torch::NoGradGuard no_grad;
-    model.eval();
+    model->eval();
     double test_loss = 0;
     int correct = 0;
     for (auto const& batch: data_loader) {
         auto data = batch.data.to(device);
         auto targets = batch.target.to(device);
-        auto output = model.forward(data);
+        auto output = model(data);
         test_loss +=
             torch::nll_loss(output, targets, {}, torch::Reduction::Sum).template item<float>();
         auto pred = output.argmax(1);
@@ -192,7 +183,7 @@ void test(int curr_epoch, Net& model, torch::Device device, DataLoader& data_loa
          test_loss / dataset_size, static_cast<double>(correct) / dataset_size * 100);
 }
 
-void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
+void testOne(FashionMnistNet& model, torch::Device device, FashionMnistDataset& dataset)
 {
     static std::map<unsigned, std::string> const kLabelDesc = {
         {0, "T-shirt"}, {1, "Trouser"}, {2, "Pullover"}, {3, "Dress"}, {4, "Coat"},
@@ -210,9 +201,9 @@ void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
     int predict;
     {
         torch::NoGradGuard no_grad;
-        model.eval();
+        model->eval();
         auto data = example.data.unsqueeze(0).to(torch::kFloat).to(device) / 255.0f;
-        auto output = model.forward(data);
+        auto output = model(data);
         predict = output.argmax(1).item<int>();
     }
 
@@ -223,6 +214,8 @@ void testOne(Net& model, torch::Device device, FashionMnistDataset& dataset)
     ILOG("predict [{}] as '{}', really is '{}'", idx, kLabelDesc.at(predict),
          kLabelDesc.at(target));
 }
+
+}  // namespace
 
 MyErrCode fashionMnist(int argc, char** argv)
 {
@@ -246,13 +239,13 @@ MyErrCode fashionMnist(int argc, char** argv)
     torch::Device device(device_type);
 
     auto saved_model_path = toolkit::getTempDir() / "fashion-mnist.pt";
-    Net model;
-    model.to(device);
+    FashionMnistNet model;
+    model->to(device);
     if (std::filesystem::exists(saved_model_path)) {
         ILOG("load model from {}", saved_model_path.string());
         torch::serialize::InputArchive ia;
         ia.load_from(saved_model_path);
-        model.load(ia);
+        model->load(ia);
     }
 
     auto train_dataset = train_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
@@ -268,7 +261,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     size_t const train_dataset_size = train_raw_dataset.size().value();
     size_t const test_dataset_size = test_raw_dataset.size().value();
 
-    torch::optim::RMSprop optimizer(model.parameters(),
+    torch::optim::RMSprop optimizer(model->parameters(),
                                     torch::optim::RMSpropOptions(0.0005).weight_decay(1e-6));
 
     MY_TIMER_BEGIN(INFO, "process")
@@ -285,7 +278,7 @@ MyErrCode fashionMnist(int argc, char** argv)
 
     ILOG("save model to {}", saved_model_path.string());
     torch::serialize::OutputArchive oa;
-    model.save(oa);
+    model->save(oa);
     oa.save_to(saved_model_path);
 
     return MyErrCode::kOk;

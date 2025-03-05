@@ -36,29 +36,29 @@ MyErrCode linearRegression(int argc, char** argv)
     auto loader = torch::data::make_data_loader<torch::data::samplers::DistributedRandomSampler>(
         std::move(dataset), batch_size);
 
-    torch::nn::Sequential net({
+    auto net = torch::nn::Sequential({
         {"layer0", torch::nn::Linear(n_feature, 1)},
     });
     auto layer0 = net[0]->as<torch::nn::Linear>();
-    torch::nn::init::normal_(layer0->weight, 0, 0.01);
-    layer0->bias.data().fill_(0);
+    layer0->weight.detach().normal_(0, 0.01);
+    layer0->bias.detach().fill_(0);
     auto loss = torch::nn::MSELoss();
     auto optimizer = torch::optim::SGD(net->parameters(), lr);
 
     MY_TIMER_BEGIN(INFO, "process")
     for (int i = 0; i < n_epoch; ++i) {
         for (auto& batch: *loader) {
-            auto l = loss->forward(net->forward(batch.data), batch.target);
+            auto l = loss(net->forward(batch.data), batch.target);
             optimizer.zero_grad();
             l.backward();
             optimizer.step();
         }
-        ILOG("epoch {}, loss={}", i, loss->forward(net->forward(x), y).item<double>());
+        ILOG("epoch {}, loss={}", i, loss(net->forward(x), y).item<double>());
     }
     MY_TIMER_END()
 
-    ILOG("w = \n{}", layer0->weight.data());
-    ILOG("b = \n{}", layer0->bias.data());
+    ILOG("w = \n{}", layer0->weight);
+    ILOG("b = \n{}", layer0->bias);
 
     return MyErrCode::kOk;
 }
