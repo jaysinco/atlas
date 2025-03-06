@@ -51,7 +51,7 @@ MyErrCode txiGuided(int argc, char** argv)
     auto fpath = toolkit::getDataDir() / "hdr.jpg";
     cv::Mat img_file = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img_file.data == nullptr) {
-        ELOG("failed to load image file: {}", fpath.string());
+        ELOG("failed to load image file: {}", fpath);
         return MyErrCode::kFailed;
     }
     cv::Mat img_in;
@@ -150,7 +150,7 @@ MyErrCode txiGuided(int argc, char** argv)
 
     // write image
     cv::Mat img_out(frame_height, frame_width, CV_8UC3, img_out_data.data());
-    auto outfile = FSTR("{}-txi_guided-ocl{}", fpath.stem().string(), fpath.extension().string());
+    auto outfile = FSTR("{}-txi_guided-ocl{}", fpath.stem(), fpath.extension());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), img_out);
 
     return MyErrCode::kOk;

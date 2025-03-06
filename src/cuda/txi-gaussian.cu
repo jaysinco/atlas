@@ -95,7 +95,7 @@ MyErrCode txiGaussian(int argc, char** argv)
     // read image
     cv::Mat img_file = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img_file.data == nullptr) {
-        ELOG("failed to load image file: {}", fpath.string());
+        ELOG("failed to load image file: {}", fpath);
         return MyErrCode::kFailed;
     }
     cv::Mat img;
@@ -187,8 +187,7 @@ MyErrCode txiGaussian(int argc, char** argv)
 #else
     cv::Mat mat_img_out(image_height, image_width, CV_8UC4, vec_img_out.data());
 #endif
-    auto outfile =
-        FSTR("{}-txi_gaussian-cuda{}", fpath.stem().string(), fpath.extension().string());
+    auto outfile = FSTR("{}-txi_gaussian-cuda{}", fpath.stem(), fpath.extension());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
     MY_TIMER_END()

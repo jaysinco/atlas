@@ -16,10 +16,10 @@ public:
             data_root / (is_train ? L"train-labels-idx1-ubyte" : L"t10k-labels-idx1-ubyte");
 
         if (!std::filesystem::exists(image_path)) {
-            MY_THROW("file not found: {}", image_path.string());
+            MY_THROW("file not found: {}", image_path);
         }
         if (!std::filesystem::exists(label_path)) {
-            MY_THROW("file not found: {}", label_path.string());
+            MY_THROW("file not found: {}", label_path);
         }
 
         data_ = readImages(image_path);
@@ -53,7 +53,7 @@ private:
         int32_t n = header[1];
         int32_t nr = header[2];
         int32_t nc = header[3];
-        ILOG("read {}x{}x{} images from {}", n, nr, nc, fp.string());
+        ILOG("read {}x{}x{} images from {}", n, nr, nc, fp);
         size_t numel = n * nr * nc;
         auto buf = new uint8_t[numel];
         for (int i = 0; i < n; ++i) {
@@ -73,7 +73,7 @@ private:
             header[i] = reverseInt(header[i]);
         }
         int32_t n = header[1];
-        ILOG("read {} labels from {}", n, fp.string());
+        ILOG("read {} labels from {}", n, fp);
         auto buf = new uint8_t[n];
         for (int i = 0; i < n; ++i) {
             file.read(reinterpret_cast<char*>(&buf[i]), sizeof(uint8_t));
@@ -242,7 +242,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     FashionMnistNet model;
     model->to(device);
     if (std::filesystem::exists(saved_model_path)) {
-        ILOG("load model from {}", saved_model_path.string());
+        ILOG("load model from {}", saved_model_path);
         torch::serialize::InputArchive ia;
         ia.load_from(saved_model_path.string());
         model->load(ia);
@@ -276,7 +276,7 @@ MyErrCode fashionMnist(int argc, char** argv)
         testOne(model, device, test_raw_dataset);
     }
 
-    ILOG("save model to {}", saved_model_path.string());
+    ILOG("save model to {}", saved_model_path);
     torch::serialize::OutputArchive oa;
     model->save(oa);
     oa.save_to(saved_model_path.string());

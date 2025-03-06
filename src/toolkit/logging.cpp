@@ -58,7 +58,7 @@ MyErrCode initLogger(LoggerOption&& opt)
     if (opt.logtofile) {
         std::filesystem::path fpath(opt.logdir);
         std::string fname =
-            FSTR("{}_{:%Y%m%d.%H%M%S}_{}.log", std::filesystem::path(opt.program).stem().string(),
+            FSTR("{}_{:%Y%m%d.%H%M%S}_{}.log", std::filesystem::path(opt.program).stem(),
                  spdlog::details::os::localtime(), spdlog::details::os::pid());
         fpath /= fname;
 
@@ -100,8 +100,7 @@ void logPrint(LogLevel level, std::string_view content)
 
 void logPrint(LogLevel level, char const* filepath, int line, std::string_view content)
 {
-    logPrint(level, FSTR("[{}:{}] {}", std::filesystem::path(filepath).filename().string(), line,
-                         content));
+    logPrint(level, FSTR("[{}:{}] {}", std::filesystem::path(filepath).filename(), line, content));
 }
 
 }  // namespace toolkit

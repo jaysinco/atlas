@@ -44,7 +44,7 @@ MyErrCode readFile(std::filesystem::path const& path, std::string& content)
 {
     std::ifstream in_file(path);
     if (!in_file) {
-        ELOG("failed to open file: {}", path.string());
+        ELOG("failed to open file: {}", path);
         return MyErrCode::kFailed;
     }
     std::stringstream ss;

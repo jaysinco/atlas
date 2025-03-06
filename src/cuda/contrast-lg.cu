@@ -361,7 +361,7 @@ MyErrCode contrastLG(int argc, char** argv)
     // read image
     cv::Mat img_file = cv::imread(fpath.string(), cv::IMREAD_COLOR);
     if (img_file.data == nullptr) {
-        ELOG("failed to load image file: {}", fpath.string());
+        ELOG("failed to load image file: {}", fpath);
         return MyErrCode::kFailed;
     }
     cv::Mat img_in;
@@ -409,7 +409,7 @@ MyErrCode contrastLG(int argc, char** argv)
 
     // write image
     cv::Mat mat_img_out(image_height, image_width, CV_8UC3, vec_img_out.data());
-    auto outfile = FSTR("{}-contrast-lg-cuda{}", fpath.stem().string(), fpath.extension().string());
+    auto outfile = FSTR("{}-contrast-lg-cuda{}", fpath.stem(), fpath.extension());
     cv::imwrite((toolkit::getTempDir() / outfile).string(), mat_img_out);
 
     // free
