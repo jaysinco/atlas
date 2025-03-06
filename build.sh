@@ -69,8 +69,9 @@ fi
 
 arch=`uname -m`
 case "$OSTYPE" in
-    linux*)   os=linux ;;
-    msys*)    os=windows ;;
+    linux*)    os=linux ;;
+    msys*)     os=windows ;;
+    cygwin*)   os=windows ;;
 esac
 
 source_folder=$git_root/src
@@ -162,8 +163,8 @@ function flutter_build() {
         export PUB_HOSTED_URL=https://pub.flutter-io.cn
         export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
         bundle_dir=$([ "$os" == "linux" ] && \
-            echo "$flapp_src_folder/build/$os/x64/${build_type,,}/bundle" || \
-            echo "$flapp_src_folder/build/$os/x64/runner/$build_type")
+            echo "build/$os/x64/${build_type,,}/bundle" || \
+            echo "build/$os/x64/runner/$build_type")
         fl_opt=$([ "$os" == "linux" ] && echo "--target-platform=linux-x64" || echo "")
 
         if [ ! -d $flapp_src_folder ]; then
@@ -183,7 +184,7 @@ function flutter_build() {
             --no-pub \
             $fl_opt \
         && \
-        rsync -r $bundle_dir/* $binary_folder \
+        rsync -r $bundle_dir/* ../../bin/$tuple_name \
         && \
         popd
     fi
