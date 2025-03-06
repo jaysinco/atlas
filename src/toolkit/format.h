@@ -26,6 +26,8 @@ struct HasToStr<T, std::void_t<decltype(std::declval<T>().toStr())>>: std::true_
 {
 };
 
+inline std::string toString(std::filesystem::path const& fp) { return fp.string(); }
+
 template <typename T>
 std::enable_if_t<HasToStr<T>::value, std::string> toString(T&& arg)
 {
