@@ -59,7 +59,7 @@ MyErrCode Ipv4::decode(uint8_t const* const start, uint8_t const*& end, Protocol
 Variant Ipv4::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
+    j["type"] = FSTR(type());
     j["ipv4-type"] = FSTR("{}({})", succType(), d_.type);
     j["version"] = d_.ver_hl >> 4;
     j["tos"] = d_.tos;

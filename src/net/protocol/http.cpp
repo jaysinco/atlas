@@ -60,7 +60,7 @@ MyErrCode Http::decode(uint8_t const* const start, uint8_t const*& end, Protocol
 Variant Http::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
+    j["type"] = FSTR(type());
     j["op"] = d_.op;
     if (d_.op == "request") {
         j["version"] = d_.ver;

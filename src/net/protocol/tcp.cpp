@@ -31,8 +31,8 @@ MyErrCode Tcp::decode(uint8_t const* const start, uint8_t const*& end, Protocol 
 Variant Tcp::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
-    j["tcp-type"] = TOSTR(succType());
+    j["type"] = FSTR(type());
+    j["tcp-type"] = FSTR(succType());
     j["source-port"] = d_.sport;
     j["dest-port"] = d_.dport;
     size_t header_size = 4 * (d_.hl_flags >> 12 & 0xf);

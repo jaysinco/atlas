@@ -29,8 +29,8 @@ MyErrCode Udp::decode(uint8_t const* const start, uint8_t const*& end, Protocol 
 Variant Udp::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
-    j["udp-type"] = TOSTR(succType());
+    j["type"] = FSTR(type());
+    j["udp-type"] = FSTR(succType());
     j["source-port"] = d_.sport;
     j["dest-port"] = d_.dport;
     j["total-size"] = d_.len;

@@ -46,7 +46,7 @@ MyErrCode Ethernet::decode(uint8_t const* const start, uint8_t const*& end, Prot
 Variant Ethernet::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
+    j["type"] = FSTR(type());
     j["ethernet-type"] = FSTR("{}({:#x})", succType(), d_.type);
     j["source-mac"] = d_.smac.toStr();
     j["dest-mac"] = d_.dmac.toStr();

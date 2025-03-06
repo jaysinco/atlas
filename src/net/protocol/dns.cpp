@@ -39,7 +39,7 @@ MyErrCode Dns::encode(std::vector<uint8_t>& bytes) const
         bytes.insert(bytes.end(), pc, pc + sizeof(uint16_t));
     }
     auto encode_res = [&](std::vector<ResDetail> const& rd) {
-        for (const auto& rr: rd) {
+        for (auto const& rr: rd) {
             std::string name = encodeDomain(rr.domain);
             bytes.insert(bytes.end(), name.cbegin(), name.cend());
             uint16_t type = htons(rr.type);
@@ -80,13 +80,13 @@ MyErrCode Dns::decode(uint8_t const* const start, uint8_t const*& end, Protocol 
         for (int i = 0; i < count; ++i) {
             ResDetail rr;
             rr.domain = decodeDomain(start, end, it);
-            rr.type = ntohs(*reinterpret_cast<const uint16_t*>(it));
+            rr.type = ntohs(*reinterpret_cast<uint16_t const*>(it));
             it += sizeof(uint16_t);
-            rr.cls = ntohs(*reinterpret_cast<const uint16_t*>(it));
+            rr.cls = ntohs(*reinterpret_cast<uint16_t const*>(it));
             it += sizeof(uint16_t);
-            rr.ttl = ntohl(*reinterpret_cast<const uint32_t*>(it));
+            rr.ttl = ntohl(*reinterpret_cast<uint32_t const*>(it));
             it += sizeof(uint32_t);
-            rr.dlen = ntohs(*reinterpret_cast<const uint16_t*>(it));
+            rr.dlen = ntohs(*reinterpret_cast<uint16_t const*>(it));
             it += sizeof(uint16_t);
             if (rr.type == 5) {  // CNAME
                 rr.data = decodeDomain(start, end, it);
@@ -106,7 +106,7 @@ MyErrCode Dns::decode(uint8_t const* const start, uint8_t const*& end, Protocol 
 Variant Dns::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
+    j["type"] = FSTR(type());
     j["id"] = d_.id;
     j["dns-type"] = d_.flags & 0x8000 ? "reply" : "query";
     j["opcode"] = (d_.flags >> 11) & 0xf;
@@ -132,7 +132,7 @@ Variant Dns::toVariant() const
     }
     auto jsonify_res = [](std::vector<ResDetail> const& rd) -> Variant {
         Variant::Vec res;
-        for (const auto& rr: rd) {
+        for (auto const& rr: rd) {
             Variant r;
             r["domain"] = rr.domain;
             r["query-type"] = rr.type;
@@ -140,7 +140,7 @@ Variant Dns::toVariant() const
             r["ttl"] = rr.ttl;
             r["data-size"] = rr.dlen;
             if (rr.type == 1) {  // A
-                r["data"] = reinterpret_cast<const Ip4*>(rr.data.data())->toStr();
+                r["data"] = reinterpret_cast<Ip4 const*>(rr.data.data())->toStr();
             } else if (rr.type == 5) {  // CNAME
                 r["data"] = rr.data;
             }

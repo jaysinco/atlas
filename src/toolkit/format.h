@@ -8,7 +8,6 @@
 #define MY_CONCAT_HELPER(a, b) a##b
 #define MY_CONCAT(a, b) MY_CONCAT_HELPER(a, b)
 #define FSTR(...) (toolkit::format(__VA_ARGS__))
-#define TOSTR(v) (FSTR("{}", v))
 #define MY_VA_ARGS(...) , ##__VA_ARGS__
 #define LOG_FSTR(f, ...) \
     (FSTR("[{}:{}] " f, toolkit::filename(__FILE__), __LINE__ MY_VA_ARGS(__VA_ARGS__)))

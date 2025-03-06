@@ -61,9 +61,9 @@ ftxui::Element CaptureView::renderPackets()
         pac_info.push_back(FSTR("{}.{:06d}", pac_time_str, pac_time_us));
         // type
         if (layers.size() >= 2) {
-            pac_info.push_back(TOSTR(layers.at(1)->type()));
+            pac_info.push_back(FSTR(layers.at(1)->type()));
         } else {
-            pac_info.push_back(TOSTR(layers.at(0)->type()));
+            pac_info.push_back(FSTR(layers.at(0)->type()));
         }
         pac_list.push_back(pac_info);
     }

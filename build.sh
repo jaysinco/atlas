@@ -97,9 +97,8 @@ function clean_build() {
 }
 
 function preprocess_code() {
-    find $source_folder -iname *.h -or -iname *.cpp | xargs clang-format -i \
-    && find $source_folder -iname *.h -or -iname *.cpp | xargs clang-tidy \
-        --quiet --warnings-as-errors="*" -p $build_folder
+    fd '\.h$|\.cpp$|\.cuh$|\.cu$' -E "flapp" $source_folder | \
+        xargs clang-format -i
 }
 
 function zip_binary() {

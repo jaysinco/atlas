@@ -43,7 +43,7 @@ MyErrCode Arp::decode(uint8_t const* const start, uint8_t const*& end, Protocol 
 Variant Arp::toVariant() const
 {
     Variant j;
-    j["type"] = TOSTR(type());
+    j["type"] = FSTR(type());
     j["hardware-type"] = d_.hw_type;
     j["protocol-type"] = d_.prot_type;
     j["hardware-addr-len"] = d_.hw_len;

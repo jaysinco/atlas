@@ -65,7 +65,7 @@ Variant const& Packet::toVariant() const
             layers.push_back(p->toVariant());
         }
         j["layers"] = layers;
-        j["time"] = TOSTR(d_.time);
+        j["time"] = FSTR(d_.time);
         const_cast<Packet&>(*this).j_cached_ = std::move(j);
     }
     return *j_cached_;
@@ -162,7 +162,7 @@ MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, u
         case Protocol::kEmpty:
         case Protocol::kUnknown:
         default:
-            DLOG("decode '{}' not implemented", TOSTR(type));
+            DLOG("decode '{}' not implemented", FSTR(type));
             return MyErrCode::kUnimplemented;
     }
     CHECK_ERR_RET(pt->decode(start, end, prev));
