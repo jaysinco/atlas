@@ -26,6 +26,8 @@ toolkit::Variant Adaptor::toVariant() const
     return j;
 }
 
+std::string Adaptor::toStr() const { return toVariant().toJsonStr(); }
+
 Adaptor const& Adaptor::fit(Ip4 const& hint)
 {
     auto it = std::find_if(all().begin(), all().end(), [&](Adaptor const& apt) {

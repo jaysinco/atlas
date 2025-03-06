@@ -16,6 +16,7 @@ public:
     Mac mac;
 
     toolkit::Variant toVariant() const;
+    std::string toStr() const;
 
     static Adaptor const& fit(Ip4 const& hint = Ip4::kZeros);
     static bool isNative(Ip4 const& ip);
@@ -28,4 +29,4 @@ private:
 
 }  // namespace net
 
-DEFINE_FORMATTER(net::Adaptor, item.toVariant().toJsonStr());
+// DEFINE_FORMATTER(net::Adaptor, item.toVariant().toJsonStr());

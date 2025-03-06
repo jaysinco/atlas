@@ -109,6 +109,7 @@ public:
     // export
     nlohmann::json toJson() const;
     std::string toJsonStr(int indent = -1, char indent_char = ' ') const;
+    std::string toStr() const;
 
     // import
     static Variant fromJson(nlohmann::json const& js);
@@ -117,9 +118,6 @@ public:
     // merge & diff
     static void merge(Variant& a, Variant const& b);
     static Variant diff(Variant const& a, Variant const& b);
-
-    // format type
-    static std::string typeToStr(Type type);
 
 private:
     static void mergeVec(Vec& a, Vec const& b);
@@ -132,9 +130,9 @@ private:
     std::any val_;
 };
 
+std::string toString(Variant::Type type);
+
 bool operator==(Variant const& a, Variant const& b);
 bool operator!=(Variant const& a, Variant const& b);
 
 }  // namespace toolkit
-
-DEFINE_FORMATTER(toolkit::Variant::Type, toolkit::Variant::typeToStr(item));

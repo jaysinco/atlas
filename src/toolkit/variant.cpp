@@ -248,6 +248,8 @@ std::string Variant::toJsonStr(int indent, char indent_char) const
     return toJson().dump(indent, indent_char);
 }
 
+std::string Variant::toStr() const { return toJsonStr(); }
+
 nlohmann::json Variant::toJson() const
 {
     switch (type_) {
@@ -503,24 +505,24 @@ Variant Variant::diffMap(Map const& a, Map const& b)
     return c;
 }
 
-std::string Variant::typeToStr(Type type)
+std::string toString(Variant::Type type)
 {
     switch (type) {
-        case kVoid:
+        case Variant::kVoid:
             return "void";
-        case kBool:
+        case Variant::kBool:
             return "bool";
-        case kInt:
+        case Variant::kInt:
             return "int";
-        case kUint:
+        case Variant::kUint:
             return "uint";
-        case kDouble:
+        case Variant::kDouble:
             return "double";
-        case kStr:
+        case Variant::kStr:
             return "str";
-        case kVec:
+        case Variant::kVec:
             return "vec";
-        case kMap:
+        case Variant::kMap:
             return "map";
         default:
             return "invalid";

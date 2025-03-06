@@ -14,7 +14,7 @@ CaptureView::CaptureView(int line_per_page): line_per_page_(line_per_page)
     cap_btn_opt.transform = [&](ftxui::EntryState const& s) {
         std::string sep_l = s.focused ? "[" : " ";
         std::string sep_r = s.focused ? "]" : " ";
-        std::string text = fmt::format("{}{}{}", sep_l, is_capturing_ ? "stop" : "start", sep_r);
+        std::string text = FSTR("{}{}{}", sep_l, is_capturing_ ? "stop" : "start", sep_r);
         auto element = ftxui::text(text);
         return element;
     };

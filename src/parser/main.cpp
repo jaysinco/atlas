@@ -6,8 +6,6 @@
 #include <boost/spirit/include/qi.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/spirit/include/support_line_pos_iterator.hpp>
-#include <fmt/ranges.h>
-#include <fmt/ostream.h>
 
 namespace qi = boost::spirit::qi;
 namespace enc = boost::spirit::standard_wide;

@@ -123,6 +123,8 @@ void Packet::setTime(Time const& tm) { d_.time = tm; }
 
 Packet::Detail const& Packet::getDetail() const { return d_; }
 
+std::string Packet::toStr() const { return toVariant().toJsonStr(); }
+
 MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, uint8_t const*& end,
                               Protocol const* prev, Protocol::Ptr& pt)
 {

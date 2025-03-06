@@ -22,40 +22,42 @@ std::map<Protocol::Type, std::map<uint16_t, Protocol::Type>> Protocol::protocol_
          {3389, Protocol::kRDP},
      }}};
 
-std::string Protocol::typeToStr(Type type)
+std::string Protocol::toStr() const { return toVariant().toJsonStr(); }
+
+std::string toString(Protocol::Type type)
 {
     switch (type) {
-        case kEmpty:
+        case Protocol::kEmpty:
             return "empty";
-        case kUnknown:
+        case Protocol::kUnknown:
             return "unknown";
-        case kEthernet:
+        case Protocol::kEthernet:
             return "ethernet";
-        case kIPv4:
+        case Protocol::kIPv4:
             return "ipv4";
-        case kIPv6:
+        case Protocol::kIPv6:
             return "ipv6";
-        case kARP:
+        case Protocol::kARP:
             return "arp";
-        case kRARP:
+        case Protocol::kRARP:
             return "rarp";
-        case kICMP:
+        case Protocol::kICMP:
             return "icmp";
-        case kTCP:
+        case Protocol::kTCP:
             return "tcp";
-        case kUDP:
+        case Protocol::kUDP:
             return "udp";
-        case kDNS:
+        case Protocol::kDNS:
             return "dns";
-        case kHTTP:
+        case Protocol::kHTTP:
             return "http";
-        case kHTTPS:
+        case Protocol::kHTTPS:
             return "https";
-        case kSSH:
+        case Protocol::kSSH:
             return "ssh";
-        case kTELNET:
+        case Protocol::kTELNET:
             return "telnet";
-        case kRDP:
+        case Protocol::kRDP:
             return "rdp";
         default:
             return "invalid";

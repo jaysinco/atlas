@@ -31,6 +31,7 @@ public:
     void setLayers(Protocol::Stack&& st);
     void setTime(Time const& tm);
     Detail const& getDetail() const;
+    std::string toStr() const;
 
 public:
     static Packet arp(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip,
@@ -47,5 +48,3 @@ private:
 };
 
 }  // namespace net
-
-DEFINE_FORMATTER(net::Packet, item.toVariant().toJsonStr());

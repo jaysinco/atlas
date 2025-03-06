@@ -58,8 +58,8 @@ public:
     // whether this is request, and rhs is the response
     virtual bool linkTo(Protocol const& rhs) const = 0;
 
-public:
-    static std::string typeToStr(Type type);
+    // format to str
+    std::string toStr() const;
 
 protected:
     static uint16_t randUint16();
@@ -70,7 +70,6 @@ private:
     static std::map<Type, std::map<uint16_t, Type>> protocol_ports;
 };
 
-}  // namespace net
+std::string toString(Protocol::Type type);
 
-DEFINE_FORMATTER(net::Protocol, item.toVariant().toJsonStr());
-DEFINE_FORMATTER(net::Protocol::Type, net::Protocol::typeToStr(item));
+}  // namespace net

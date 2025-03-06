@@ -56,6 +56,3 @@ struct Ip4
 };
 
 }  // namespace net
-
-DEFINE_FORMATTER(net::Mac, item.toStr());
-DEFINE_FORMATTER(net::Ip4, item.toStr());

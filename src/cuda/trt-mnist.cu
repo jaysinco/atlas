@@ -1,6 +1,5 @@
 #include "./common.cuh"
 #include "toolkit/toolkit.h"
-#include <fmt/ostream.h>
 #include <cuda_runtime.h>
 #include "NvInfer.h"
 #include "NvOnnxParser.h"
@@ -17,11 +16,6 @@ std::ostream& operator<<(std::ostream& out, nvinfer1::Dims const& shape)
     return out;
 }
 
-template <>
-struct fmt::formatter<nvinfer1::Dims>: ostream_formatter
-{
-};
-
 std::ostream& operator<<(std::ostream& out, nvinfer1::TensorIOMode mode)
 {
     switch (mode) {
@@ -37,11 +31,6 @@ std::ostream& operator<<(std::ostream& out, nvinfer1::TensorIOMode mode)
     }
     return out;
 }
-
-template <>
-struct fmt::formatter<nvinfer1::TensorIOMode>: ostream_formatter
-{
-};
 
 std::ostream& operator<<(std::ostream& out, nvinfer1::DataType type)
 {
@@ -83,11 +72,6 @@ void printPGMData(uint8_t* buffer, int32_t inH, int32_t inW)
         std::cout << (" .:-=+*#%@"[buffer[i] / 26]) << (((i + 1) % inW) ? "" : "\n");
     }
 }
-
-template <>
-struct fmt::formatter<nvinfer1::DataType>: ostream_formatter
-{
-};
 
 class MyLogger: public nvinfer1::ILogger
 {
