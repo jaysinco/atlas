@@ -26,7 +26,7 @@ void Context::startCapture()
         void* handle;
         CHECK_ERR_RET(net::Transport::open(apt, handle));
         auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
-        ILOG(apt.toVariant().toJsonStr(3));
+        ILOG("adaptor: {}", apt);
 
         if (!cap_filter_.empty()) {
             ILOG("set filter \"{}\", mask={}", cap_filter_, apt.mask);

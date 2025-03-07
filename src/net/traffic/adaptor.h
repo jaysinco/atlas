@@ -28,5 +28,3 @@ private:
 };
 
 }  // namespace net
-
-// DEFINE_FORMATTER(net::Adaptor, item.toVariant().toJsonStr());
