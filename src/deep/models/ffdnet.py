@@ -1,5 +1,6 @@
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 import basicblock as B
 import torch
 import os
@@ -26,7 +27,7 @@ class FFDNet(nn.Module):
         bias = True
         sf = 2
 
-        self.m_down = B.PixelUnShuffle(upscale_factor=sf)
+        # self.m_down = B.PixelUnShuffle(upscale_factor=sf)
 
         m_head = B.conv(in_nc*sf*sf+1, nc, mode='C'+act_mode[-1], bias=bias)
         m_body = [B.conv(nc, nc, mode='C'+act_mode, bias=bias) for _ in range(nb-2)]
@@ -36,20 +37,20 @@ class FFDNet(nn.Module):
 
         self.m_up = nn.PixelShuffle(upscale_factor=sf)
 
-    def forward(self, x, sigma: torch.Tensor):
-        h, w = x.size()[-2:]
+    def forward(self, x):
+        # h, w = x.size()[-2:]
         # paddingBottom = int(np.ceil(h/2)*2-h)
         # paddingRight = int(np.ceil(w/2)*2-w)
         # x = torch.nn.ReplicationPad2d((0, paddingRight, 0, paddingBottom))(x)
 
-        x = self.m_down(x)
+        # x = self.m_down(x)
         # m = torch.ones(sigma.size()[0], sigma.size()[1], x.size()[-2], x.size()[-1]).type_as(x).mul(sigma)
-        m = sigma.repeat(1, 1, x.size()[-2], x.size()[-1])
-        x = torch.cat((x, m), 1)
+        # m = sigma.repeat(1, 1, x.size()[-2], x.size()[-1])
+        # x = torch.cat((x, m), 1)
         x = self.model(x)
-        x = self.m_up(x)
+        # x = self.m_up(x)
 
-        x = x[..., :h, :w]
+        # x = x[..., :h, :w]
         return x
 
 
@@ -111,15 +112,24 @@ if __name__ == '__main__':
 
     img_path = os.path.join(data_dir, "noisy.jpg")
     img_bef = imread_uint(img_path, n_channels=3)
-    # img_bef = img_bef[0:int(1056/3), 0:1200]
+    img_bef = img_bef[0:int(1056/3), 0:1200]
+    img_width = img_bef.shape[1]
+    img_height = img_bef.shape[0]
+    print(f"w={img_width}, h={img_height}")
+
     img_L = np.float32(img_bef/255.)
     img_L = torch.from_numpy(np.ascontiguousarray(img_L)).permute(2, 0, 1).float().unsqueeze(0)
-    sigma = torch.full((1,1,1,1), noise_level/255.).type_as(img_L)
-    img_E = model(img_L, sigma)
+    img_L = B.pixel_unshuffle(img_L, 2)
+    sigma = torch.full((1,1,int(img_height/2),int(img_width/2)), noise_level/255.).type_as(img_L)
+    img_I = torch.cat((img_L, sigma), 1)
+    print(f"input={img_I.shape}")
+    img_E: torch.Tensor = model(img_I)
+    print(f"output={img_E.shape}")
+    img_E = F.pixel_shuffle(img_E, 2)
     img_aft = tensor2uint(img_E)
 
     # imshow(img_bef, img_aft)
     cv2.imwrite(os.path.join(temp_dir, "denoised.jpg"), img_aft[:, :, [2, 1, 0]])
 
     onnx_path = os.path.join(temp_dir, "ffdnet_color_clip.onnx")
-    torch.onnx.export(model, (img_L, sigma), onnx_path, verbose=False)
+    torch.onnx.export(model, (img_I), onnx_path, verbose=False)
