@@ -212,8 +212,6 @@ MyErrCode fashionMnist(int argc, char** argv)
     toolkit::Args args(argc, argv);
     args.parse();
 
-    torch::manual_seed(1);
-
     auto data_root = CURR_FILE_DIR() / ".temp" / "FashionMNIST" / "raw";
     FashionMnistDataset train_raw_dataset(data_root, true);
     FashionMnistDataset test_raw_dataset(data_root, false);
