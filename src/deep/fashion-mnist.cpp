@@ -89,51 +89,41 @@ private:
 
 struct FashionMnistNetImpl: torch::nn::Module
 {
-    ADD_NN_MOD(conv1_1, Conv2d, Conv2dOptions(1, 32, 3).padding(1));
-    ADD_NN_MOD(batch_norm1_1, BatchNorm2d, BatchNorm2dOptions(32));
-    ADD_NN_MOD(conv1_2, Conv2d, Conv2dOptions(32, 32, 3).padding(1));
-    ADD_NN_MOD(batch_norm1_2, BatchNorm2d, BatchNorm2dOptions(32));
-    ADD_NN_MOD(max_pool1, MaxPool2d, MaxPool2dOptions({2, 2}));
-    ADD_NN_MOD(dropout1, Dropout, DropoutOptions(0.25));
-
-    ADD_NN_MOD(conv2_1, Conv2d, Conv2dOptions(32, 64, 3).padding(1));
-    ADD_NN_MOD(batch_norm2_1, BatchNorm2d, BatchNorm2dOptions(64));
-    ADD_NN_MOD(conv2_2, Conv2d, Conv2dOptions(64, 64, 3).padding(1));
-    ADD_NN_MOD(batch_norm2_2, BatchNorm2d, BatchNorm2dOptions(64));
-    ADD_NN_MOD(max_pool2, MaxPool2d, MaxPool2dOptions({2, 2}));
-    ADD_NN_MOD(dropout2, Dropout, DropoutOptions(0.25));
-
-    ADD_NN_MOD(fc1, Linear, LinearOptions(64 * (28 / 4) * (28 / 4), 512));
-    ADD_NN_MOD(batch_norm3, BatchNorm1d, BatchNorm1dOptions(512));
-    ADD_NN_MOD(dropout3, Dropout, DropoutOptions(0.5));
-    ADD_NN_MOD(fc2, Linear, LinearOptions(512, 10));
-
-    torch::Tensor forward(torch::Tensor x)
+    FashionMnistNetImpl()
     {
-        x = torch::relu(conv1_1(x));
-        x = batch_norm1_1(x);
-        x = torch::relu(conv1_2(x));
-        x = batch_norm1_2(x);
-        x = max_pool1(x);
-        x = dropout1(x);
-
-        x = torch::relu(conv2_1(x));
-        x = batch_norm2_1(x);
-        x = torch::relu(conv2_2(x));
-        x = batch_norm2_2(x);
-        x = max_pool2(x);
-        x = dropout2(x);
-
-        x = x.view({x.size(0), -1});
-        x = torch::relu(fc1(x));
-        x = batch_norm3(x);
-        x = dropout3(x);
-
-        x = fc2(x);
-        x = torch::log_softmax(x, 1);
-
-        return x;
+        using namespace torch::nn;
+        net_ = Sequential({
+            {"9b645b6d", Conv2d(Conv2dOptions(1, 32, 3).padding(1))},
+            {"ace20aff", ReLU()},
+            {"eca26f36", BatchNorm2d(BatchNorm2dOptions(32))},
+            {"ccaa4b6b", Conv2d(Conv2dOptions(32, 32, 3).padding(1))},
+            {"12366812", ReLU()},
+            {"e409fcfc", BatchNorm2d(BatchNorm2dOptions(32))},
+            {"ba196546", MaxPool2d(MaxPool2dOptions({2, 2}))},
+            {"35d3dff9", Dropout(DropoutOptions(0.25))},
+            {"867fb601", Conv2d(Conv2dOptions(32, 64, 3).padding(1))},
+            {"6db104af", ReLU()},
+            {"0638916e", BatchNorm2d(BatchNorm2dOptions(64))},
+            {"04d1b721", Conv2d(Conv2dOptions(64, 64, 3).padding(1))},
+            {"c1871057", ReLU()},
+            {"d774e4b8", BatchNorm2d(BatchNorm2dOptions(64))},
+            {"66fec474", MaxPool2d(MaxPool2dOptions({2, 2}))},
+            {"30b7caf7", Dropout(DropoutOptions(0.25))},
+            {"430bcfba", Flatten()},
+            {"9ea993be", Linear(LinearOptions(64 * (28 / 4) * (28 / 4), 512))},
+            {"c1e8ca8f", ReLU()},
+            {"4f0d34d4", BatchNorm1d(BatchNorm1dOptions(512))},
+            {"9ef1ce6d", Dropout(DropoutOptions(0.5))},
+            {"e167c0ad", Linear(LinearOptions(512, 10))},
+            {"50a37880", LogSoftmax(LogSoftmaxOptions(1))},
+        });
+        register_module("074a5943", net_);
     }
+
+    torch::Tensor forward(torch::Tensor x) { return net_->forward(x); }
+
+private:
+    torch::nn::Sequential net_;
 };
 
 TORCH_MODULE(FashionMnistNet);
