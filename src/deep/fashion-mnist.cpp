@@ -220,7 +220,7 @@ MyErrCode fashionMnist(int argc, char** argv)
 
     torch::DeviceType device_type;
     if (torch::cuda::is_available()) {
-        ILOG("cuda available, training on gpu");
+        ILOG("cuda available, training on {} gpu", torch::cuda::device_count());
         device_type = torch::kCUDA;
     } else {
         ILOG("training on cpu");
