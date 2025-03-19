@@ -8,6 +8,8 @@
 template <size_t D>
 using IntArray = std::array<int64_t, D>;
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Inception Block ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 struct InceptionOptions
 {
     InceptionOptions(int64_t c0, int64_t c1, IntArray<2> c2, IntArray<2> c3, int64_t c4)
@@ -41,3 +43,29 @@ private:
 };
 
 TORCH_MODULE(Inception);
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Residual Block ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+struct ResidualOptions
+{
+    ResidualOptions(int64_t in_c, int64_t out_c): in_c_(in_c), out_c_(out_c) {}
+
+    TORCH_ARG(int64_t, in_c);
+    TORCH_ARG(int64_t, out_c);
+    TORCH_ARG(int64_t, stride) = 1;
+};
+
+struct ResidualImpl: torch::nn::Module
+{
+    explicit ResidualImpl(ResidualOptions const& o);
+    torch::Tensor forward(torch::Tensor x);
+
+private:
+    torch::nn::Conv2d conv1_ = nullptr;
+    torch::nn::Conv2d conv2_ = nullptr;
+    torch::nn::Conv2d conv3_ = nullptr;
+    torch::nn::BatchNorm2d bn1_ = nullptr;
+    torch::nn::BatchNorm2d bn2_ = nullptr;
+};
+
+TORCH_MODULE(Residual);

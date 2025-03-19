@@ -20,3 +20,31 @@ torch::Tensor InceptionImpl::forward(torch::Tensor x)
     auto b4 = torch::relu(b4_2_(b4_1_(x)));
     return torch::cat({b1, b2, b3, b4}, 1);
 }
+
+ResidualImpl::ResidualImpl(ResidualOptions const& o)
+{
+    using namespace torch::nn;
+    conv1_ = register_module(
+        "conv1", Conv2d(Conv2dOptions(o.in_c(), o.out_c(), 3).padding(1).stride(o.stride())));
+
+    conv2_ = register_module(
+        "conv2", Conv2d(Conv2dOptions(o.out_c(), o.out_c(), 3).padding(1).stride(o.stride())));
+
+    if (o.in_c() != o.out_c()) {
+        conv3_ = register_module("conv3",
+                                 Conv2d(Conv2dOptions(o.in_c(), o.out_c(), 1).stride(o.stride())));
+    }
+
+    bn1_ = register_module("bn1", BatchNorm2d(BatchNorm2dOptions(o.out_c())));
+    bn2_ = register_module("bn2", BatchNorm2d(BatchNorm2dOptions(o.out_c())));
+}
+
+torch::Tensor ResidualImpl::forward(torch::Tensor x)
+{
+    auto y = torch::relu(bn1_(conv1_(x)));
+    y = bn2_(conv2_(y));
+    if (conv3_) {
+        x = conv3_(x);
+    }
+    return torch::relu(y + x);
+}

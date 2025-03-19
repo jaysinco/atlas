@@ -239,7 +239,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     auto train_dataset = train_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                              .map(torch::data::transforms::Stack<>());
     auto train_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
-        std::move(train_dataset), 250);
+        std::move(train_dataset), 128);
 
     auto test_dataset = test_raw_dataset.map(torch::data::transforms::Normalize<>(0, 255))
                             .map(torch::data::transforms::Stack<>());
@@ -257,6 +257,7 @@ MyErrCode fashionMnist(int argc, char** argv)
     for (size_t epoch = 1; epoch <= 10; ++epoch) {
         train(epoch, model, device, *train_loader, optimizer, train_dataset_size);
         test(epoch, model, device, *test_loader, test_dataset_size);
+        test(epoch, model, device, *train_loader, train_dataset_size);
     }
     MY_TIMER_END()
 
