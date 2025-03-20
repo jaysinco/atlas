@@ -16,7 +16,7 @@ class PoemSentenceIterator: public sentencepiece::SentenceIterator
 public:
     PoemSentenceIterator(std::vector<std::string> const& data): data_(data), total_(data.size()) {}
 
-    virtual ~PoemSentenceIterator() {}
+    ~PoemSentenceIterator() override = default;
 
     bool done() const override { return idx_ >= total_; }
 

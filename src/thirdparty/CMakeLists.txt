@@ -51,6 +51,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libftxui-component.so
         ${TC_INSTALL_DIR}/lib/libsentencepiece.so
         ${TC_INSTALL_DIR}/lib/libsentencepiece_train.so
+        ${TC_INSTALL_DIR}/lib/libtcmalloc_minimal.so.4
     )
 
     if(TC_CROSS_COMPILE)
