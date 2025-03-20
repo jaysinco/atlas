@@ -1,5 +1,8 @@
 #include "common.h"
 
+namespace
+{
+
 struct TensorDataset: public torch::data::Dataset<TensorDataset>
 {
     TensorDataset(torch::Tensor data, torch::Tensor target): data(data), target(target) {}
@@ -11,6 +14,8 @@ struct TensorDataset: public torch::data::Dataset<TensorDataset>
     torch::Tensor data;
     torch::Tensor target;
 };
+
+}  // namespace
 
 MyErrCode linearRegression(int argc, char** argv)
 {

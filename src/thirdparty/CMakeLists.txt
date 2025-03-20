@@ -10,6 +10,7 @@ add_subdirectory(${TC_THIRDPARTY}/sqlite3 sqlite3)
 add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
+add_subdirectory(${TC_THIRDPARTY}/sentencepiece sentencepiece)
 
 if(UNIX)
     add_subdirectory(imgui)
@@ -48,6 +49,8 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libftxui-screen.so
         ${TC_INSTALL_DIR}/lib/libftxui-dom.so
         ${TC_INSTALL_DIR}/lib/libftxui-component.so
+        ${TC_INSTALL_DIR}/lib/libsentencepiece.so
+        ${TC_INSTALL_DIR}/lib/libsentencepiece_train.so
     )
 
     if(TC_CROSS_COMPILE)

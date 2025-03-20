@@ -12,12 +12,14 @@ add_executable(${TARGET_NAME}-samples
     main.cpp
     linear-regression.cpp
     fashion-mnist.cpp
+    poem-generator.cpp
 )
 
 target_link_libraries(${TARGET_NAME}-samples
     ${TORCH_LIBRARIES}
     toolkit
     boost
+    sentencepiece
 )
 
 if(UNIX)
@@ -25,3 +27,8 @@ if(UNIX)
         INSTALL_RPATH "${CMAKE_INSTALL_RPATH}:$ENV{LIBTORCH_HOME}/lib"
     )
 endif()
+
+file(COPY
+    .temp/ci.db
+    DESTINATION ${MY_RUNTIME_DIR}/data
+)

@@ -106,7 +106,7 @@ if __name__ == '__main__':
     model = FFDNet(in_nc=3, out_nc=3, nc=96, nb=12, act_mode='R')
     print(describe_model(model))
 
-    model_path = os.path.join(data_dir, "ffdnet_color_clip.pth")
+    model_path = os.path.join(temp_dir, "ffdnet-color-clip.pth")
     model.load_state_dict(torch.load(model_path), strict=True)
     model.eval()
 
@@ -131,5 +131,5 @@ if __name__ == '__main__':
     # imshow(img_bef, img_aft)
     cv2.imwrite(os.path.join(temp_dir, "denoised.jpg"), img_aft[:, :, [2, 1, 0]])
 
-    onnx_path = os.path.join(temp_dir, "ffdnet_color_clip.onnx")
+    onnx_path = os.path.join(temp_dir, "ffdnet-color-clip.onnx")
     torch.onnx.export(model, (img_I), onnx_path, verbose=False)
