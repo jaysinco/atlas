@@ -2,6 +2,12 @@
 #include <sentencepiece_trainer.h>
 #include "toolkit/sqlite-helper.h"
 
+namespace sentencepiece::util
+{
+std::string toString(sentencepiece::util::Status const& s) { return s.ToString(); }
+
+}  // namespace sentencepiece::util
+
 namespace
 {
 
@@ -35,7 +41,7 @@ MyErrCode getPoemData(std::vector<std::string>& poem_data)
     for (auto& row: rows) {
         poem_data.push_back(row.at(0).asStr());
     }
-    ILOG("load {} poems", poem_data.size());
+    ILOG("{} poems loaded", poem_data.size());
     return MyErrCode::kOk;
 }
 
@@ -45,6 +51,7 @@ MyErrCode prepareTokenizer(std::string const& model_fp, std::vector<std::string>
     if (std::filesystem::exists(model_fp) && !force) {
         return MyErrCode::kOk;
     }
+    ILOG("training tokenizer model...");
     PoemSentenceIterator iter(poem_data);
     auto err = sentencepiece::SentencePieceTrainer::Train(
         {
@@ -52,11 +59,14 @@ MyErrCode prepareTokenizer(std::string const& model_fp, std::vector<std::string>
             {"vocab_size", "6500"},
             {"character_coverage", "0.9995"},
             {"model_type", "unigram"},
+            {"minloglevel", "1"},
         },
         &iter);
     if (!err.ok()) {
-        ELOG("failed to train tokenizer: {}", err.ToString());
+        ELOG("failed to train tokenizer: {}", err);
+        return MyErrCode::kFailed;
     }
+    ILOG("tokenizer model is written to {}", model_fp);
     return MyErrCode::kOk;
 }
 
@@ -75,13 +85,13 @@ MyErrCode poemGenerator(int argc, char** argv)
 
     sentencepiece::SentencePieceProcessor processor;
     if (auto err = processor.Load(tokenizer_model.string()); !err.ok()) {
-        ELOG("failed to load tokenizer: {}", err.ToString());
+        ELOG("failed to load tokenizer: {}", err);
         return MyErrCode::kFailed;
     }
 
     std::vector<std::string> pieces;
     if (auto err = processor.Encode("天涯共此时", &pieces); !err.ok()) {
-        ELOG("failed to encode: {}", err.ToString());
+        ELOG("failed to encode: {}", err);
         return MyErrCode::kFailed;
     }
     for (auto& token: pieces) {
