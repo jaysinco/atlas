@@ -60,6 +60,11 @@ MyErrCode prepareTokenizer(std::string const& model_fp, std::vector<std::string>
             {"character_coverage", "0.9995"},
             {"model_type", "unigram"},
             {"minloglevel", "1"},
+            {"add_dummy_prefix", "false"},
+            {"unk_id", "0"},
+            {"bos_id", "1"},
+            {"eos_id", "2"},
+            {"pad_id", "3"},
         },
         &iter);
     if (!err.ok()) {
@@ -90,7 +95,7 @@ MyErrCode poemGenerator(int argc, char** argv)
     }
 
     std::vector<std::string> pieces;
-    if (auto err = processor.Encode("天涯共此时", &pieces); !err.ok()) {
+    if (auto err = processor.Encode("天涯共此时 何处不相逢", &pieces); !err.ok()) {
         ELOG("failed to encode: {}", err);
         return MyErrCode::kFailed;
     }
