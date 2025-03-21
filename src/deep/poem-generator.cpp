@@ -86,7 +86,7 @@ MyErrCode poemGenerator(int argc, char** argv)
     CHECK_ERR_RET(getPoemData(poem_data));
 
     auto tokenizer_model = toolkit::getDataDir() / "poem.model";
-    CHECK_ERR_RET(prepareTokenizer(tokenizer_model, poem_data));
+    CHECK_ERR_RET(prepareTokenizer(tokenizer_model.string(), poem_data));
 
     sentencepiece::SentencePieceProcessor processor;
     if (auto err = processor.Load(tokenizer_model.string()); !err.ok()) {

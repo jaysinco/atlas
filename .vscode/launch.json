@@ -2,7 +2,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C++: Launch",
+            "name": "Windows C++: Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/x86_64-debug/deep-samples",
+            "args": [],
+            "environment": [],
+            "cwd": "${workspaceFolder}/bin/x86_64-debug",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Linux C++: Launch",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/x86_64-debug/deep-samples",
@@ -10,24 +20,22 @@
             "environment": [],
             "cwd": "${workspaceFolder}/bin/x86_64-debug",
             "stopAtEntry": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
             "logging": {
                 "moduleLoad": true,
                 "trace": false
-            },
-            "linux": {
-                "MIMode": "gdb",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ],
-                "miDebuggerPath": "/usr/bin/gdb"
-            },
+            }
         },
         {
-            "name": "CUDA C++: Launch",
+            "name": "Linux CUDA: Launch",
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/bin/aarch64-debug/cuda-samples"
@@ -38,13 +46,13 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/src/deep",
+            "cwd": "${workspaceFolder}/src/deep"
         },
         {
             "name": "Flutter: Launch",
             "type": "dart",
             "request": "launch",
             "program": "${workspaceFolder}/src/flapp/lib/main.dart"
-        },
+        }
     ]
 }
