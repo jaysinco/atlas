@@ -4,7 +4,7 @@ import os
 # data I/O
 curr_file_dir = os.path.dirname(os.path.realpath(__file__))
 temp_dir = os.path.join(curr_file_dir, "../.temp")
-data = open(os.path.join(temp_dir, 'The Time Machine.txt'), 'r').read() # should be simple plain text file
+data = open(os.path.join(temp_dir, 'game-of-thrones.txt'), 'r').read() # should be simple plain text file
 chars = list(set(data))
 data_size, vocab_size = len(data), len(chars)
 print(f'data has {data_size} characters, {vocab_size} unique.')
