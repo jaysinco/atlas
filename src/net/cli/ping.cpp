@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
     args.optional("count,c", po::value<int>()->default_value(5), "send count");
-    CHECK_ERR_RET_INT(args.parse());
+    CHECK_ERR_RTI(args.parse());
 
     auto opt_target = args.get<std::string>("target");
     auto opt_count = args.get<int>("count");
@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
 
     auto& apt = net::Adaptor::fit(net::Ip4::kZeros);
     void* handle;
-    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    CHECK_ERR_RTI(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     int recv_cnt = 0;
@@ -72,5 +72,5 @@ int main(int argc, char* argv[])
         std::cout << "    min=" << min_cost << "ms, max=" << max_cost
                   << "ms, avg=" << (sum_cost) / opt_count << "ms\n";
     }
-    MY_CATCH_RET_INT
+    MY_CATCH_RTI
 }

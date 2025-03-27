@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
     args.optional("attack,a", po::value<std::string>()->default_value(""), "arp attack mac");
     args.optional("per,p", po::value<int>()->default_value(500), "send period (ms)");
     args.optional("ratio,r", po::value<float>()->default_value(100), "attack ratio (%)");
-    CHECK_ERR_RET_INT(args.parse());
+    CHECK_ERR_RTI(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
     auto opt_attack_mac = args.get<std::string>("attack");
@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
     net::Ip4 ip = !opt_ip.empty() ? net::Ip4(opt_ip) : net::Ip4::kZeros;
     auto& apt = net::Adaptor::fit(ip);
     void* handle;
-    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    CHECK_ERR_RTI(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     if (opt_attack_mac.empty()) {
@@ -92,11 +92,11 @@ int main(int argc, char* argv[])
             // TLOG("forge victim {} at {}", victim_forged_mac, victim_ip);
             rarp_cnt = (rarp_cnt + 1) % rarp_cycle;
             if (lie_per > 0) {
-                CHECK_ERR_RET_INT(net::Transport::send(handle, lie));
+                CHECK_ERR_RTI(net::Transport::send(handle, lie));
                 std::this_thread::sleep_for(std::chrono::milliseconds(lie_per));
             }
             if (true_per > 0) {
-                CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
+                CHECK_ERR_RTI(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(true_per));
             }
         }
@@ -105,11 +105,11 @@ int main(int argc, char* argv[])
             truth =
                 net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip, true);
             for (int i = 0; i < 5; ++i) {
-                CHECK_ERR_RET_INT(net::Transport::send(handle, truth));
+                CHECK_ERR_RTI(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             ILOG("victim {} restored at {}", victim_actual_mac, victim_ip);
         }
     }
-    MY_CATCH_RET_INT
+    MY_CATCH_RTI
 }

@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
     args.optional("max", po::value<int>()->default_value(1500), "high bound for mtu");
-    CHECK_ERR_RET_INT(args.parse());
+    CHECK_ERR_RTI(args.parse());
 
     auto opt_target = args.get<std::string>("target");
     auto opt_max = args.get<int>("max");
@@ -30,12 +30,12 @@ int main(int argc, char* argv[])
 
     auto& apt = net::Adaptor::fit(net::Ip4::kZeros);
     void* handle;
-    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    CHECK_ERR_RTI(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     int nbytes;
-    CHECK_ERR_RET_INT(net::Transport::calcMtu(handle, apt, target_ip, nbytes, opt_max));
+    CHECK_ERR_RTI(net::Transport::calcMtu(handle, apt, target_ip, nbytes, opt_max));
     ILOG("MTU={}", nbytes);
 
-    MY_CATCH_RET_INT
+    MY_CATCH_RTI
 }

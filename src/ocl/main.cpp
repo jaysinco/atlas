@@ -12,8 +12,7 @@ int main(int argc, char** argv)
     args.parse();
 
     MY_TRY
-    CHECK_ERR_RET_INT(txiGuided(argc, argv));
-    // CHECK_ERR_RET_INT(spatialDenoise(argc, argv));
-    MY_CATCH_RET_INT
-    return 0;
+    CHECK_ERR_RTI(txiGuided(argc, argv));
+    // CHECK_ERR_RTI(spatialDenoise(argc, argv));
+    MY_CATCH_RTI return 0;
 }

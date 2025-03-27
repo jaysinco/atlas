@@ -10,20 +10,19 @@ int main(int argc, char** argv)
     args.parse();
 
     MY_TRY
-    // CHECK_ERR_RET_INT(helloWorld(argc, argv));
-    // CHECK_ERR_RET_INT(checkDevice(argc, argv));
-    // CHECK_ERR_RET_INT(sumMatrix(argc, argv));
-    // CHECK_ERR_RET_INT(reduceInteger(argc, argv));
-    // CHECK_ERR_RET_INT(nestedHelloWorld(argc, argv));
-    // CHECK_ERR_RET_INT(globalVariable(argc, argv));
-    // CHECK_ERR_RET_INT(cufftTest(argc, argv));
-    // CHECK_ERR_RET_INT(juliaSet(argc, argv));
-    // CHECK_ERR_RET_INT(dotProduct(argc, argv));
-    // CHECK_ERR_RET_INT(rayTracing(argc, argv));
-    // CHECK_ERR_RET_INT(txiGaussian(argc, argv));
-    // CHECK_ERR_RET_INT(txiGuided(argc, argv));
-    // CHECK_ERR_RET_INT(trtMnist(argc, argv));
-    CHECK_ERR_RET_INT(contrastLG(argc, argv));
-    MY_CATCH_RET_INT
-    return 0;
+    // CHECK_ERR_RTI(helloWorld(argc, argv));
+    // CHECK_ERR_RTI(checkDevice(argc, argv));
+    // CHECK_ERR_RTI(sumMatrix(argc, argv));
+    // CHECK_ERR_RTI(reduceInteger(argc, argv));
+    // CHECK_ERR_RTI(nestedHelloWorld(argc, argv));
+    // CHECK_ERR_RTI(globalVariable(argc, argv));
+    // CHECK_ERR_RTI(cufftTest(argc, argv));
+    // CHECK_ERR_RTI(juliaSet(argc, argv));
+    // CHECK_ERR_RTI(dotProduct(argc, argv));
+    // CHECK_ERR_RTI(rayTracing(argc, argv));
+    // CHECK_ERR_RTI(txiGaussian(argc, argv));
+    // CHECK_ERR_RTI(txiGuided(argc, argv));
+    // CHECK_ERR_RTI(trtMnist(argc, argv));
+    CHECK_ERR_RTI(contrastLG(argc, argv));
+    MY_CATCH_RTI return 0;
 }

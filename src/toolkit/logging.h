@@ -12,7 +12,7 @@
         x;                                  \
     }
 #define MY_CATCH_RET MY_CATCH_FUNC(return MyErrCode::kException)
-#define MY_CATCH_RET_INT MY_CATCH_FUNC(return static_cast<int>(MyErrCode::kException))
+#define MY_CATCH_RTI MY_CATCH_FUNC(return static_cast<int>(MyErrCode::kException))
 
 #define LOG_FUNC(level, ...) toolkit::logPrint(level, FSTR(__VA_ARGS__))
 #define LOG_FUNC_DETAILED(level, ...) \

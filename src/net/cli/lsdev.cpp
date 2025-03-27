@@ -13,5 +13,5 @@ int main(int argc, char** argv)
         j.push_back(apt.toVariant());
     }
     ILOG(toolkit::Variant(j).toJsonStr(3));
-    MY_CATCH_RET_INT
+    MY_CATCH_RTI
 }

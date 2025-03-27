@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     toolkit::runAsRoot(argc, argv);
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
-    CHECK_ERR_RET_INT(args.parse());
+    CHECK_ERR_RTI(args.parse());
 
     auto opt_target = args.get<std::string>("target");
 
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 
     auto& apt = net::Adaptor::fit(net::Ip4::kZeros);
     void* handle;
-    CHECK_ERR_RET_INT(net::Transport::open(apt, handle));
+    CHECK_ERR_RTI(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     int ttl = 0;
@@ -70,5 +70,5 @@ int main(int argc, char* argv[])
             }
         }
     }
-    MY_CATCH_RET_INT
+    MY_CATCH_RTI
 }
