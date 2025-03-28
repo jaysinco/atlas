@@ -169,6 +169,9 @@ struct PoemNetImpl: torch::nn::Module
     PoemNetImpl(int embed_sz = 128, int lstm_hidden = 256, int lstm_layers = 1)
         : lstm_hidden_(lstm_hidden), lstm_layers_(lstm_layers)
     {
+        lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
+        lstm_c_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
+
         using namespace torch::nn;
         embed_ = register_module("embed", Embedding(EmbeddingOptions(VOCAB_SIZE, embed_sz)));
         lstm_ = register_module(
@@ -180,16 +183,14 @@ struct PoemNetImpl: torch::nn::Module
 
     void reset()
     {
+        lstm_h_ = lstm_h_.detach();
+        lstm_c_ = lstm_c_.detach();
         lstm_h_.zero_();
         lstm_c_.zero_();
     }
 
     torch::Tensor forward(torch::Tensor x)
     {
-        if (!lstm_h_.defined()) {
-            lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_}, x.device());
-            lstm_c_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_}, x.device());
-        }
         x = embed_(x);
         auto xhc = lstm_->forward(x, std::make_tuple(lstm_h_, lstm_c_));
         auto hc = std::get<1>(xhc);
@@ -198,8 +199,29 @@ struct PoemNetImpl: torch::nn::Module
         x = std::get<0>(xhc);
         x = torch::relu(fc0_(x));
         x = fc1_(x);
-        x = torch::log_softmax(x, 1);
+        x = torch::log_softmax(x, 2);
         return x;
+    }
+
+    void to(torch::Device device, torch::Dtype dtype, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(device, dtype, non_blocking);
+        lstm_h_ = lstm_h_.to(device, dtype, non_blocking);
+        lstm_c_ = lstm_c_.to(device, dtype, non_blocking);
+    }
+
+    void to(torch::Dtype dtype, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(dtype, non_blocking);
+        lstm_h_ = lstm_h_.to(dtype, non_blocking);
+        lstm_c_ = lstm_c_.to(dtype, non_blocking);
+    }
+
+    void to(torch::Device device, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(device, non_blocking);
+        lstm_h_ = lstm_h_.to(device, non_blocking);
+        lstm_c_ = lstm_c_.to(device, non_blocking);
     }
 
 private:
@@ -214,6 +236,59 @@ private:
 };
 
 TORCH_MODULE(PoemNet);
+
+template <typename DataLoader>
+void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device device,
+           DataLoader& data_loader, torch::optim::Optimizer& optimizer)
+{
+    model->train();
+    size_t batch_idx = 0;
+    for (auto& batch: data_loader) {
+        model->reset();
+        auto data = batch.data.to(device);
+        auto targets = batch.target.to(device);
+        optimizer.zero_grad();
+        auto output = model(data);
+        auto loss = torch::nll_loss(output.view({-1, VOCAB_SIZE}), targets.view({-1}));
+        loss.backward();
+        optimizer.step();
+        ++batch_idx;
+        if (batch_idx % 1000 == 0) {
+            ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, batch_idx * batch.data.size(0),
+                 *dataset.size(), loss.template item<float>());
+        }
+    }
+}
+
+std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch::Device device,
+                                    std::string const& prefix = "", int max_output = 600)
+{
+    torch::NoGradGuard no_grad;
+    model->eval();
+    model->reset();
+    bool reach_eos = false;
+    std::vector<int> ids = {TOKEN_BOS_ID};
+    for (int i = 0; i < max_output; ++i) {
+        torch::Tensor data =
+            torch::tensor(ids.back(), torch::TensorOptions(torch::kLong).device(device))
+                .reshape({1, 1});
+        auto log_probs = model(data);
+        torch::Tensor probs = torch::exp(log_probs.squeeze());
+        int64_t next_token = torch::multinomial(probs, 1, true).item<int64_t>();
+        if (next_token == TOKEN_EOS_ID) {
+            reach_eos = true;
+            break;
+        }
+        ids.push_back(next_token);
+    }
+    return std::make_pair(dataset.decode(ids), reach_eos);
+}
+
+void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device device)
+{
+    auto s = sample(model, dataset, device);
+    ILOG("epoch {}: {}{}", curr_epoch, s.first, s.second ? "</s>" : "");
+}
 
 }  // namespace
 
@@ -248,13 +323,21 @@ MyErrCode poemGenerator(int argc, char** argv)
         model->load(ia);
     }
 
-    for (auto& batch: *data_loader) {
-        auto data = batch.data.to(device);
-        auto targets = batch.target.to(device);
-        ILOG("=== {} {}", data.sizes(), targets.sizes());
-        ILOG("=== {}", model(data.to(device)).sizes());
-        break;
+    torch::optim::RMSprop optimizer(model->parameters(),
+                                    torch::optim::RMSpropOptions(0.0005).weight_decay(1e-6));
+
+    MY_TIMER_BEGIN(INFO, "process")
+    test(0, model, dataset, device);
+    for (size_t epoch = 1; epoch <= 5; ++epoch) {
+        train(epoch, model, dataset, device, *data_loader, optimizer);
+        test(epoch, model, dataset, device);
     }
+    MY_TIMER_END()
+
+    ILOG("save model to {}", saved_model_path);
+    torch::serialize::OutputArchive oa;
+    model->save(oa);
+    oa.save_to(saved_model_path.string());
 
     return MyErrCode::kOk;
 }
