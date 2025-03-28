@@ -7,7 +7,6 @@
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
 #define TOKEN_EOS_ID 2
-#define TOKEN_PAD_ID 3
 
 namespace sentencepiece::util
 {
@@ -122,9 +121,10 @@ private:
     {
         toolkit::RowsValue rows;
         CHECK_ERR_RET(toolkit::SQLiteHelper::querySQL(
-            poem_db, {"select content from ci order by value;", {{}}}, rows))
+            poem_db, {"select rhythmic, content from ci order by value;", {{}}}, rows))
         for (auto& row: rows) {
-            poem_str.push_back(row.at(0).asStr());
+            auto s = FSTR("《{}》 {}", row.at(0).asStr(), row.at(1).asStr());
+            poem_str.push_back(s);
         }
         ILOG("{} poems loaded", poem_str.size());
         return MyErrCode::kOk;
@@ -146,10 +146,11 @@ private:
                 {"model_type", "unigram"},
                 {"minloglevel", "1"},
                 {"add_dummy_prefix", "false"},
+                {"normalization_rule_name", "identity"},
                 {"unk_id", std::to_string(TOKEN_UNK_ID)},
                 {"bos_id", std::to_string(TOKEN_BOS_ID)},
                 {"eos_id", std::to_string(TOKEN_EOS_ID)},
-                {"pad_id", std::to_string(TOKEN_PAD_ID)},
+                {"pad_id", "-1"},
             },
             &iter);
         if (!err.ok()) {
@@ -287,7 +288,7 @@ std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch:
 void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device device)
 {
     auto s = sample(model, dataset, device);
-    ILOG("epoch {}: {}{}", curr_epoch, s.first, s.second ? "</s>" : "");
+    ILOG("epoch {}: {}", curr_epoch, s.first);
 }
 
 }  // namespace
