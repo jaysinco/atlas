@@ -167,7 +167,7 @@ private:
 
 struct PoemNetImpl: torch::nn::Module
 {
-    PoemNetImpl(int embed_sz = 128, int lstm_hidden = 256, int lstm_layers = 1)
+    PoemNetImpl(int embed_sz = 200, int lstm_hidden = 500, int lstm_layers = 2)
         : lstm_hidden_(lstm_hidden), lstm_layers_(lstm_layers)
     {
         lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
@@ -178,8 +178,7 @@ struct PoemNetImpl: torch::nn::Module
         lstm_ = register_module(
             "lstm",
             LSTM(LSTMOptions(embed_sz, lstm_hidden_).num_layers(lstm_layers_).batch_first(true)));
-        fc0_ = register_module("fc0", Linear(LinearOptions(lstm_hidden_, 512)));
-        fc1_ = register_module("fc1", Linear(LinearOptions(512, VOCAB_SIZE)));
+        fc0_ = register_module("fc0", Linear(LinearOptions(lstm_hidden_, VOCAB_SIZE)));
     }
 
     void reset()
@@ -198,8 +197,7 @@ struct PoemNetImpl: torch::nn::Module
         lstm_h_ = std::get<0>(hc);
         lstm_c_ = std::get<1>(hc);
         x = std::get<0>(xhc);
-        x = torch::relu(fc0_(x));
-        x = fc1_(x);
+        x = fc0_(x);
         x = torch::log_softmax(x, 2);
         return x;
     }
@@ -231,7 +229,6 @@ private:
     torch::nn::Embedding embed_ = nullptr;
     torch::nn::LSTM lstm_ = nullptr;
     torch::nn::Linear fc0_ = nullptr;
-    torch::nn::Linear fc1_ = nullptr;
     torch::Tensor lstm_h_;
     torch::Tensor lstm_c_;
 };
