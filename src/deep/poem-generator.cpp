@@ -243,7 +243,10 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
            DataLoader& data_loader, torch::optim::Optimizer& optimizer)
 {
     model->train();
+    size_t dataset_size = *dataset.size();
     size_t batch_idx = 0;
+    double sum_loss = 0;
+
     for (auto& batch: data_loader) {
         model->reset();
         auto data = batch.data.to(device);
@@ -253,10 +256,13 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
         auto loss = torch::nll_loss(output.view({-1, VOCAB_SIZE}), targets.view({-1}));
         loss.backward();
         optimizer.step();
+        sum_loss += loss.template item<float>();
+
         ++batch_idx;
-        if (batch_idx % 1000 == 0) {
-            ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, batch_idx * batch.data.size(0),
-                 *dataset.size(), loss.template item<float>());
+        size_t trained_size = batch_idx * batch.data.size(0);
+        if (batch_idx % 1000 == 0 || trained_size == dataset_size) {
+            ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, trained_size, dataset_size,
+                 sum_loss / batch_idx);
         }
     }
 }
@@ -324,12 +330,11 @@ MyErrCode poemGenerator(int argc, char** argv)
         model->load(ia);
     }
 
-    torch::optim::RMSprop optimizer(model->parameters(),
-                                    torch::optim::RMSpropOptions(0.0005).weight_decay(1e-6));
+    torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-3));
 
     MY_TIMER_BEGIN(INFO, "process")
     test(0, model, dataset, device);
-    for (size_t epoch = 1; epoch <= 5; ++epoch) {
+    for (size_t epoch = 1; epoch <= 10; ++epoch) {
         train(epoch, model, dataset, device, *data_loader, optimizer);
         test(epoch, model, dataset, device);
     }
