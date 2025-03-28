@@ -2,6 +2,7 @@
 #include <sentencepiece_trainer.h>
 #include "toolkit/sqlite-helper.h"
 
+#define BATCH_SIZE 1
 #define VOCAB_SIZE 6500
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
@@ -50,7 +51,7 @@ public:
 
     ExampleType get(size_t index) override
     {
-        auto& p = poem_tk_.at(index);
+        auto& p = poem_tk_->at(index);
         torch::Tensor data = torch::from_blob(
             p.data(), {static_cast<int>(p.size())}, [](void* buf) {}, torch::kInt32);
 
@@ -65,12 +66,12 @@ public:
         return {data.to(torch::kLong), target.to(torch::kLong)};
     }
 
-    c10::optional<size_t> size() const override { return poem_tk_.size(); }
+    c10::optional<size_t> size() const override { return poem_tk_->size(); }
 
     std::string decode(std::vector<int> const& ids)
     {
         std::string text;
-        if (auto err = tokenizer_.Decode(ids, &text); !err.ok()) {
+        if (auto err = tokenizer_->Decode(ids, &text); !err.ok()) {
             MY_THROW("failed to decode: {}", err);
         }
         return text;
@@ -87,28 +88,30 @@ public:
     }
 
 private:
-    static MyErrCode loadPoemToken(std::filesystem::path const& poem_db,
-                                   std::filesystem::path const& tk_model,
-                                   sentencepiece::SentencePieceProcessor& tokenizer,
-                                   std::vector<std::vector<int>>& poem_tk)
+    static MyErrCode loadPoemToken(
+        std::filesystem::path const& poem_db, std::filesystem::path const& tk_model,
+        std::shared_ptr<sentencepiece::SentencePieceProcessor>& tokenizer,
+        std::shared_ptr<std::vector<std::vector<int>>>& poem_tk)
     {
         std::vector<std::string> poem_str;
         CHECK_ERR_RET(loadPoemStr(poem_db, poem_str));
         CHECK_ERR_RET(prepareTokenizer(tk_model.string(), poem_str));
 
-        if (auto err = tokenizer.Load(tk_model.string()); !err.ok()) {
+        tokenizer = std::make_shared<sentencepiece::SentencePieceProcessor>();
+        if (auto err = tokenizer->Load(tk_model.string()); !err.ok()) {
             ELOG("failed to load tokenizer: {}", err);
             return MyErrCode::kFailed;
         }
 
+        poem_tk = std::make_shared<std::vector<std::vector<int>>>();
         for (auto const& poem: poem_str) {
             std::vector<int> pieces;
-            if (auto err = tokenizer.Encode(poem, &pieces); !err.ok()) {
+            if (auto err = tokenizer->Encode(poem, &pieces); !err.ok()) {
                 ELOG("failed to encode '{}': {}", poem, err);
                 return MyErrCode::kFailed;
             }
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
-            poem_tk.push_back(std::move(pieces));
+            poem_tk->push_back(std::move(pieces));
         }
 
         return MyErrCode::kOk;
@@ -157,9 +160,60 @@ private:
         return MyErrCode::kOk;
     }
 
-    sentencepiece::SentencePieceProcessor tokenizer_;
-    std::vector<std::vector<int>> poem_tk_;
+    std::shared_ptr<sentencepiece::SentencePieceProcessor> tokenizer_;
+    std::shared_ptr<std::vector<std::vector<int>>> poem_tk_;
 };
+
+struct PoemNetImpl: torch::nn::Module
+{
+    PoemNetImpl(int embed_sz = 128, int lstm_hidden = 256, int lstm_layers = 1)
+        : lstm_hidden_(lstm_hidden), lstm_layers_(lstm_layers)
+    {
+        using namespace torch::nn;
+        embed_ = register_module("embed", Embedding(EmbeddingOptions(VOCAB_SIZE, embed_sz)));
+        lstm_ = register_module(
+            "lstm",
+            LSTM(LSTMOptions(embed_sz, lstm_hidden_).num_layers(lstm_layers_).batch_first(true)));
+        fc0_ = register_module("fc0", Linear(LinearOptions(lstm_hidden_, 512)));
+        fc1_ = register_module("fc1", Linear(LinearOptions(512, VOCAB_SIZE)));
+    }
+
+    void reset()
+    {
+        lstm_h_.zero_();
+        lstm_c_.zero_();
+    }
+
+    torch::Tensor forward(torch::Tensor x)
+    {
+        if (!lstm_h_.defined()) {
+            lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_}, x.device());
+            lstm_c_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_}, x.device());
+        }
+        x = embed_(x);
+        auto xhc = lstm_->forward(x, std::make_tuple(lstm_h_, lstm_c_));
+        auto hc = std::get<1>(xhc);
+        lstm_h_ = std::get<0>(hc);
+        lstm_c_ = std::get<1>(hc);
+        x = std::get<0>(xhc);
+        x = torch::relu(fc0_(x));
+        x = fc1_(x);
+        x = torch::log_softmax(x, 1);
+        return x;
+    }
+
+private:
+    int const lstm_hidden_;
+    int const lstm_layers_;
+    torch::nn::Embedding embed_ = nullptr;
+    torch::nn::LSTM lstm_ = nullptr;
+    torch::nn::Linear fc0_ = nullptr;
+    torch::nn::Linear fc1_ = nullptr;
+    torch::Tensor lstm_h_;
+    torch::Tensor lstm_c_;
+};
+
+TORCH_MODULE(PoemNet);
 
 }  // namespace
 
@@ -170,11 +224,37 @@ MyErrCode poemGenerator(int argc, char** argv)
 
     auto poem_db = toolkit::getDataDir() / "ci.db";
     auto tk_model = toolkit::getDataDir() / "poem.model";
-    PoemDataset ds(poem_db, tk_model);
+    PoemDataset dataset{poem_db, tk_model};
+    auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
+        dataset.map(torch::data::transforms::Stack<>()), BATCH_SIZE);
 
-    auto exam = ds.get(0);
-    ILOG("data:   {}", ds.decode(exam.data));
-    ILOG("target: {}", ds.decode(exam.target));
+    torch::DeviceType device_type;
+    if (torch::cuda::is_available()) {
+        ILOG("cuda available, training on {} gpu", torch::cuda::device_count());
+        device_type = torch::kCUDA;
+    } else {
+        ILOG("training on cpu");
+        device_type = torch::kCPU;
+    }
+    torch::Device device(device_type);
+
+    auto saved_model_path = toolkit::getTempDir() / "poem-generator.pt";
+    PoemNet model;
+    model->to(device);
+    if (std::filesystem::exists(saved_model_path)) {
+        ILOG("load model from {}", saved_model_path);
+        torch::serialize::InputArchive ia;
+        ia.load_from(saved_model_path.string());
+        model->load(ia);
+    }
+
+    for (auto& batch: *data_loader) {
+        auto data = batch.data.to(device);
+        auto targets = batch.target.to(device);
+        ILOG("=== {} {}", data.sizes(), targets.sizes());
+        ILOG("=== {}", model(data.to(device)).sizes());
+        break;
+    }
 
     return MyErrCode::kOk;
 }
