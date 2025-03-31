@@ -290,8 +290,18 @@ std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch:
 
 void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device device)
 {
-    auto s = sample(model, dataset, device);
-    ILOG("epoch {}: {}", curr_epoch, s.first);
+    for (int i = 0; i < 5; ++i) {
+        auto s = sample(model, dataset, device);
+        ILOG(s.first);
+    }
+}
+
+void save(int curr_epoch, PoemNet& model, std::filesystem::path const& saved_path)
+{
+    torch::serialize::OutputArchive oa;
+    model->save(oa);
+    oa.save_to(saved_path.string());
+    ILOG("epoch {}: model saved to {}", curr_epoch, saved_path);
 }
 
 }  // namespace
@@ -326,20 +336,16 @@ MyErrCode poemGenerator(int argc, char** argv)
         model->load(ia);
     }
 
-    torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-3));
+    torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-5));
 
     MY_TIMER_BEGIN(INFO, "process")
     test(0, model, dataset, device);
-    for (size_t epoch = 1; epoch <= 5; ++epoch) {
+    for (size_t epoch = 1; true; ++epoch) {
         train(epoch, model, dataset, device, *data_loader, optimizer);
         test(epoch, model, dataset, device);
+        save(epoch, model, saved_model_path);
     }
     MY_TIMER_END()
-
-    ILOG("save model to {}", saved_model_path);
-    torch::serialize::OutputArchive oa;
-    model->save(oa);
-    oa.save_to(saved_model_path.string());
 
     return MyErrCode::kOk;
 }
