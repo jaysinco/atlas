@@ -3,7 +3,7 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 1
-#define VOCAB_SIZE 6500
+#define VOCAB_SIZE 5120
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
 #define TOKEN_EOS_ID 2
@@ -167,7 +167,7 @@ private:
 
 struct PoemNetImpl: torch::nn::Module
 {
-    PoemNetImpl(int embed_sz = 200, int lstm_hidden = 500, int lstm_layers = 2)
+    PoemNetImpl(int embed_sz = 512, int lstm_hidden = 1024, int lstm_layers = 2)
         : lstm_hidden_(lstm_hidden), lstm_layers_(lstm_layers)
     {
         lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
@@ -307,15 +307,14 @@ MyErrCode poemGenerator(int argc, char** argv)
     auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
         dataset.map(torch::data::transforms::Stack<>()), BATCH_SIZE);
 
-    torch::DeviceType device_type;
+    torch::Device device(torch::kCPU);
     if (torch::cuda::is_available()) {
-        ILOG("cuda available, training on {} gpu", torch::cuda::device_count());
-        device_type = torch::kCUDA;
+        auto gpu_cnt = torch::cuda::device_count();
+        ILOG("cuda available, training on {} gpu", gpu_cnt);
+        device = torch::Device(torch::kCUDA, gpu_cnt - 1);
     } else {
         ILOG("training on cpu");
-        device_type = torch::kCPU;
     }
-    torch::Device device(device_type);
 
     auto saved_model_path = toolkit::getTempDir() / "poem-generator.pt";
     PoemNet model;
@@ -331,7 +330,7 @@ MyErrCode poemGenerator(int argc, char** argv)
 
     MY_TIMER_BEGIN(INFO, "process")
     test(0, model, dataset, device);
-    for (size_t epoch = 1; epoch <= 10; ++epoch) {
+    for (size_t epoch = 1; epoch <= 5; ++epoch) {
         train(epoch, model, dataset, device, *data_loader, optimizer);
         test(epoch, model, dataset, device);
     }
