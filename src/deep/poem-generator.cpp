@@ -198,7 +198,6 @@ struct PoemNetImpl: torch::nn::Module
         lstm_c_ = std::get<1>(hc);
         x = std::get<0>(xhc);
         x = fc0_(x);
-        x = torch::log_softmax(x, 2);
         return x;
     }
 
@@ -249,8 +248,9 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
         auto data = batch.data.to(device);
         auto targets = batch.target.to(device);
         optimizer.zero_grad();
-        auto output = model(data);
-        auto loss = torch::nll_loss(output.view({-1, VOCAB_SIZE}), targets.view({-1}));
+        auto logits = model(data);
+        auto log_probs = torch::log_softmax(logits, -1);
+        auto loss = torch::nll_loss(log_probs.view({-1, VOCAB_SIZE}), targets.view({-1}));
         loss.backward();
         optimizer.step();
         sum_loss += loss.template item<float>();
@@ -262,6 +262,32 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
                  sum_loss / batch_idx);
         }
     }
+}
+
+int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double top_p = 0.7,
+                   int top_k = 50)
+{
+    torch::Tensor scaled_logits = logits / temperature;
+    torch::Tensor probs = torch::softmax(scaled_logits, -1);
+    if (top_k > 0) {
+        auto [topk_values, topk_indices] = torch::topk(probs, top_k);
+        torch::Tensor mask = torch::zeros_like(probs).scatter(-1, topk_indices, topk_values);
+        probs = mask / mask.sum(-1, true);
+    }
+    if (top_p < 1.0) {
+        auto [sorted_probs, sorted_indices] = torch::sort(probs, -1, true);
+        torch::Tensor cum_probs = torch::cumsum(sorted_probs, -1);
+        torch::Tensor mask = cum_probs <= top_p;
+        if (mask.sum().item<int>() == 0) {
+            mask[0] = 1;
+        }
+        torch::Tensor expanded_mask =
+            torch::zeros_like(probs, torch::kBool).scatter(-1, sorted_indices, mask);
+        probs *= expanded_mask;
+        probs /= probs.sum(-1, true);
+    }
+    torch::Tensor next_token = torch::multinomial(probs, 1, true);
+    return next_token.item<int64_t>();
 }
 
 std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch::Device device,
@@ -276,9 +302,8 @@ std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch:
         torch::Tensor data =
             torch::tensor(ids.back(), torch::TensorOptions(torch::kLong).device(device))
                 .reshape({1, 1});
-        auto log_probs = model(data);
-        torch::Tensor probs = torch::exp(log_probs.squeeze());
-        int64_t next_token = torch::multinomial(probs, 1, true).item<int64_t>();
+        auto logits = model(data);
+        int64_t next_token = sampleNext(logits.squeeze());
         if (next_token == TOKEN_EOS_ID) {
             reach_eos = true;
             break;
