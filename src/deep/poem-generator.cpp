@@ -408,7 +408,8 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
         optimizer.zero_grad();
         auto logits = model(data);
         auto log_probs = torch::log_softmax(logits, -1);
-        auto loss = torch::nll_loss(log_probs.view({-1, VOCAB_SIZE}), targets.view({-1}));
+        auto loss = torch::nll_loss(log_probs.view({-1, VOCAB_SIZE}), targets.view({-1}), {},
+                                    torch::Reduction::Mean, TOKEN_PAD_ID);
         loss.backward();
         optimizer.step();
         sum_loss += loss.template item<float>();
