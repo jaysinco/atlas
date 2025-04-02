@@ -112,6 +112,7 @@ private:
                 return MyErrCode::kFailed;
             }
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
+            pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
             poem_tk->push_back(std::move(pieces));
         }
 
@@ -367,8 +368,11 @@ struct PoemNetImpl: torch::nn::Module
     {
         int64_t batch_size = x.size(0);
         int64_t seq_len = x.size(1);
-        auto pos_ids = torch::arange(seq_len, torch::kLong).expand({batch_size, seq_len});
-        auto mask = torch::triu(torch::ones({seq_len, seq_len}), 1).to(torch::kBool);
+        auto pos_ids = torch::arange(seq_len, torch::TensorOptions(torch::kLong).device(x.device()))
+                           .expand({batch_size, seq_len});
+        auto mask =
+            torch::triu(torch::ones({seq_len, seq_len}, torch::TensorOptions(x.device())), 1)
+                .to(torch::kBool);
 
         x = token_embed_(x) + pos_embed_(pos_ids);
         x = tf_(drop_(x), mask);
