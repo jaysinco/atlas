@@ -151,7 +151,7 @@ MyErrCode txiGuided(int argc, char** argv)
     MY_TIMER_BEGIN(INFO, "total")
 
     // copy data in
-    MY_TIMER_BEGIN(INFO, FSTR("host to device {} bytes", image_byte_len))
+    MY_TIMER_BEGIN(INFO, "host to device {} bytes", image_byte_len)
     CHECK_CUDA(cudaMemcpy(d_img_in, mat_img_in.data, image_byte_len, cudaMemcpyHostToDevice));
     MY_TIMER_END()
 
@@ -161,7 +161,7 @@ MyErrCode txiGuided(int argc, char** argv)
     dim3 block(32, 32);
     dim3 grid((image_width + block.x - 1) / block.x, (image_height + block.y - 1) / block.y);
 
-    MY_TIMER_BEGIN(INFO, FSTR("kernel separate on {}x{}", image_width, image_height))
+    MY_TIMER_BEGIN(INFO, "kernel separate on {}x{}", image_width, image_height)
     separate<<<grid, block>>>(d_img_in, d_r, d_g, d_b, image_width, image_height);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -169,7 +169,7 @@ MyErrCode txiGuided(int argc, char** argv)
 
     float* buf_arr[3] = {d_b, d_g, d_r};
     for (int color_idx = 0; color_idx < 3; ++color_idx) {
-        MY_TIMER_BEGIN(INFO, FSTR("kernel filter on {}x{}", image_width, image_height))
+        MY_TIMER_BEGIN(INFO, "kernel filter on {}x{}", image_width, image_height)
 
         calcAb<<<grid, block>>>(buf_arr[color_idx], d_pa, d_pb, image_width, image_height, radius,
                                 eps);
@@ -185,7 +185,7 @@ MyErrCode txiGuided(int argc, char** argv)
     }
 
     // copy data out
-    MY_TIMER_BEGIN(INFO, FSTR("device to host {} bytes", image_byte_len))
+    MY_TIMER_BEGIN(INFO, "device to host {} bytes", image_byte_len)
     CHECK_CUDA(cudaMemcpy(vec_img_out.data(), d_img_out, image_byte_len, cudaMemcpyDeviceToHost));
     MY_TIMER_END()
 

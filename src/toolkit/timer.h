@@ -2,9 +2,10 @@
 #include "logging.h"
 #include <boost/timer/timer.hpp>
 
-#define MY_TIMER_BEGIN(level, desc) \
-    {                               \
-        toolkit::AutoCpuTimer MY_CONCAT(_my_timer_, __LINE__)(desc, toolkit::LogLevel::k##level);
+#define MY_TIMER_BEGIN(level, ...)                                               \
+    {                                                                            \
+        toolkit::AutoCpuTimer MY_CONCAT(_my_timer_, __LINE__)(FSTR(__VA_ARGS__), \
+                                                              toolkit::LogLevel::k##level);
 #define MY_TIMER_END() }
 
 namespace toolkit
@@ -23,7 +24,7 @@ public:
     {
         stop();
         auto tm = elapsed();
-        LOG_FUNC(level_, "elapsed {:.1f}ms, {}", tm.wall * 1e-6, desc_);
+        LOG_FUNC(level_, "{}: {:.1f}ms elapsed", desc_, tm.wall * 1e-6);
     }
 
 private:

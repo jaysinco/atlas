@@ -60,7 +60,7 @@ public:
         for (int i = 1; i < p.size(); ++i) {
             n.push_back(p[i]);
         }
-        n.push_back(TOKEN_EOS_ID);
+        n.push_back(TOKEN_UNK_ID);
         torch::Tensor target = torch::from_blob(
             n.data(), {static_cast<int64_t>(n.size())}, [](void* buf) {}, torch::kInt32);
 
@@ -112,6 +112,7 @@ private:
                 return MyErrCode::kFailed;
             }
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
+            pieces.push_back(TOKEN_EOS_ID);
             pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
             poem_tk->push_back(std::move(pieces));
         }
@@ -414,7 +415,7 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
 
         ++batch_idx;
         size_t trained_size = batch_idx * batch.data.size(0);
-        if (batch_idx % 1000 == 0 || trained_size == dataset_size) {
+        if (batch_idx % (1024 / BATCH_SIZE) == 0 || trained_size == dataset_size) {
             ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, trained_size, dataset_size,
                  sum_loss / batch_idx);
         }
@@ -448,22 +449,23 @@ int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double
 }
 
 std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch::Device device,
-                                    std::string const& prefix = "", int max_output = 600)
+                                    std::string const& prefix = "")
 {
     torch::NoGradGuard no_grad;
     model->eval();
     bool reach_eos = false;
-    std::vector<int> ids = {TOKEN_BOS_ID};
-    for (int i = 0; i < max_output; ++i) {
-        torch::Tensor data =
-            torch::tensor(ids.back(), torch::TensorOptions(torch::kLong).device(device))
-                .reshape({1, 1});
-        auto logits = model(data);
-        int64_t next_token = sampleNext(logits.squeeze());
+    std::vector<int> ids = {};
+    torch::Tensor data = torch::full({1, MAX_SEQ_LEN}, TOKEN_PAD_ID,
+                                     torch::TensorOptions(torch::kLong).device(device));
+    data.index({0, 0}) = TOKEN_BOS_ID;
+    for (int i = 1; i < MAX_SEQ_LEN; ++i) {
+        auto logits = model(data).index({0, i - 1});
+        int64_t next_token = sampleNext(logits);
         if (next_token == TOKEN_EOS_ID) {
             reach_eos = true;
             break;
         }
+        data.index({0, i}) = next_token;
         ids.push_back(next_token);
     }
     return std::make_pair(dataset.decode(ids), reach_eos);
@@ -473,7 +475,7 @@ void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device de
 {
     for (int i = 0; i < 5; ++i) {
         auto s = sample(model, dataset, device);
-        ILOG(s.first);
+        ILOG("{}{}", s.first, s.second ? "<eos>" : "");
     }
 }
 
@@ -519,14 +521,14 @@ MyErrCode poemGenerator(int argc, char** argv)
 
     torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-5));
 
-    MY_TIMER_BEGIN(INFO, "process")
     test(0, model, dataset, device);
     for (size_t epoch = 1; true; ++epoch) {
+        MY_TIMER_BEGIN(INFO, "epoch {}", epoch)
         train(epoch, model, dataset, device, *data_loader, optimizer);
+        MY_TIMER_END()
         test(epoch, model, dataset, device);
         save(epoch, model, saved_model_path);
     }
-    MY_TIMER_END()
 
     return MyErrCode::kOk;
 }
