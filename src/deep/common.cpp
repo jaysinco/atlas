@@ -1,5 +1,22 @@
 #include "./common.h"
 
+MyErrCode describeModel(torch::nn::Module const& model, std::string const& prefix)
+{
+    size_t param_count = 0;
+    for (auto const& param: model.parameters(true)) {
+        param_count += param.numel();
+    }
+    ILOG("{}[{}] ({} params)", prefix, model.name(), param_count);
+    for (auto const& param: model.named_parameters(false)) {
+        ILOG("{}..{}: {} ({} params)", prefix, param.key(), param.value().sizes(),
+             param.value().numel());
+    }
+    for (auto const& child: model.named_children()) {
+        describeModel(*child.value(), prefix + "..");
+    }
+    return MyErrCode::kOk;
+}
+
 InceptionImpl::InceptionImpl(InceptionOptions const& o)
 {
     using namespace torch::nn;

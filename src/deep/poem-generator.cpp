@@ -3,7 +3,7 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 1
-#define MAX_SEQ_LEN 300
+#define MAX_SEQ_LEN 150
 #define VOCAB_SIZE 5120
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
@@ -105,17 +105,22 @@ private:
         }
 
         poem_tk = std::make_shared<std::vector<std::vector<int>>>();
+        int64_t sum_tokens = 0;
         for (auto const& poem: poem_str) {
             std::vector<int> pieces;
             if (auto err = tokenizer->Encode(poem, &pieces); !err.ok()) {
                 ELOG("failed to encode '{}': {}", poem, err);
                 return MyErrCode::kFailed;
             }
+            sum_tokens += pieces.size();
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
             pieces.push_back(TOKEN_EOS_ID);
             pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
             poem_tk->push_back(std::move(pieces));
         }
+
+        ILOG("{} poems loaded, {:.1f} average tokens", poem_str.size(),
+             static_cast<float>(sum_tokens) / poem_str.size());
 
         return MyErrCode::kOk;
     }
@@ -130,7 +135,6 @@ private:
             auto s = FSTR("《{}》 {}", row.at(0).asStr(), row.at(1).asStr());
             poem_str.push_back(s);
         }
-        ILOG("{} poems loaded", poem_str.size());
         return MyErrCode::kOk;
     }
 
@@ -351,7 +355,7 @@ TORCH_MODULE(TransformerStack);
 
 struct PoemNetImpl: torch::nn::Module
 {
-    PoemNetImpl(): o_(3, 512, 4, 1024)
+    PoemNetImpl(): o_(5, 768, 12, 1024)
     {
         token_embed_ = register_module(
             "token_embed",
@@ -519,8 +523,9 @@ MyErrCode poemGenerator(int argc, char** argv)
         ia.load_from(saved_model_path.string());
         model->load(ia);
     }
+    CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-5));
+    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-5));
 
     test(0, model, dataset, device);
     for (size_t epoch = 1; true; ++epoch) {

@@ -8,6 +8,10 @@
 template <size_t D>
 using IntArray = std::array<int64_t, D>;
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Util Functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+MyErrCode describeModel(torch::nn::Module const& model, std::string const& prefix = "");
+
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Inception Block ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 struct InceptionOptions
