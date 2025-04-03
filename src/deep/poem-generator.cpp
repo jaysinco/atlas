@@ -355,7 +355,7 @@ TORCH_MODULE(TransformerStack);
 
 struct PoemNetImpl: torch::nn::Module
 {
-    PoemNetImpl(): o_(5, 768, 12, 1024)
+    PoemNetImpl(): o_(3, 192, 3, 256)
     {
         token_embed_ = register_module(
             "token_embed",
