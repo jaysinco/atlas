@@ -8,6 +8,7 @@ int main(int argc, char** argv)
     MY_TRY
     // CHECK_ERR_RTI(linearRegression(argc, argv));
     // CHECK_ERR_RTI(fashionMnist(argc, argv));
-    CHECK_ERR_RTI(poemGenerator(argc, argv));
+    // CHECK_ERR_RTI(poemWriter(argc, argv));
+    CHECK_ERR_RTI(essayWriter(argc, argv));
     MY_CATCH_RTI return 0;
 }

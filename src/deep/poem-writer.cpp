@@ -3,12 +3,10 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 1
-#define MAX_SEQ_LEN 150
 #define VOCAB_SIZE 5120
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
 #define TOKEN_EOS_ID 2
-#define TOKEN_PAD_ID 3
 
 namespace sentencepiece::util
 {
@@ -60,7 +58,7 @@ public:
         for (int i = 1; i < p.size(); ++i) {
             n.push_back(p[i]);
         }
-        n.push_back(TOKEN_UNK_ID);
+        n.push_back(TOKEN_EOS_ID);
         torch::Tensor target = torch::from_blob(
             n.data(), {static_cast<int64_t>(n.size())}, [](void* buf) {}, torch::kInt32);
 
@@ -105,22 +103,15 @@ private:
         }
 
         poem_tk = std::make_shared<std::vector<std::vector<int>>>();
-        int64_t sum_tokens = 0;
         for (auto const& poem: poem_str) {
             std::vector<int> pieces;
             if (auto err = tokenizer->Encode(poem, &pieces); !err.ok()) {
                 ELOG("failed to encode '{}': {}", poem, err);
                 return MyErrCode::kFailed;
             }
-            sum_tokens += pieces.size();
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
-            pieces.push_back(TOKEN_EOS_ID);
-            pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
             poem_tk->push_back(std::move(pieces));
         }
-
-        ILOG("{} poems loaded, {:.1f} average tokens", poem_str.size(),
-             static_cast<float>(sum_tokens) / poem_str.size());
 
         return MyErrCode::kOk;
     }
@@ -135,6 +126,7 @@ private:
             auto s = FSTR("《{}》 {}", row.at(0).asStr(), row.at(1).asStr());
             poem_str.push_back(s);
         }
+        ILOG("{} poems loaded", poem_str.size());
         return MyErrCode::kOk;
     }
 
@@ -158,7 +150,7 @@ private:
                 {"unk_id", std::to_string(TOKEN_UNK_ID)},
                 {"bos_id", std::to_string(TOKEN_BOS_ID)},
                 {"eos_id", std::to_string(TOKEN_EOS_ID)},
-                {"pad_id", std::to_string(TOKEN_PAD_ID)},
+                {"pad_id", "-1"},
             },
             &iter);
         if (!err.ok()) {
@@ -173,226 +165,71 @@ private:
     std::shared_ptr<std::vector<std::vector<int>>> poem_tk_;
 };
 
-struct DyTOptions
-{
-    explicit DyTOptions(int64_t embed_dim, float init_alpha)
-        : embed_dim_(embed_dim), init_alpha_(init_alpha)
-    {
-    }
-
-    TORCH_ARG(int64_t, embed_dim);
-    TORCH_ARG(float, init_alpha);
-};
-
-struct DyTImpl: torch::nn::Module
-{
-    DyTImpl(DyTOptions const& o)
-    {
-        alpha_ = register_parameter("alpha", torch::ones(1) * o.init_alpha());
-        gamma_ = register_parameter("gamma", torch::ones(o.embed_dim()));
-        beta_ = register_parameter("beta", torch::zeros(o.embed_dim()));
-    }
-
-    // `x` has the shape of [batch_size, seq_len, embed_dim]
-    torch::Tensor forward(torch::Tensor x)
-    {
-        x = torch::tanh(alpha_ * x);
-        return gamma_ * x + beta_;
-    }
-
-private:
-    torch::Tensor alpha_;
-    torch::Tensor gamma_;
-    torch::Tensor beta_;
-};
-
-TORCH_MODULE(DyT);
-
-struct MultiHeadSelfAttentionOptions
-{
-    MultiHeadSelfAttentionOptions(int64_t embed_dim, int64_t num_heads)
-        : embed_dim_(embed_dim), num_heads_(num_heads)
-    {
-    }
-
-    TORCH_ARG(int64_t, embed_dim);
-    TORCH_ARG(int64_t, num_heads);
-};
-
-struct MultiHeadSelfAttentionImpl: torch::nn::Module
-{
-    MultiHeadSelfAttentionImpl(MultiHeadSelfAttentionOptions const& o)
-        : num_heads_(o.num_heads()), embed_dim_(o.embed_dim())
-    {
-        if (embed_dim_ % num_heads_ != 0) {
-            MY_THROW(R"(embed_dim % num_heads != 0)");
-        }
-        head_dim_ = embed_dim_ / num_heads_;
-        q_proj_ = register_module("q_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        k_proj_ = register_module("k_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        v_proj_ = register_module("v_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        out_proj_ = register_module("out_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
-    }
-
-    // `x` has the shape of [batch_size, seq_len, embed_dim]
-    // `mask` has the shape of [batch_size, num_heads, seq_len, seq_len]
-    //        True value indicates that the corresponding position is not allowed to attend
-    torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
-    {
-        auto batch_size = x.size(0);
-        auto seq_len = x.size(1);
-
-        auto q = q_proj_(x);
-        auto k = k_proj_(x);
-        auto v = v_proj_(x);
-
-        q = q.view({batch_size, seq_len, num_heads_, head_dim_}).transpose(1, 2);
-        k = k.view({batch_size, seq_len, num_heads_, head_dim_}).transpose(1, 2);
-        v = v.view({batch_size, seq_len, num_heads_, head_dim_}).transpose(1, 2);
-
-        auto scores = torch::matmul(q, k.transpose(-2, -1)) / std::sqrt(head_dim_);
-        if (mask.defined()) {
-            scores = scores.masked_fill(mask, -INFINITY);
-        }
-
-        auto attn_weights = torch::softmax(scores, -1);
-        attn_weights = drop_(attn_weights);
-        auto output = torch::matmul(attn_weights, v);
-        output = output.transpose(1, 2).contiguous().view({batch_size, seq_len, embed_dim_});
-
-        return out_proj_(output);
-    }
-
-private:
-    int64_t num_heads_;
-    int64_t embed_dim_;
-    int64_t head_dim_;
-
-    torch::nn::Linear q_proj_ = nullptr;
-    torch::nn::Linear k_proj_ = nullptr;
-    torch::nn::Linear v_proj_ = nullptr;
-    torch::nn::Linear out_proj_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
-};
-
-TORCH_MODULE(MultiHeadSelfAttention);
-
-struct TransformerBlockOptions: MultiHeadSelfAttentionOptions
-{
-    TransformerBlockOptions(int64_t embed_dim, int64_t num_heads, int64_t hidden_dim)
-        : MultiHeadSelfAttentionOptions(embed_dim, num_heads), hidden_dim_(hidden_dim)
-    {
-    }
-
-    TORCH_ARG(int64_t, hidden_dim);
-};
-
-struct TransformerBlockImpl: torch::nn::Module
-{
-    TransformerBlockImpl(TransformerBlockOptions const& o)
-    {
-        fc1_ = register_module("fc1", torch::nn::Linear(o.embed_dim(), o.hidden_dim()));
-        fc2_ = register_module("fc2", torch::nn::Linear(o.hidden_dim(), o.embed_dim()));
-        dy1_ = register_module("dy1", DyT(DyTOptions(o.embed_dim(), 0.5)));
-        dy2_ = register_module("dy2", DyT(DyTOptions(o.embed_dim(), 0.5)));
-        attn_ = register_module("attn", MultiHeadSelfAttention(o));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
-    }
-
-    torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
-    {
-        x = attn_(dy1_(x), mask);
-        x = dy2_(x + drop_(x));
-        x = torch::gelu(fc1_(x));
-        x = fc2_(drop_(x));
-        x = x + drop_(x);
-        return x;
-    }
-
-private:
-    MultiHeadSelfAttention attn_ = nullptr;
-    torch::nn::Linear fc1_ = nullptr, fc2_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
-    DyT dy1_ = nullptr, dy2_ = nullptr;
-};
-
-TORCH_MODULE(TransformerBlock);
-
-struct TransformerStackOptions: TransformerBlockOptions
-{
-    TransformerStackOptions(int64_t num_layers, int64_t embed_dim, int64_t num_heads,
-                            int64_t hidden_dim)
-        : TransformerBlockOptions(embed_dim, num_heads, hidden_dim), num_layers_(num_layers)
-    {
-    }
-
-    TORCH_ARG(int64_t, num_layers);
-};
-
-struct TransformerStackImpl: torch::nn::Module
-{
-    TransformerStackImpl(TransformerStackOptions const& o)
-    {
-        for (int i = 0; i < o.num_layers(); ++i) {
-            layers_->push_back(register_module("layer_" + std::to_string(i), TransformerBlock(o)));
-        }
-    }
-
-    torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
-    {
-        for (auto& layer: *layers_) {
-            x = layer->as<TransformerBlock>()->forward(x, mask);
-        }
-        return x;
-    }
-
-private:
-    torch::nn::ModuleList layers_;
-};
-
-TORCH_MODULE(TransformerStack);
-
 struct PoemNetImpl: torch::nn::Module
 {
-    PoemNetImpl(): o_(3, 192, 3, 256)
+    PoemNetImpl(int embed_sz = 512, int lstm_hidden = 1024, int lstm_layers = 2)
+        : lstm_hidden_(lstm_hidden), lstm_layers_(lstm_layers)
     {
-        token_embed_ = register_module(
-            "token_embed",
-            torch::nn::Embedding(torch::nn::EmbeddingOptions(VOCAB_SIZE, o_.embed_dim())));
-        pos_embed_ = register_module("pos_embed", torch::nn::Embedding(torch::nn::EmbeddingOptions(
-                                                      MAX_SEQ_LEN, o_.embed_dim())));
-        tf_ = register_module("tf", TransformerStack(o_));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
-        fc1_ = register_module("fc1", torch::nn::Linear(o_.embed_dim(), VOCAB_SIZE));
-        dy1_ = register_module("dy1", DyT(DyTOptions(o_.embed_dim(), 0.5)));
+        lstm_h_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
+        lstm_c_ = torch::zeros({lstm_layers_, BATCH_SIZE, lstm_hidden_});
+
+        using namespace torch::nn;
+        embed_ = register_module("embed", Embedding(EmbeddingOptions(VOCAB_SIZE, embed_sz)));
+        lstm_ = register_module(
+            "lstm",
+            LSTM(LSTMOptions(embed_sz, lstm_hidden_).num_layers(lstm_layers_).batch_first(true)));
+        fc0_ = register_module("fc0", Linear(LinearOptions(lstm_hidden_, VOCAB_SIZE)));
     }
 
-    // `x` has the shape of [batch_size, seq_len]
+    void reset()
+    {
+        lstm_h_ = lstm_h_.detach();
+        lstm_c_ = lstm_c_.detach();
+        lstm_h_.zero_();
+        lstm_c_.zero_();
+    }
+
     torch::Tensor forward(torch::Tensor x)
     {
-        int64_t batch_size = x.size(0);
-        int64_t seq_len = x.size(1);
-        auto pos_ids = torch::arange(seq_len, torch::TensorOptions(torch::kLong).device(x.device()))
-                           .expand({batch_size, seq_len});
-        auto mask =
-            torch::triu(torch::ones({seq_len, seq_len}, torch::TensorOptions(x.device())), 1)
-                .to(torch::kBool);
-
-        x = token_embed_(x) + pos_embed_(pos_ids);
-        x = tf_(drop_(x), mask);
-        x = fc1_(dy1_(x));
+        x = embed_(x);
+        auto xhc = lstm_->forward(x, std::make_tuple(lstm_h_, lstm_c_));
+        auto hc = std::get<1>(xhc);
+        lstm_h_ = std::get<0>(hc);
+        lstm_c_ = std::get<1>(hc);
+        x = std::get<0>(xhc);
+        x = fc0_(x);
         return x;
     }
 
+    void to(torch::Device device, torch::Dtype dtype, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(device, dtype, non_blocking);
+        lstm_h_ = lstm_h_.to(device, dtype, non_blocking);
+        lstm_c_ = lstm_c_.to(device, dtype, non_blocking);
+    }
+
+    void to(torch::Dtype dtype, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(dtype, non_blocking);
+        lstm_h_ = lstm_h_.to(dtype, non_blocking);
+        lstm_c_ = lstm_c_.to(dtype, non_blocking);
+    }
+
+    void to(torch::Device device, bool non_blocking = false) override
+    {
+        torch::nn::Module::to(device, non_blocking);
+        lstm_h_ = lstm_h_.to(device, non_blocking);
+        lstm_c_ = lstm_c_.to(device, non_blocking);
+    }
+
 private:
-    const TransformerStackOptions o_;
-    torch::nn::Embedding token_embed_ = nullptr;
-    torch::nn::Embedding pos_embed_ = nullptr;
-    TransformerStack tf_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
-    torch::nn::Linear fc1_ = nullptr;
-    DyT dy1_ = nullptr;
+    int const lstm_hidden_;
+    int const lstm_layers_;
+    torch::nn::Embedding embed_ = nullptr;
+    torch::nn::LSTM lstm_ = nullptr;
+    torch::nn::Linear fc0_ = nullptr;
+    torch::Tensor lstm_h_;
+    torch::Tensor lstm_c_;
 };
 
 TORCH_MODULE(PoemNet);
@@ -407,20 +244,20 @@ void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device de
     double sum_loss = 0;
 
     for (auto& batch: data_loader) {
+        model->reset();
         auto data = batch.data.to(device);
         auto targets = batch.target.to(device);
         optimizer.zero_grad();
         auto logits = model(data);
         auto log_probs = torch::log_softmax(logits, -1);
-        auto loss = torch::nll_loss(log_probs.view({-1, VOCAB_SIZE}), targets.view({-1}), {},
-                                    torch::Reduction::Mean, TOKEN_PAD_ID);
+        auto loss = torch::nll_loss(log_probs.view({-1, VOCAB_SIZE}), targets.view({-1}));
         loss.backward();
         optimizer.step();
         sum_loss += loss.template item<float>();
 
         ++batch_idx;
         size_t trained_size = batch_idx * batch.data.size(0);
-        if (batch_idx % (1024 / BATCH_SIZE) == 0 || trained_size == dataset_size) {
+        if (batch_idx % 1000 == 0 || trained_size == dataset_size) {
             ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, trained_size, dataset_size,
                  sum_loss / batch_idx);
         }
@@ -454,23 +291,23 @@ int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double
 }
 
 std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch::Device device,
-                                    std::string const& prefix = "")
+                                    std::string const& prefix = "", int max_output = 600)
 {
     torch::NoGradGuard no_grad;
     model->eval();
+    model->reset();
     bool reach_eos = false;
-    std::vector<int> ids = {};
-    torch::Tensor data = torch::full({1, MAX_SEQ_LEN}, TOKEN_PAD_ID,
-                                     torch::TensorOptions(torch::kLong).device(device));
-    data.index({0, 0}) = TOKEN_BOS_ID;
-    for (int i = 1; i < MAX_SEQ_LEN; ++i) {
-        auto logits = model(data).index({0, i - 1});
-        int64_t next_token = sampleNext(logits);
+    std::vector<int> ids = {TOKEN_BOS_ID};
+    for (int i = 0; i < max_output; ++i) {
+        torch::Tensor data =
+            torch::tensor(ids.back(), torch::TensorOptions(torch::kLong).device(device))
+                .reshape({1, 1});
+        auto logits = model(data);
+        int64_t next_token = sampleNext(logits.squeeze());
         if (next_token == TOKEN_EOS_ID) {
             reach_eos = true;
             break;
         }
-        data.index({0, i}) = next_token;
         ids.push_back(next_token);
     }
     return std::make_pair(dataset.decode(ids), reach_eos);
@@ -480,7 +317,7 @@ void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device de
 {
     for (int i = 0; i < 5; ++i) {
         auto s = sample(model, dataset, device);
-        ILOG("{}{}", s.first, s.second ? "<eos>" : "");
+        ILOG(s.first);
     }
 }
 
@@ -494,7 +331,7 @@ void save(int curr_epoch, PoemNet& model, std::filesystem::path const& saved_pat
 
 }  // namespace
 
-MyErrCode poemGenerator(int argc, char** argv)
+MyErrCode poemWriter(int argc, char** argv)
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -514,7 +351,7 @@ MyErrCode poemGenerator(int argc, char** argv)
         ILOG("training on cpu");
     }
 
-    auto saved_model_path = toolkit::getTempDir() / "poem-generator.pt";
+    auto saved_model_path = toolkit::getTempDir() / "poem-writer.pt";
     PoemNet model;
     model->to(device);
     if (std::filesystem::exists(saved_model_path)) {
@@ -523,18 +360,17 @@ MyErrCode poemGenerator(int argc, char** argv)
         ia.load_from(saved_model_path.string());
         model->load(ia);
     }
-    CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-5));
+    torch::optim::RMSprop optimizer(model->parameters(), torch::optim::RMSpropOptions(1e-5));
 
+    MY_TIMER_BEGIN(INFO, "process")
     test(0, model, dataset, device);
     for (size_t epoch = 1; true; ++epoch) {
-        MY_TIMER_BEGIN(INFO, "epoch {}", epoch)
         train(epoch, model, dataset, device, *data_loader, optimizer);
-        MY_TIMER_END()
         test(epoch, model, dataset, device);
         save(epoch, model, saved_model_path);
     }
+    MY_TIMER_END()
 
     return MyErrCode::kOk;
 }

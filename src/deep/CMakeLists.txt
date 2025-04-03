@@ -12,7 +12,8 @@ add_executable(${TARGET_NAME}-samples
     main.cpp
     linear-regression.cpp
     fashion-mnist.cpp
-    poem-generator.cpp
+    poem-writer.cpp
+    essay-writer.cpp
 )
 
 target_link_libraries(${TARGET_NAME}-samples
