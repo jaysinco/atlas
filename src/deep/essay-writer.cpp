@@ -41,16 +41,15 @@ public:
         } else {
             total_ = rows[0][0].asInt();
         }
-        if (!done()) {
-            Next();
-        }
     }
 
     ~EssayIterator() override = default;
 
     bool done() const override { return idx_ > total_; }
 
-    void Next() override
+    void Next() override { ++idx_; }
+
+    std::string const& value() const override
     {
         toolkit::RowsValue rows;
         if (toolkit::SQLiteHelper::querySQL(
@@ -63,10 +62,8 @@ public:
         } else {
             curr_ = FSTR("《{}》 {}", rows.at(0).at(0).asStr(), rows.at(0).at(1).asStr());
         }
-        ++idx_;
+        return curr_;
     }
-
-    std::string const& value() const override { return curr_; }
 
     sentencepiece::util::Status status() const override { return {}; }
 
@@ -74,16 +71,18 @@ private:
     std::filesystem::path const& essay_db_;
     int total_;
     int idx_ = 1;
-    std::string curr_;
+    mutable std::string curr_;
 };
 
 class EssayDataset: public torch::data::Dataset<EssayDataset>
 {
 public:
     EssayDataset(std::filesystem::path const& essay_db, std::filesystem::path const& tk_model)
+        : essay_db_(essay_db), tk_model_(tk_model)
+
     {
-        if (loadEssayToken(essay_db, tk_model) != MyErrCode::kOk) {
-            MY_THROW("failed to load essay poken");
+        if (prepareTokenizer() != MyErrCode::kOk) {
+            MY_THROW("failed to prepare essay tokenizer");
         }
     }
 
@@ -125,14 +124,10 @@ public:
         return decode(ids);
     }
 
-private:
-    MyErrCode loadEssayToken(std::filesystem::path const& essay_db,
-                             std::filesystem::path const& tk_model)
+    MyErrCode load()
     {
-        CHECK_ERR_RET(prepareTokenizer(tk_model.string(), essay_db));
-
         tokenizer_ = std::make_shared<sentencepiece::SentencePieceProcessor>();
-        if (auto err = tokenizer_->Load(tk_model.string()); !err.ok()) {
+        if (auto err = tokenizer_->Load(tk_model_.string()); !err.ok()) {
             ELOG("failed to load tokenizer: {}", err);
             return MyErrCode::kFailed;
         }
@@ -140,7 +135,7 @@ private:
         essay_tk_ = std::make_shared<std::vector<std::vector<int>>>();
         int64_t sum_tokens = 0;
         int64_t count = 0;
-        EssayIterator iter(essay_db);
+        EssayIterator iter(essay_db_);
         for (; !iter.done(); iter.Next()) {
             std::string const& essay = iter.value();
             std::vector<int> pieces;
@@ -160,6 +155,7 @@ private:
         return MyErrCode::kOk;
     }
 
+private:
     MyErrCode splitEssay(std::vector<int>&& pieces)
     {
         if (pieces.size() > MAX_SEQ_LEN) {
@@ -176,14 +172,14 @@ private:
         return MyErrCode::kOk;
     }
 
-    static MyErrCode prepareTokenizer(std::string const& tk_model,
-                                      std::filesystem::path const& essay_db, bool force = false)
+    MyErrCode prepareTokenizer(bool force = false)
     {
-        if (std::filesystem::exists(tk_model) && !force) {
+        if (std::filesystem::exists(tk_model_) && !force) {
             return MyErrCode::kOk;
         }
         ILOG("training tokenizer model...");
-        EssayIterator iter(essay_db);
+        std::string tk_model = tk_model_.string();
+        EssayIterator iter(essay_db_);
         auto err = sentencepiece::SentencePieceTrainer::Train(
             {
                 {"model_prefix", tk_model.substr(0, tk_model.size() - 6)},
@@ -207,6 +203,8 @@ private:
         return MyErrCode::kOk;
     }
 
+    std::filesystem::path const essay_db_;
+    std::filesystem::path const tk_model_;
     std::shared_ptr<sentencepiece::SentencePieceProcessor> tokenizer_;
     std::shared_ptr<std::vector<std::vector<int>>> essay_tk_;
 };
@@ -458,7 +456,7 @@ void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device 
 
         ++batch_idx;
         size_t trained_size = batch_idx * batch.data.size(0);
-        if (batch_idx % (1024 / BATCH_SIZE) == 0 || trained_size == dataset_size) {
+        if (batch_idx % (10240 / BATCH_SIZE) == 0 || trained_size == dataset_size) {
             ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, trained_size, dataset_size,
                  sum_loss / batch_idx);
         }
@@ -539,9 +537,6 @@ MyErrCode essayWriter(int argc, char** argv)
 
     auto essay_db = CURR_FILE_DIR() / ".temp" / "essays.db";
     auto tk_model = CURR_FILE_DIR() / ".temp" / "essay.model";
-    EssayDataset dataset{essay_db, tk_model};
-    auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
-        dataset.map(torch::data::transforms::Stack<>()), BATCH_SIZE);
 
     torch::Device device(torch::kCPU);
     if (torch::cuda::is_available()) {
@@ -565,7 +560,11 @@ MyErrCode essayWriter(int argc, char** argv)
 
     torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-5));
 
+    EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
+    CHECK_ERR_RET(dataset.load());
+    auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
+        dataset.map(torch::data::transforms::Stack<>()), BATCH_SIZE);
     for (size_t epoch = 1; true; ++epoch) {
         MY_TIMER_BEGIN(INFO, "epoch {}", epoch)
         train(epoch, model, dataset, device, *data_loader, optimizer);

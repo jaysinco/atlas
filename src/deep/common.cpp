@@ -6,9 +6,9 @@ MyErrCode describeModel(torch::nn::Module const& model, std::string const& prefi
     for (auto const& param: model.parameters(true)) {
         param_count += param.numel();
     }
-    ILOG("{}[{}] ({} params)", prefix, model.name(), param_count);
+    DLOG("{}[{}] ({} params)", prefix, model.name(), param_count);
     for (auto const& param: model.named_parameters(false)) {
-        ILOG("{}..{}: {} ({} params)", prefix, param.key(), param.value().sizes(),
+        DLOG("{}..{}: {} ({} params)", prefix, param.key(), param.value().sizes(),
              param.value().numel());
     }
     for (auto const& child: model.named_children()) {
