@@ -3,13 +3,14 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 16
-#define MAX_SEQ_LEN 200
+#define MAX_SEQ_LEN 100
 #define SLIDE_WINDOW MAX_SEQ_LEN
 
-#define TF_NUM_LAYERS 12
-#define TF_EMBED_DIM 768
-#define TF_NUM_HEADS 12
-#define TF_HIDDEN_DIM 1024
+#define TF_NUM_LAYERS 6
+#define TF_NUM_HEADS 6
+#define TF_EMBED_DIM 384
+#define TF_HIDDEN_DIM TF_EMBED_DIM
+#define TF_DROPOUT 0.2
 
 #define VOCAB_SIZE 5120
 #define TOKEN_UNK_ID 0
@@ -59,9 +60,8 @@ public:
         }
         if (rows.empty() || rows[0].empty()) {
             MY_THROW("failed to query essay when id={}", idx_);
-        } else {
-            curr_ = FSTR("《{}》 {}", rows.at(0).at(0).asStr(), rows.at(0).at(1).asStr());
         }
+        curr_ = FSTR("《{}》 {}", rows.at(0).at(0).asStr(), rows.at(0).at(1).asStr());
         return curr_;
     }
 
@@ -152,15 +152,15 @@ public:
 private:
     MyErrCode splitEssay(std::vector<int>&& pieces)
     {
-        if (pieces.size() > MAX_SEQ_LEN) {
+        if (pieces.size() > MAX_SEQ_LEN + 1) {
             for (int i = 0; i < pieces.size(); i += SLIDE_WINDOW) {
-                std::vector<int> p(MAX_SEQ_LEN, TOKEN_PAD_ID);
-                int len = std::min(MAX_SEQ_LEN, static_cast<int>(pieces.size()) - i);
+                std::vector<int> p(MAX_SEQ_LEN + 1, TOKEN_PAD_ID);
+                int len = std::min(MAX_SEQ_LEN + 1, static_cast<int>(pieces.size()) - i);
                 std::copy(pieces.begin() + i, pieces.begin() + i + len, p.data());
                 essay_tk_->push_back(std::move(p));
             }
         } else {
-            pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
+            pieces.resize(MAX_SEQ_LEN + 1, TOKEN_PAD_ID);
             essay_tk_->push_back(std::move(pieces));
         }
         return MyErrCode::kOk;
@@ -266,7 +266,7 @@ struct MultiHeadSelfAttentionImpl: torch::nn::Module
         k_proj_ = register_module("k_proj", torch::nn::Linear(embed_dim_, embed_dim_));
         v_proj_ = register_module("v_proj", torch::nn::Linear(embed_dim_, embed_dim_));
         out_proj_ = register_module("out_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
+        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
     }
 
     // `x` has the shape of [batch_size, seq_len, embed_dim]
@@ -331,7 +331,7 @@ struct TransformerBlockImpl: torch::nn::Module
         dy1_ = register_module("dy1", DyT(DyTOptions(o.embed_dim(), 0.5)));
         dy2_ = register_module("dy2", DyT(DyTOptions(o.embed_dim(), 0.5)));
         attn_ = register_module("attn", MultiHeadSelfAttention(o));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
+        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
     }
 
     torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
@@ -397,7 +397,7 @@ struct EssayNetImpl: torch::nn::Module
         pos_embed_ = register_module("pos_embed", torch::nn::Embedding(torch::nn::EmbeddingOptions(
                                                       MAX_SEQ_LEN, o_.embed_dim())));
         tf_ = register_module("tf", TransformerStack(o_));
-        drop_ = register_module("drop", torch::nn::Dropout(0.1));
+        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
         fc1_ = register_module("fc1", torch::nn::Linear(o_.embed_dim(), VOCAB_SIZE));
         dy1_ = register_module("dy1", DyT(DyTOptions(o_.embed_dim(), 0.5)));
     }
@@ -450,7 +450,7 @@ void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device 
                                     torch::Reduction::Mean, TOKEN_PAD_ID);
         loss.backward();
         optimizer.step();
-        smooth_loss = smooth_loss * 0.999 + loss.template item<float>() * 0.001;
+        smooth_loss = smooth_loss * 0.9 + loss.template item<float>() * 0.1;
 
         ++batch_idx;
         size_t trained_size = batch_idx * batch.data.size(0);
@@ -556,7 +556,8 @@ MyErrCode essayWriter(int argc, char** argv)
     }
     CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-4));
+    torch::optim::Adam optimizer(model->parameters(),
+                                 torch::optim::AdamOptions(1e-5).weight_decay(1e-5));
 
     EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
