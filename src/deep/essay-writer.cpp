@@ -2,8 +2,15 @@
 #include <sentencepiece_trainer.h>
 #include "toolkit/sqlite-helper.h"
 
-#define BATCH_SIZE 1
-#define MAX_SEQ_LEN 150
+#define BATCH_SIZE 16
+#define MAX_SEQ_LEN 200
+#define SLIDE_WINDOW MAX_SEQ_LEN
+
+#define TF_NUM_LAYERS 12
+#define TF_EMBED_DIM 768
+#define TF_NUM_HEADS 12
+#define TF_HIDDEN_DIM 1024
+
 #define VOCAB_SIZE 5120
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
@@ -19,40 +26,70 @@ std::string toString(sentencepiece::util::Status const& s);
 namespace
 {
 
-class StrSentenceIterator: public sentencepiece::SentenceIterator
+class EssayIterator: public sentencepiece::SentenceIterator
 {
 public:
-    StrSentenceIterator(std::vector<std::string> const& data): data_(data), total_(data.size()) {}
+    EssayIterator(std::filesystem::path const& essay_db): essay_db_(essay_db)
+    {
+        toolkit::RowsValue rows;
+        if (toolkit::SQLiteHelper::querySQL(essay_db_, {"select count(*) from essays;", {{}}},
+                                            rows) != MyErrCode::kOk) {
+            MY_THROW("failed to query essay count");
+        }
+        if (rows.empty() || rows[0].empty()) {
+            total_ = 0;
+        } else {
+            total_ = rows[0][0].asInt();
+        }
+        if (!done()) {
+            Next();
+        }
+    }
 
-    ~StrSentenceIterator() override = default;
+    ~EssayIterator() override = default;
 
-    bool done() const override { return idx_ >= total_; }
+    bool done() const override { return idx_ > total_; }
 
-    void Next() override { ++idx_; }
+    void Next() override
+    {
+        toolkit::RowsValue rows;
+        if (toolkit::SQLiteHelper::querySQL(
+                essay_db_, {"select title, content from essays where id = ?;", {{idx_}}}, rows) !=
+            MyErrCode::kOk) {
+            MY_THROW("failed to query essay when id={}", idx_);
+        }
+        if (rows.empty() || rows[0].empty()) {
+            MY_THROW("failed to query essay when id={}", idx_);
+        } else {
+            curr_ = FSTR("《{}》 {}", rows.at(0).at(0).asStr(), rows.at(0).at(1).asStr());
+        }
+        ++idx_;
+    }
 
-    std::string const& value() const override { return data_[idx_]; }
+    std::string const& value() const override { return curr_; }
 
     sentencepiece::util::Status status() const override { return {}; }
 
 private:
-    std::vector<std::string> const& data_;
-    int idx_ = 0;
+    std::filesystem::path const& essay_db_;
     int total_;
+    int idx_ = 1;
+    std::string curr_;
 };
 
-class PoemDataset: public torch::data::Dataset<PoemDataset>
+class EssayDataset: public torch::data::Dataset<EssayDataset>
 {
 public:
-    PoemDataset(std::filesystem::path const& poem_db, std::filesystem::path const& tk_model)
+    EssayDataset(std::filesystem::path const& essay_db, std::filesystem::path const& tk_model)
     {
-        if (loadPoemToken(poem_db, tk_model, tokenizer_, poem_tk_) != MyErrCode::kOk) {
-            MY_THROW("failed to load poem poken");
+        if (loadEssayToken(essay_db, tk_model) != MyErrCode::kOk) {
+            MY_THROW("failed to load essay poken");
         }
     }
 
     ExampleType get(size_t index) override
     {
-        auto& p = poem_tk_->at(index);
+        auto& p = essay_tk_->at(index);
         torch::Tensor data = torch::from_blob(
             p.data(), {static_cast<int>(p.size())}, [](void* buf) {}, torch::kInt32);
 
@@ -67,7 +104,7 @@ public:
         return {data.to(torch::kLong), target.to(torch::kLong)};
     }
 
-    c10::optional<size_t> size() const override { return poem_tk_->size(); }
+    c10::optional<size_t> size() const override { return essay_tk_->size(); }
 
     std::string decode(std::vector<int> const& ids)
     {
@@ -89,70 +126,71 @@ public:
     }
 
 private:
-    static MyErrCode loadPoemToken(
-        std::filesystem::path const& poem_db, std::filesystem::path const& tk_model,
-        std::shared_ptr<sentencepiece::SentencePieceProcessor>& tokenizer,
-        std::shared_ptr<std::vector<std::vector<int>>>& poem_tk)
+    MyErrCode loadEssayToken(std::filesystem::path const& essay_db,
+                             std::filesystem::path const& tk_model)
     {
-        std::vector<std::string> poem_str;
-        CHECK_ERR_RET(loadPoemStr(poem_db, poem_str));
-        CHECK_ERR_RET(prepareTokenizer(tk_model.string(), poem_str));
+        CHECK_ERR_RET(prepareTokenizer(tk_model.string(), essay_db));
 
-        tokenizer = std::make_shared<sentencepiece::SentencePieceProcessor>();
-        if (auto err = tokenizer->Load(tk_model.string()); !err.ok()) {
+        tokenizer_ = std::make_shared<sentencepiece::SentencePieceProcessor>();
+        if (auto err = tokenizer_->Load(tk_model.string()); !err.ok()) {
             ELOG("failed to load tokenizer: {}", err);
             return MyErrCode::kFailed;
         }
 
-        poem_tk = std::make_shared<std::vector<std::vector<int>>>();
+        essay_tk_ = std::make_shared<std::vector<std::vector<int>>>();
         int64_t sum_tokens = 0;
-        for (auto const& poem: poem_str) {
+        int64_t count = 0;
+        EssayIterator iter(essay_db);
+        for (; !iter.done(); iter.Next()) {
+            std::string const& essay = iter.value();
             std::vector<int> pieces;
-            if (auto err = tokenizer->Encode(poem, &pieces); !err.ok()) {
-                ELOG("failed to encode '{}': {}", poem, err);
+            if (auto err = tokenizer_->Encode(essay, &pieces); !err.ok()) {
+                ELOG("failed to encode '{}': {}", essay, err);
                 return MyErrCode::kFailed;
             }
-            sum_tokens += pieces.size();
             pieces.insert(pieces.begin(), TOKEN_BOS_ID);
             pieces.push_back(TOKEN_EOS_ID);
-            pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
-            poem_tk->push_back(std::move(pieces));
+            sum_tokens += pieces.size();
+            ++count;
+            CHECK_ERR_RET(splitEssay(std::move(pieces)));
         }
 
-        ILOG("{} poems loaded, {:.1f} average tokens", poem_str.size(),
-             static_cast<float>(sum_tokens) / poem_str.size());
-
+        ILOG("{} essays loaded, {:.1f} average tokens", count,
+             static_cast<float>(sum_tokens) / count);
         return MyErrCode::kOk;
     }
 
-    static MyErrCode loadPoemStr(std::filesystem::path const& poem_db,
-                                 std::vector<std::string>& poem_str)
+    MyErrCode splitEssay(std::vector<int>&& pieces)
     {
-        toolkit::RowsValue rows;
-        CHECK_ERR_RET(toolkit::SQLiteHelper::querySQL(
-            poem_db, {"select rhythmic, content from ci order by value;", {{}}}, rows))
-        for (auto& row: rows) {
-            auto s = FSTR("《{}》 {}", row.at(0).asStr(), row.at(1).asStr());
-            poem_str.push_back(s);
+        if (pieces.size() > MAX_SEQ_LEN) {
+            for (int i = 0; i < pieces.size(); i += SLIDE_WINDOW) {
+                std::vector<int> p(MAX_SEQ_LEN, TOKEN_PAD_ID);
+                int len = std::min(MAX_SEQ_LEN, static_cast<int>(pieces.size()) - i);
+                std::copy(pieces.begin() + i, pieces.begin() + i + len, p.data());
+                essay_tk_->push_back(std::move(p));
+            }
+        } else {
+            pieces.resize(MAX_SEQ_LEN, TOKEN_PAD_ID);
+            essay_tk_->push_back(std::move(pieces));
         }
         return MyErrCode::kOk;
     }
 
     static MyErrCode prepareTokenizer(std::string const& tk_model,
-                                      std::vector<std::string> const& poem_str, bool force = false)
+                                      std::filesystem::path const& essay_db, bool force = false)
     {
         if (std::filesystem::exists(tk_model) && !force) {
             return MyErrCode::kOk;
         }
         ILOG("training tokenizer model...");
-        StrSentenceIterator iter(poem_str);
+        EssayIterator iter(essay_db);
         auto err = sentencepiece::SentencePieceTrainer::Train(
             {
                 {"model_prefix", tk_model.substr(0, tk_model.size() - 6)},
                 {"vocab_size", std::to_string(VOCAB_SIZE)},
                 {"character_coverage", "0.9995"},
                 {"model_type", "unigram"},
-                {"minloglevel", "1"},
+                {"minloglevel", "0"},
                 {"add_dummy_prefix", "false"},
                 {"normalization_rule_name", "identity"},
                 {"unk_id", std::to_string(TOKEN_UNK_ID)},
@@ -170,7 +208,7 @@ private:
     }
 
     std::shared_ptr<sentencepiece::SentencePieceProcessor> tokenizer_;
-    std::shared_ptr<std::vector<std::vector<int>>> poem_tk_;
+    std::shared_ptr<std::vector<std::vector<int>>> essay_tk_;
 };
 
 struct DyTOptions
@@ -353,9 +391,9 @@ private:
 
 TORCH_MODULE(TransformerStack);
 
-struct PoemNetImpl: torch::nn::Module
+struct EssayNetImpl: torch::nn::Module
 {
-    PoemNetImpl(): o_(3, 192, 3, 256)
+    EssayNetImpl(): o_(TF_NUM_LAYERS, TF_EMBED_DIM, TF_NUM_HEADS, TF_HIDDEN_DIM)
     {
         token_embed_ = register_module(
             "token_embed",
@@ -395,10 +433,10 @@ private:
     DyT dy1_ = nullptr;
 };
 
-TORCH_MODULE(PoemNet);
+TORCH_MODULE(EssayNet);
 
 template <typename DataLoader>
-void train(int curr_epoch, PoemNet& model, PoemDataset dataset, torch::Device device,
+void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device device,
            DataLoader& data_loader, torch::optim::Optimizer& optimizer)
 {
     model->train();
@@ -453,7 +491,7 @@ int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double
     return next_token.item<int64_t>();
 }
 
-std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch::Device device,
+std::pair<std::string, bool> sample(EssayNet& model, EssayDataset& dataset, torch::Device device,
                                     std::string const& prefix = "")
 {
     torch::NoGradGuard no_grad;
@@ -476,7 +514,7 @@ std::pair<std::string, bool> sample(PoemNet& model, PoemDataset& dataset, torch:
     return std::make_pair(dataset.decode(ids), reach_eos);
 }
 
-void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device device)
+void test(int curr_epoch, EssayNet& model, EssayDataset& dataset, torch::Device device)
 {
     for (int i = 0; i < 5; ++i) {
         auto s = sample(model, dataset, device);
@@ -484,7 +522,7 @@ void test(int curr_epoch, PoemNet& model, PoemDataset& dataset, torch::Device de
     }
 }
 
-void save(int curr_epoch, PoemNet& model, std::filesystem::path const& saved_path)
+void save(int curr_epoch, EssayNet& model, std::filesystem::path const& saved_path)
 {
     torch::serialize::OutputArchive oa;
     model->save(oa);
@@ -499,9 +537,9 @@ MyErrCode essayWriter(int argc, char** argv)
     toolkit::Args args(argc, argv);
     args.parse();
 
-    auto poem_db = toolkit::getDataDir() / "ci.db";
-    auto tk_model = toolkit::getDataDir() / "poem.model";
-    PoemDataset dataset{poem_db, tk_model};
+    auto essay_db = CURR_FILE_DIR() / ".temp" / "essays.db";
+    auto tk_model = CURR_FILE_DIR() / ".temp" / "essay.model";
+    EssayDataset dataset{essay_db, tk_model};
     auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
         dataset.map(torch::data::transforms::Stack<>()), BATCH_SIZE);
 
@@ -514,8 +552,8 @@ MyErrCode essayWriter(int argc, char** argv)
         ILOG("training on cpu");
     }
 
-    auto saved_model_path = toolkit::getTempDir() / "poem-generator.pt";
-    PoemNet model;
+    auto saved_model_path = toolkit::getTempDir() / "essay-writer.pt";
+    EssayNet model;
     model->to(device);
     if (std::filesystem::exists(saved_model_path)) {
         ILOG("load model from {}", saved_model_path);
