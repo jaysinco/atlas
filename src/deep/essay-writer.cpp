@@ -126,12 +126,6 @@ public:
 
     MyErrCode load()
     {
-        tokenizer_ = std::make_shared<sentencepiece::SentencePieceProcessor>();
-        if (auto err = tokenizer_->Load(tk_model_.string()); !err.ok()) {
-            ELOG("failed to load tokenizer: {}", err);
-            return MyErrCode::kFailed;
-        }
-
         essay_tk_ = std::make_shared<std::vector<std::vector<int>>>();
         int64_t sum_tokens = 0;
         int64_t count = 0;
@@ -174,32 +168,36 @@ private:
 
     MyErrCode prepareTokenizer(bool force = false)
     {
-        if (std::filesystem::exists(tk_model_) && !force) {
-            return MyErrCode::kOk;
-        }
-        ILOG("training tokenizer model...");
         std::string tk_model = tk_model_.string();
-        EssayIterator iter(essay_db_);
-        auto err = sentencepiece::SentencePieceTrainer::Train(
-            {
-                {"model_prefix", tk_model.substr(0, tk_model.size() - 6)},
-                {"vocab_size", std::to_string(VOCAB_SIZE)},
-                {"character_coverage", "0.9995"},
-                {"model_type", "unigram"},
-                {"minloglevel", "0"},
-                {"add_dummy_prefix", "false"},
-                {"normalization_rule_name", "identity"},
-                {"unk_id", std::to_string(TOKEN_UNK_ID)},
-                {"bos_id", std::to_string(TOKEN_BOS_ID)},
-                {"eos_id", std::to_string(TOKEN_EOS_ID)},
-                {"pad_id", std::to_string(TOKEN_PAD_ID)},
-            },
-            &iter);
-        if (!err.ok()) {
-            ELOG("failed to train tokenizer: {}", err);
+        if (!std::filesystem::exists(tk_model_) || force) {
+            ILOG("training tokenizer model...");
+            EssayIterator iter(essay_db_);
+            auto err = sentencepiece::SentencePieceTrainer::Train(
+                {
+                    {"model_prefix", tk_model.substr(0, tk_model.size() - 6)},
+                    {"vocab_size", std::to_string(VOCAB_SIZE)},
+                    {"character_coverage", "0.9995"},
+                    {"model_type", "unigram"},
+                    {"minloglevel", "0"},
+                    {"add_dummy_prefix", "false"},
+                    {"normalization_rule_name", "identity"},
+                    {"unk_id", std::to_string(TOKEN_UNK_ID)},
+                    {"bos_id", std::to_string(TOKEN_BOS_ID)},
+                    {"eos_id", std::to_string(TOKEN_EOS_ID)},
+                    {"pad_id", std::to_string(TOKEN_PAD_ID)},
+                },
+                &iter);
+            if (!err.ok()) {
+                ELOG("failed to train tokenizer: {}", err);
+                return MyErrCode::kFailed;
+            }
+            ILOG("tokenizer model is written to {}", tk_model);
+        }
+        tokenizer_ = std::make_shared<sentencepiece::SentencePieceProcessor>();
+        if (auto err = tokenizer_->Load(tk_model); !err.ok()) {
+            ELOG("failed to load tokenizer: {}", err);
             return MyErrCode::kFailed;
         }
-        ILOG("tokenizer model is written to {}", tk_model);
         return MyErrCode::kOk;
     }
 
@@ -440,7 +438,7 @@ void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device 
     model->train();
     size_t dataset_size = *dataset.size();
     size_t batch_idx = 0;
-    double sum_loss = 0;
+    double smooth_loss = -std::log(1.0 / VOCAB_SIZE);
 
     for (auto& batch: data_loader) {
         auto data = batch.data.to(device);
@@ -452,13 +450,13 @@ void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device 
                                     torch::Reduction::Mean, TOKEN_PAD_ID);
         loss.backward();
         optimizer.step();
-        sum_loss += loss.template item<float>();
+        smooth_loss = smooth_loss * 0.999 + loss.template item<float>() * 0.001;
 
         ++batch_idx;
         size_t trained_size = batch_idx * batch.data.size(0);
         if (batch_idx % (10240 / BATCH_SIZE) == 0 || trained_size == dataset_size) {
             ILOG("epoch {}: {:5}/{:5} loss={:.4f}", curr_epoch, trained_size, dataset_size,
-                 sum_loss / batch_idx);
+                 smooth_loss);
         }
     }
 }
@@ -547,7 +545,7 @@ MyErrCode essayWriter(int argc, char** argv)
         ILOG("training on cpu");
     }
 
-    auto saved_model_path = toolkit::getTempDir() / "essay-writer.pt";
+    auto saved_model_path = CURR_FILE_DIR() / ".temp" / "essay-writer.pt";
     EssayNet model;
     model->to(device);
     if (std::filesystem::exists(saved_model_path)) {
@@ -558,7 +556,7 @@ MyErrCode essayWriter(int argc, char** argv)
     }
     CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-5));
+    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-4));
 
     EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
