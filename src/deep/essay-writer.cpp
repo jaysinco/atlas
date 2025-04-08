@@ -3,16 +3,16 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 16
-#define MAX_SEQ_LEN 200
+#define MAX_SEQ_LEN 256
 #define SLIDE_WINDOW MAX_SEQ_LEN
 
 #define TF_NUM_LAYERS 12
 #define TF_NUM_HEADS 12
 #define TF_EMBED_DIM 768
-#define TF_HIDDEN_DIM TF_EMBED_DIM
+#define TF_HIDDEN_DIM 1024
 #define TF_DROPOUT 0.2
 
-#define VOCAB_SIZE 30000
+#define VOCAB_SIZE 16384
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
 #define TOKEN_EOS_ID 2
@@ -206,40 +206,33 @@ private:
     std::shared_ptr<std::vector<std::vector<int>>> essay_tk_;
 };
 
-struct DyTOptions
+struct LayerNormOptions
 {
-    explicit DyTOptions(int64_t embed_dim, float init_alpha)
-        : embed_dim_(embed_dim), init_alpha_(init_alpha)
-    {
-    }
+    explicit LayerNormOptions(int64_t embed_dim): embed_dim_(embed_dim) {}
 
     TORCH_ARG(int64_t, embed_dim);
-    TORCH_ARG(float, init_alpha);
 };
 
-struct DyTImpl: torch::nn::Module
+struct LayerNormImpl: torch::nn::Module
 {
-    DyTImpl(DyTOptions const& o)
+    LayerNormImpl(LayerNormOptions const& o)
     {
-        alpha_ = register_parameter("alpha", torch::ones(1) * o.init_alpha());
-        gamma_ = register_parameter("gamma", torch::ones(o.embed_dim()));
-        beta_ = register_parameter("beta", torch::zeros(o.embed_dim()));
+        weight_ = register_parameter("weight", torch::ones(o.embed_dim()));
+        bias_ = register_parameter("bias", torch::zeros(o.embed_dim()));
     }
 
     // `x` has the shape of [batch_size, seq_len, embed_dim]
     torch::Tensor forward(torch::Tensor x)
     {
-        x = torch::tanh(alpha_ * x);
-        return gamma_ * x + beta_;
+        return torch::layer_norm(x, weight_.sizes(), weight_, bias_);
     }
 
 private:
-    torch::Tensor alpha_;
-    torch::Tensor gamma_;
-    torch::Tensor beta_;
+    torch::Tensor weight_;
+    torch::Tensor bias_;
 };
 
-TORCH_MODULE(DyT);
+TORCH_MODULE(LayerNorm);
 
 struct MultiHeadSelfAttentionOptions
 {
@@ -327,19 +320,19 @@ struct TransformerBlockImpl: torch::nn::Module
     {
         fc1_ = register_module("fc1", torch::nn::Linear(o.embed_dim(), o.hidden_dim()));
         fc2_ = register_module("fc2", torch::nn::Linear(o.hidden_dim(), o.embed_dim()));
-        dy1_ = register_module("dy1", DyT(DyTOptions(o.embed_dim(), 0.5)));
-        dy2_ = register_module("dy2", DyT(DyTOptions(o.embed_dim(), 0.5)));
+        ln1_ = register_module("ln1", LayerNorm(LayerNormOptions(o.embed_dim())));
+        ln2_ = register_module("ln2", LayerNorm(LayerNormOptions(o.embed_dim())));
         attn_ = register_module("attn", MultiHeadSelfAttention(o));
         drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
     }
 
     torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
     {
-        x = attn_(dy1_(x), mask);
-        x = dy2_(x + drop_(x));
-        x = torch::gelu(fc1_(x));
-        x = fc2_(drop_(x));
-        x = x + drop_(x);
+        auto a = attn_(ln1_(x), mask);
+        x = x + drop_(a);
+        auto m = torch::gelu(fc1_(ln2_(x)));
+        m = fc2_(drop_(m));
+        x = x + drop_(m);
         return x;
     }
 
@@ -347,7 +340,7 @@ private:
     MultiHeadSelfAttention attn_ = nullptr;
     torch::nn::Linear fc1_ = nullptr, fc2_ = nullptr;
     torch::nn::Dropout drop_ = nullptr;
-    DyT dy1_ = nullptr, dy2_ = nullptr;
+    LayerNorm ln1_ = nullptr, ln2_ = nullptr;
 };
 
 TORCH_MODULE(TransformerBlock);
@@ -398,7 +391,7 @@ struct EssayNetImpl: torch::nn::Module
         tf_ = register_module("tf", TransformerStack(o_));
         drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
         fc1_ = register_module("fc1", torch::nn::Linear(o_.embed_dim(), VOCAB_SIZE));
-        dy1_ = register_module("dy1", DyT(DyTOptions(o_.embed_dim(), 0.5)));
+        ln1_ = register_module("ln1", LayerNorm(LayerNormOptions(o_.embed_dim())));
     }
 
     // `x` has the shape of [batch_size, seq_len]
@@ -414,7 +407,7 @@ struct EssayNetImpl: torch::nn::Module
 
         x = token_embed_(x) + pos_embed_(pos_ids);
         x = tf_(drop_(x), mask);
-        x = fc1_(dy1_(x));
+        x = fc1_(ln1_(x));
         return x;
     }
 
@@ -425,7 +418,7 @@ private:
     TransformerStack tf_ = nullptr;
     torch::nn::Dropout drop_ = nullptr;
     torch::nn::Linear fc1_ = nullptr;
-    DyT dy1_ = nullptr;
+    LayerNorm ln1_ = nullptr;
 };
 
 TORCH_MODULE(EssayNet);
@@ -556,7 +549,7 @@ MyErrCode essayWriter(int argc, char** argv)
     CHECK_ERR_RET(describeModel(*model));
 
     torch::optim::Adam optimizer(model->parameters(),
-                                 torch::optim::AdamOptions(1e-5).weight_decay(1e-5));
+                                 torch::optim::AdamOptions(1e-4).weight_decay(1e-5));
 
     EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
