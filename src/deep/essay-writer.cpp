@@ -179,7 +179,7 @@ private:
                     {"model_type", "unigram"},
                     {"minloglevel", "0"},
                     {"add_dummy_prefix", "false"},
-                    {"normalization_rule_name", "identity"},
+                    {"normalization_rule_name", "nmt_nfkc"},
                     {"unk_id", std::to_string(TOKEN_UNK_ID)},
                     {"bos_id", std::to_string(TOKEN_BOS_ID)},
                     {"eos_id", std::to_string(TOKEN_EOS_ID)},
