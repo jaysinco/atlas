@@ -453,8 +453,8 @@ void train(int curr_epoch, EssayNet& model, EssayDataset dataset, torch::Device 
     }
 }
 
-int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double top_p = 0.7,
-                   int top_k = 50)
+int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, int top_k = 50,
+                   double top_p = -1)
 {
     torch::Tensor scaled_logits = logits / temperature;
     torch::Tensor probs = torch::softmax(scaled_logits, -1);
@@ -462,8 +462,7 @@ int64_t sampleNext(torch::Tensor const& logits, double temperature = 0.7, double
         auto [topk_values, topk_indices] = torch::topk(probs, top_k);
         torch::Tensor mask = torch::zeros_like(probs).scatter(-1, topk_indices, topk_values);
         probs = mask / mask.sum(-1, true);
-    }
-    if (top_p < 1.0) {
+    } else if (top_p > 0 && top_p < 1) {
         auto [sorted_probs, sorted_indices] = torch::sort(probs, -1, true);
         torch::Tensor cum_probs = torch::cumsum(sorted_probs, -1);
         torch::Tensor mask = cum_probs <= top_p;
