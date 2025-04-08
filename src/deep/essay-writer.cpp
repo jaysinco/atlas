@@ -3,16 +3,16 @@
 #include "toolkit/sqlite-helper.h"
 
 #define BATCH_SIZE 16
-#define MAX_SEQ_LEN 100
+#define MAX_SEQ_LEN 200
 #define SLIDE_WINDOW MAX_SEQ_LEN
 
-#define TF_NUM_LAYERS 6
-#define TF_NUM_HEADS 6
-#define TF_EMBED_DIM 384
+#define TF_NUM_LAYERS 12
+#define TF_NUM_HEADS 12
+#define TF_EMBED_DIM 768
 #define TF_HIDDEN_DIM TF_EMBED_DIM
 #define TF_DROPOUT 0.2
 
-#define VOCAB_SIZE 5120
+#define VOCAB_SIZE 30000
 #define TOKEN_UNK_ID 0
 #define TOKEN_BOS_ID 1
 #define TOKEN_EOS_ID 2
@@ -90,13 +90,12 @@ public:
     {
         auto& p = essay_tk_->at(index);
         torch::Tensor data = torch::from_blob(
-            p.data(), {static_cast<int>(p.size())}, [](void* buf) {}, torch::kInt32);
+            p.data(), {static_cast<int>(MAX_SEQ_LEN)}, [](void* buf) {}, torch::kInt32);
 
         std::vector<int> n;
-        for (int i = 1; i < p.size(); ++i) {
+        for (int i = 1; i < MAX_SEQ_LEN + 1; ++i) {
             n.push_back(p[i]);
         }
-        n.push_back(TOKEN_UNK_ID);
         torch::Tensor target = torch::from_blob(
             n.data(), {static_cast<int64_t>(n.size())}, [](void* buf) {}, torch::kInt32);
 
