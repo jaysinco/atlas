@@ -2,7 +2,7 @@
 #include <sentencepiece_trainer.h>
 #include "toolkit/sqlite-helper.h"
 
-#define BATCH_SIZE 64
+#define BATCH_SIZE 8
 #define MAX_SEQ_LEN 256
 #define SLIDE_WINDOW MAX_SEQ_LEN
 
@@ -538,7 +538,7 @@ MyErrCode essayWriter(int argc, char** argv)
     }
     CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(5e-5));
+    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(1e-5));
 
     EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
