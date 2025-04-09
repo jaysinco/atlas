@@ -2,7 +2,7 @@
 #include <sentencepiece_trainer.h>
 #include "toolkit/sqlite-helper.h"
 
-#define BATCH_SIZE 16
+#define BATCH_SIZE 64
 #define MAX_SEQ_LEN 256
 #define SLIDE_WINDOW MAX_SEQ_LEN
 
@@ -10,7 +10,6 @@
 #define TF_NUM_HEADS 12
 #define TF_EMBED_DIM 768
 #define TF_HIDDEN_DIM 1024
-#define TF_DROPOUT 0.2
 
 #define VOCAB_SIZE 16384
 #define TOKEN_UNK_ID 0
@@ -258,7 +257,6 @@ struct MultiHeadSelfAttentionImpl: torch::nn::Module
         k_proj_ = register_module("k_proj", torch::nn::Linear(embed_dim_, embed_dim_));
         v_proj_ = register_module("v_proj", torch::nn::Linear(embed_dim_, embed_dim_));
         out_proj_ = register_module("out_proj", torch::nn::Linear(embed_dim_, embed_dim_));
-        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
     }
 
     // `x` has the shape of [batch_size, seq_len, embed_dim]
@@ -283,7 +281,6 @@ struct MultiHeadSelfAttentionImpl: torch::nn::Module
         }
 
         auto attn_weights = torch::softmax(scores, -1);
-        attn_weights = drop_(attn_weights);
         auto output = torch::matmul(attn_weights, v);
         output = output.transpose(1, 2).contiguous().view({batch_size, seq_len, embed_dim_});
 
@@ -299,7 +296,6 @@ private:
     torch::nn::Linear k_proj_ = nullptr;
     torch::nn::Linear v_proj_ = nullptr;
     torch::nn::Linear out_proj_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
 };
 
 TORCH_MODULE(MultiHeadSelfAttention);
@@ -323,23 +319,20 @@ struct TransformerBlockImpl: torch::nn::Module
         ln1_ = register_module("ln1", LayerNorm(LayerNormOptions(o.embed_dim())));
         ln2_ = register_module("ln2", LayerNorm(LayerNormOptions(o.embed_dim())));
         attn_ = register_module("attn", MultiHeadSelfAttention(o));
-        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
     }
 
     torch::Tensor forward(torch::Tensor x, torch::Tensor mask = {})
     {
         auto a = attn_(ln1_(x), mask);
-        x = x + drop_(a);
+        x = x + a;
         auto m = torch::gelu(fc1_(ln2_(x)));
-        m = fc2_(drop_(m));
-        x = x + drop_(m);
+        x = x + fc2_(m);
         return x;
     }
 
 private:
     MultiHeadSelfAttention attn_ = nullptr;
     torch::nn::Linear fc1_ = nullptr, fc2_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
     LayerNorm ln1_ = nullptr, ln2_ = nullptr;
 };
 
@@ -389,7 +382,6 @@ struct EssayNetImpl: torch::nn::Module
         pos_embed_ = register_module("pos_embed", torch::nn::Embedding(torch::nn::EmbeddingOptions(
                                                       MAX_SEQ_LEN, o_.embed_dim())));
         tf_ = register_module("tf", TransformerStack(o_));
-        drop_ = register_module("drop", torch::nn::Dropout(TF_DROPOUT));
         fc1_ = register_module("fc1", torch::nn::Linear(o_.embed_dim(), VOCAB_SIZE));
         ln1_ = register_module("ln1", LayerNorm(LayerNormOptions(o_.embed_dim())));
     }
@@ -406,7 +398,7 @@ struct EssayNetImpl: torch::nn::Module
                 .to(torch::kBool);
 
         x = token_embed_(x) + pos_embed_(pos_ids);
-        x = tf_(drop_(x), mask);
+        x = tf_(x, mask);
         x = fc1_(ln1_(x));
         return x;
     }
@@ -416,7 +408,6 @@ private:
     torch::nn::Embedding token_embed_ = nullptr;
     torch::nn::Embedding pos_embed_ = nullptr;
     TransformerStack tf_ = nullptr;
-    torch::nn::Dropout drop_ = nullptr;
     torch::nn::Linear fc1_ = nullptr;
     LayerNorm ln1_ = nullptr;
 };
@@ -547,8 +538,7 @@ MyErrCode essayWriter(int argc, char** argv)
     }
     CHECK_ERR_RET(describeModel(*model));
 
-    torch::optim::Adam optimizer(model->parameters(),
-                                 torch::optim::AdamOptions(1e-4).weight_decay(1e-5));
+    torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(5e-5));
 
     EssayDataset dataset{essay_db, tk_model};
     test(0, model, dataset, device);
