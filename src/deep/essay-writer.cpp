@@ -533,7 +533,7 @@ MyErrCode essayWriter(int argc, char** argv)
     if (std::filesystem::exists(saved_model_path)) {
         ILOG("load model from {}", saved_model_path);
         torch::serialize::InputArchive ia;
-        ia.load_from(saved_model_path.string());
+        ia.load_from(saved_model_path.string(), device);
         model->load(ia);
     }
     CHECK_ERR_RET(describeModel(*model));
