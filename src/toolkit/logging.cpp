@@ -87,9 +87,9 @@ MyErrCode initLogger(LoggerOption&& opt)
     spdlog::set_default_logger(logger);
     spdlog::flush_every(std::chrono::seconds(opt.logbufsecs));
 
-    ILOG("### GIT HASH: {} ###", _GIT_HASH);
-    ILOG("### GIT BRANCH: {} ###", _GIT_BRANCH);
-    ILOG("### BUILD AT: {} {} ###", __DATE__, __TIME__);
+    DLOG("### GIT HASH: {} ###", _GIT_HASH);
+    DLOG("### GIT BRANCH: {} ###", _GIT_BRANCH);
+    DLOG("### BUILD AT: {} {} ###", __DATE__, __TIME__);
     return MyErrCode::kOk;
 }
 

@@ -39,7 +39,7 @@ static std::string cellValueToSQL(CellValue const& val)
 SQLiteHelper::Stmt::~Stmt()
 {
     if (this->stmt_ != nullptr) {
-        DLOG("[{}] finalize sql", sqlite3_finalize(this->stmt_));
+        TLOG("[{}] finalize sql", sqlite3_finalize(this->stmt_));
     }
 }
 
@@ -73,7 +73,7 @@ MyErrCode SQLiteHelper::Stmt::bind(std::vector<CellValue> const& vals)
 {
     for (int i = 0; i < vals.size(); ++i) {
         int code = bindCell(vals.at(i), i + 1);
-        DLOG("[{}] bind value {} -> {}", code, i + 1, cellValueToSQL(vals.at(i)));
+        TLOG("[{}] bind value {} -> {}", code, i + 1, cellValueToSQL(vals.at(i)));
         if (code != SQLITE_OK) {
             ELOG(sqlite3_errmsg(this->db_));
             return MyErrCode::kFailed;
@@ -86,7 +86,7 @@ MyErrCode SQLiteHelper::Stmt::step(bool& done)
 {
     done = false;
     int code = sqlite3_step(this->stmt_);
-    DLOG("[{}] step sql", code);
+    TLOG("[{}] step sql", code);
     if (code == SQLITE_OK || code == SQLITE_ROW) {
         return MyErrCode::kOk;
     } else if (code == SQLITE_DONE) {
@@ -133,14 +133,14 @@ MyErrCode SQLiteHelper::Stmt::column(int index, CellValue& val)
         default:
             MY_THROW("sqlite3 bad column type: {}", type);
     }
-    DLOG("[{}] get column {} -> {}", 0, index, cellValueToSQL(val));
+    TLOG("[{}] get column {} -> {}", 0, index, cellValueToSQL(val));
     return MyErrCode::kOk;
 }
 
 MyErrCode SQLiteHelper::Stmt::reset()
 {
     int code = sqlite3_reset(this->stmt_);
-    DLOG("[{}] reset sql", code);
+    TLOG("[{}] reset sql", code);
     if (code != SQLITE_OK) {
         ELOG(sqlite3_errmsg(this->db_));
         return MyErrCode::kFailed;
@@ -151,7 +151,7 @@ MyErrCode SQLiteHelper::Stmt::reset()
 SQLiteHelper::~SQLiteHelper()
 {
     if (this->db_ != nullptr) {
-        DLOG("[{}] close database {}", sqlite3_close_v2(this->db_), this->db_path_);
+        TLOG("[{}] close database {}", sqlite3_close_v2(this->db_), this->db_path_);
     }
 }
 
@@ -161,7 +161,7 @@ MyErrCode SQLiteHelper::open(std::string const& db_path)
     int code =
         sqlite3_open_v2(db_path.c_str(), &this->db_,
                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nullptr);
-    DLOG("[{}] open database {}", code, this->db_path_);
+    TLOG("[{}] open database {}", code, this->db_path_);
     if (code != SQLITE_OK) {
         ELOG(sqlite3_errmsg(this->db_));
         return MyErrCode::kFailed;
@@ -173,7 +173,7 @@ MyErrCode SQLiteHelper::prepare(std::string const& sql, Stmt& stmt)
 {
     stmt.db_ = this->db_;
     int code = sqlite3_prepare_v2(this->db_, sql.c_str(), sql.size(), &stmt.stmt_, nullptr);
-    DLOG("[{}] prepare sql =>\n{}", code, sql);
+    TLOG("[{}] prepare sql =>\n{}", code, sql);
     if (code != SQLITE_OK) {
         ELOG(sqlite3_errmsg(this->db_));
         return MyErrCode::kFailed;
@@ -185,7 +185,7 @@ MyErrCode SQLiteHelper::exec(std::string const& sql)
 {
     char* errmsg = nullptr;
     int code = sqlite3_exec(this->db_, sql.c_str(), nullptr, nullptr, &errmsg);
-    DLOG("[{}] exec sql =>\n{}", code, sql);
+    TLOG("[{}] exec sql =>\n{}", code, sql);
     if (errmsg != nullptr) {
         std::string message = errmsg;
         sqlite3_free(errmsg);

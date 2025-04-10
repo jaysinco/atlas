@@ -25,7 +25,9 @@ public:
     T const& get(std::string const& name) const
     {
         if (!has(name)) {
-            MY_THROW("flags not exist: {}", name);
+            std::cerr << FSTR("Error: argument \"{}\" is not specified", name) << std::endl;
+            printUsage();
+            std::exit(1);
         }
         return vars_[name].as<T>();
     }
@@ -38,7 +40,7 @@ private:
     void addHelpFlags();
     void addLoggingFlags();
     void addSubcommandFlags();
-    void printUsage(std::ostream& os = std::cerr);
+    void printUsage(std::ostream& os = std::cerr) const;
     MyErrCode parse(std::vector<std::string> const& args, bool init_logger);
     MyErrCode parse(po::command_line_parser& parser, bool init_logger);
 
@@ -52,7 +54,9 @@ private:
     int argc_;
     char** argv_;
     std::string program_;
-    po::options_description opt_args_;
+    po::options_description cmd_opt_args_;
+    po::options_description log_opt_args_;
+    po::options_description pos_opt_args_;
     po::positional_options_description pos_args_;
     po::variables_map vars_;
     std::map<std::string, SubCmd> subs_;
