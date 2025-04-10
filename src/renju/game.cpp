@@ -51,8 +51,6 @@ void Board::pushValid(std::vector<Move>& set) const
             set.emplace_back(i);
         }
     }
-
-    std::shuffle(set.begin(), set.end(), g_random_engine);
 }
 
 bool Board::winFrom(Move mv) const
@@ -161,7 +159,7 @@ void State::next(Move mv)
 Color State::nextRandTillEnd()
 {
     while (!over()) {
-        next(opts_[0]);
+        next(opts_.back());
     }
     return winner_;
 }

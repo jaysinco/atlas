@@ -1,7 +1,13 @@
 get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-set(MAIN ${CURRENT_DIR_NAME})
+set(TARGET_NAME ${CURRENT_DIR_NAME})
 
-add_executable(${MAIN}
+list(APPEND CMAKE_PREFIX_PATH $ENV{LIBTORCH_HOME}/share/cmake)
+find_package(Torch QUIET)
+if(NOT Torch_FOUND)
+    return()
+endif()
+
+add_executable(${TARGET_NAME}
     network.cpp
     train.cpp
     game.cpp
@@ -9,14 +15,13 @@ add_executable(${MAIN}
     main.cpp
 )
 
-target_link_libraries(${MAIN} utils
-    Torch::torch
-    $<IF:$<BOOL:${UNIX}>,,-INCLUDE:?warp_size@cuda@at@@YAHXZ>
-    $<IF:$<BOOL:${UNIX}>,,-INCLUDE:?searchsorted_cuda@native@at@@YA?AVTensor@2@AEBV32@0_N1@Z>
+target_link_libraries(${TARGET_NAME}
+    ${TORCH_LIBRARIES}
+    toolkit
 )
 
 if(UNIX)
-    set_target_properties(${MAIN} PROPERTIES
-        INSTALL_RPATH "${torch_ROOT}/lib:${CMAKE_INSTALL_RPATH}"
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        INSTALL_RPATH "${CMAKE_INSTALL_RPATH}:$ENV{LIBTORCH_HOME}/lib"
     )
 endif()

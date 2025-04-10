@@ -194,6 +194,7 @@ Move MCTSPurePlayer::play(State const& state)
     }
     for (int i = 0; i < itermax_; ++i) {
         State state_copied(state);
+        state_copied.shuffleOptions();
         MCTSNode* node = root_;
         while (!node->isLeaf()) {
             auto move_node = node->select(c_puct_);

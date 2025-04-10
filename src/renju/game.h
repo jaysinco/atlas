@@ -1,5 +1,6 @@
 #pragma once
-#include "utils/logging.h"
+#include "toolkit/toolkit.h"
+#include "toolkit/logging.h"
 #include <random>
 #include <algorithm>
 #include <cassert>
@@ -7,14 +8,15 @@
 #include <vector>
 
 /*
-3 * 3 board looks like:
-  0 1 2
- ------- Col
-0|0 1 2
-1|3 4 5
-2|6 7 8
- |
-Row  => move z(5) = (x(1), y(2))
+    3 * 3 board looks like:
+
+      0 1 2
+    ------- Col
+    0|0 1 2
+    1|3 4 5
+    2|6 7 8
+
+    Row  => move z(5) = (r(1), c(2))
 */
 
 constexpr int kFiveInRow = 5;
@@ -104,7 +106,11 @@ class State
     std::vector<Move> opts_;
 
 public:
-    State(): last_(kNoMoveYet) { board_.pushValid(opts_); }
+    State(): last_(kNoMoveYet)
+    {
+        board_.pushValid(opts_);
+        shuffleOptions();
+    }
 
     State(State const& state) = default;
 
@@ -127,6 +133,8 @@ public:
     bool valid(Move mv) const { return std::find(opts_.cbegin(), opts_.cend(), mv) != opts_.end(); }
 
     bool over() const { return winner_ != Color::kEmpty || opts_.size() == 0; }
+
+    void shuffleOptions() { std::shuffle(opts_.begin(), opts_.end(), g_random_engine); }
 
     void next(Move mv);
     Color nextRandTillEnd();
@@ -157,7 +165,7 @@ public:
 
     std::string const& name() const override { return id_; }
 
-    Move play(State const& state) override { return state.getOptions()[0]; }
+    Move play(State const& state) override { return state.getOptions().back(); }
 
     ~RandomPlayer() override = default;
 };

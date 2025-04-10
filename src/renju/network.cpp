@@ -283,7 +283,7 @@ std::string FIRNet::makeParamFileName() const
     std::ostringstream filename;
     filename << "FIR-" << kBoardMaxRow << "x" << kBoardMaxCol << "-r" << kResidualLayers << "c"
              << kResidualFilters << "@" << impl_->update_cnt << ".pt";
-    return utils::ws2s(utils::getExeDir()) + "/" + filename.str();
+    return (toolkit::currentExeDir() / filename.str()).string();
 }
 
 void FIRNet::loadParam()
@@ -369,7 +369,7 @@ static Move mappingMove(int id, Move mv)
 }
 
 void FIRNet::evalState(State const& state, float value[1],
-                       std::vector<std::pair<Move, float>>& net_move_priors)
+                       std::vector<std::pair<Move, float>>& move_priors)
 {
     torch::NoGradGuard no_grad;
     impl_->module.eval();
@@ -385,17 +385,17 @@ void FIRNet::evalState(State const& state, float value[1],
     for (auto const mv: state.getOptions()) {
         Move mapped = mappingMove(transform_id, mv);
         float prior = x_act[0][mapped.z()].item<float>();
-        net_move_priors.emplace_back(mv, prior);
+        move_priors.emplace_back(mv, prior);
         priors_sum += prior;
     }
     if (priors_sum < 1e-8) {
         ILOG("wield policy prob, lr might be too large: sum={}, available_move_n={}", priors_sum,
-             net_move_priors.size());
-        for (auto& item: net_move_priors) {
-            item.second = 1.0f / static_cast<float>(net_move_priors.size());
+             move_priors.size());
+        for (auto& item: move_priors) {
+            item.second = 1.0f / static_cast<float>(move_priors.size());
         }
     } else {
-        for (auto& item: net_move_priors) {
+        for (auto& item: move_priors) {
             item.second /= priors_sum;
         }
     }
