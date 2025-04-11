@@ -192,6 +192,7 @@ Move MCTSPurePlayer::play(State const& state)
     if (!(state.getLast().z() == kNoMoveYet) && !root_->isLeaf()) {
         swapRoot(root_->cut(state.getLast()));
     }
+    Color enemy_side = ~state.current();
     for (int i = 0; i < itermax_; ++i) {
         State state_copied(state);
         state_copied.shuffleOptions();
@@ -201,7 +202,6 @@ Move MCTSPurePlayer::play(State const& state)
             node = move_node.second;
             state_copied.next(move_node.first);
         }
-        Color enemy_side = state_copied.current();
         Color winner = state_copied.getWinner();
         if (!state_copied.over()) {
             int n_options = state_copied.getOptions().size();
