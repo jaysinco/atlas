@@ -159,7 +159,7 @@ void Args::printUsage(std::ostream& os) const
         os << std::endl;
         os << cmd_opt_args_;
     }
-    if (containPositional()) {
+    if (!containSub() && containPositional()) {
         os << std::endl;
         os << "Positional arguments:" << std::endl;
         size_t wmax = 0;
