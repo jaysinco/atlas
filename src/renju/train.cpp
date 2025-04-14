@@ -7,7 +7,7 @@ int selfplay(std::shared_ptr<FIRNet> net, DataSet& dataset, int itermax)
 {
     State game;
     std::vector<SampleData> record;
-    MCTSNode* root = new MCTSNode(nullptr, 1.0f);
+    MCTSNode* root = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
     float ind = -1.0f;
     int step = 0;
     while (!game.over()) {

@@ -20,7 +20,7 @@
 */
 
 constexpr int kFiveInRow = 5;
-constexpr int kBoardMaxCol = 15;
+constexpr int kBoardMaxCol = 8;
 constexpr int kBoardMaxRow = kBoardMaxCol;
 constexpr int kBoardSize = kBoardMaxRow * kBoardMaxCol;
 constexpr int kInputFeatureNum = 4;  // self, opponent[[, lastmove], color]
@@ -59,13 +59,13 @@ public:
 
     int r() const
     {
-        assert(index_ >= 0 && index_ < kBoardSize);
+        assert(index_ >= 0 && index_ < kBoardSize || index_ == kNoMoveYet);
         return index_ / kBoardMaxCol;
     }
 
     int c() const
     {
-        assert(index_ >= 0 && index_ < kBoardSize);
+        assert(index_ >= 0 && index_ < kBoardSize || index_ == kNoMoveYet);
         return index_ % kBoardMaxCol;
     }
 

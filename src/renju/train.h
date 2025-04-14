@@ -1,7 +1,7 @@
 #pragma once
 #include "network.h"
 
-constexpr float kCpuct = 1.0;
+constexpr float kCpuct = 2.4;
 constexpr int kEpochPerGame = 1;
 constexpr int kExploreStep = 30;
 constexpr int kTestPureItermax = 1000;

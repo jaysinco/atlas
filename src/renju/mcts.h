@@ -12,23 +12,29 @@ class MCTSNode
     friend std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
     MCTSNode* parent_;
     std::map<Move, MCTSNode*> children_;
+    Move move_;
     int visits_ = 0;
-    float quality_ = 0;
+    float total_val_ = 0;
     float prior_;
 
 public:
-    MCTSNode(MCTSNode* node_p, float prior_p): parent_(node_p), prior_(prior_p) {}
+    MCTSNode(MCTSNode* node_p, Move mv, float prior_p): parent_(node_p), move_(mv), prior_(prior_p)
+    {
+    }
 
     ~MCTSNode();
     void expand(std::vector<std::pair<Move, float>> const& set);
     MCTSNode* cut(Move occurred);
-    std::pair<Move, MCTSNode*> select(float c_puct) const;
+    MCTSNode* select(float c_puct) const;
     Move actByMostVisted() const;
     Move actByProb(float mcts_move_priors[kBoardSize], float temp) const;
     void update(float leaf_value);
     void updateRecursive(float leaf_value);
     void addNoiseToChildPrior(float noise_rate);
+    void dump(std::ostream& out, int max_depth, int depth = 0) const;
     float value(float c_puct) const;
+
+    Move move() const { return move_; }
 
     bool isLeaf() const { return children_.size() == 0; }
 

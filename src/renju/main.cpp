@@ -16,8 +16,9 @@ void runTrain(int64_t verno)
 void runPlay(int color, int64_t verno, int itermax)
 {
     ILOG("color={}, verno={}, itermax={}", color, verno, itermax);
-    auto net = std::make_shared<FIRNet>(verno);
-    auto p1 = MCTSDeepPlayer(net, itermax, kCpuct);
+    // auto net = std::make_shared<FIRNet>(verno);
+    // auto p1 = MCTSDeepPlayer(net, itermax, kCpuct);
+    auto p1 = MCTSPurePlayer(itermax, kCpuct);
     if (color == 0) {
         auto p0 = HumanPlayer("human");
         play(p0, p1, false);
@@ -25,8 +26,8 @@ void runPlay(int color, int64_t verno, int itermax)
         auto p0 = HumanPlayer("human");
         play(p1, p0, false);
     } else if (color == -1) {
-        auto p0 = MCTSDeepPlayer(net, itermax, kCpuct);
-        play(p0, p1, false);
+        // auto p0 = MCTSDeepPlayer(net, itermax, kCpuct);
+        // play(p0, p1, false);
     }
 }
 
