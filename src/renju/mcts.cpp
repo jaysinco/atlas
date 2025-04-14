@@ -40,21 +40,22 @@ MCTSNode* MCTSNode::select(float c_puct) const
     return picked;
 }
 
-Move MCTSNode::actByMostVisted() const
+Move MCTSNode::actByMostVisted(float& prob) const
 {
     int max_visit = -1 * std::numeric_limits<int>::max();
-    Move act(kNoMoveYet);
+    MCTSNode* act_node = nullptr;
     if (kDebugMCTSProb) {
         std::cout << *this << std::endl;
     }
     for (auto const& [_, node]: children_) {
         auto vn = node->visits_;
         if (vn > max_visit) {
-            act = node->move_;
+            act_node = node;
             max_visit = vn;
         }
     }
-    return act;
+    prob = static_cast<float>(act_node->visits_) / act_node->parent_->visits_;
+    return act_node->move();
 }
 
 Move MCTSNode::actByProb(float mcts_move_priors[kBoardSize], float temp) const
@@ -185,7 +186,7 @@ void MCTSPurePlayer::reset()
     root_ = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
 }
 
-Move MCTSPurePlayer::play(State const& state)
+Move MCTSPurePlayer::play(State const& state, float& certainty)
 {
     if (!(state.getLast().z() == kNoMoveYet) && !root_->isLeaf()) {
         swapRoot(root_->cut(state.getLast()));
@@ -219,7 +220,7 @@ Move MCTSPurePlayer::play(State const& state)
         }
         node->updateRecursive(leaf_value);
     }
-    Move act = root_->actByMostVisted();
+    Move act = root_->actByMostVisted(certainty);
     swapRoot(root_->cut(act));
     return act;
 }
@@ -274,7 +275,7 @@ void MCTSDeepPlayer::think(int itermax, float c_puct, State const& state,
     }
 }
 
-Move MCTSDeepPlayer::play(State const& state)
+Move MCTSDeepPlayer::play(State const& state, float& certainty)
 {
     if (!(state.getLast().z() == kNoMoveYet) && !root_->isLeaf()) {
         swapRoot(root_->cut(state.getLast()));

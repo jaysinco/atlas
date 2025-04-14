@@ -164,14 +164,7 @@ Color State::nextRandTillEnd()
     return winner_;
 }
 
-std::ostream& operator<<(std::ostream& out, State const& state)
-{
-    if (state.last_.z() == kNoMoveYet) {
-        return out << state.board_ << "last move: None";
-    } else {
-        return out << state.board_ << "last move: " << ~state.current() << state.last_;
-    }
-}
+std::ostream& operator<<(std::ostream& out, State const& state) { return out << state.board_; }
 
 Player& play(Player& p1, Player& p2, bool silent)
 {
@@ -182,15 +175,21 @@ Player& play(Player& p1, Player& p2, bool silent)
     p2.reset();
     int turn = 0;
     if (!silent) {
-        std::cout << game << std::endl;
+        std::cout << game;
     }
     while (!game.over()) {
         auto player = player_color.at(game.current());
-        auto act = player->play(game);
+        float certainty = -100;
+        auto act = player->play(game, certainty);
         game.next(act);
         ++turn;
         if (!silent) {
-            std::cout << game << std::endl;
+            std::cout << game;
+            std::cout << "last move: " << ~game.current() << game.getLast();
+            if (certainty > -100) {
+                std::cout << " " << FSTR("{:.1f}%", certainty * 100);
+            }
+            std::cout << std::endl;
         }
     }
     auto winner = player_color.at(game.getWinner());
@@ -255,7 +254,7 @@ bool HumanPlayer::getMove(int& row, int& col)
     return true;
 }
 
-Move HumanPlayer::play(State const& state)
+Move HumanPlayer::play(State const& state, float& certainty)
 {
     int col, row;
     while (true) {

@@ -20,7 +20,7 @@
 */
 
 constexpr int kFiveInRow = 5;
-constexpr int kBoardMaxCol = 8;
+constexpr int kBoardMaxCol = 9;
 constexpr int kBoardMaxRow = kBoardMaxCol;
 constexpr int kBoardSize = kBoardMaxRow * kBoardMaxCol;
 constexpr int kInputFeatureNum = 4;  // self, opponent[[, lastmove], color]
@@ -147,7 +147,7 @@ struct Player
     Player() = default;
     virtual void reset() = 0;
     virtual std::string const& name() const = 0;
-    virtual Move play(State const& state) = 0;
+    virtual Move play(State const& state, float& certainty) = 0;
     virtual ~Player() = default;
 };
 
@@ -165,7 +165,7 @@ public:
 
     std::string const& name() const override { return id_; }
 
-    Move play(State const& state) override { return state.getOptions().back(); }
+    Move play(State const& state, float& certainty) override { return state.getOptions().back(); }
 
     ~RandomPlayer() override = default;
 };
@@ -182,6 +182,6 @@ public:
 
     std::string const& name() const override { return id_; }
 
-    Move play(State const& state) override;
+    Move play(State const& state, float& certainty) override;
     ~HumanPlayer() override = default;
 };

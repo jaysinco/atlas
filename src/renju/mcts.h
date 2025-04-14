@@ -26,7 +26,7 @@ public:
     void expand(std::vector<std::pair<Move, float>> const& set);
     MCTSNode* cut(Move occurred);
     MCTSNode* select(float c_puct) const;
-    Move actByMostVisted() const;
+    Move actByMostVisted(float& prob) const;
     Move actByProb(float mcts_move_priors[kBoardSize], float temp) const;
     void update(float leaf_value);
     void updateRecursive(float leaf_value);
@@ -66,7 +66,7 @@ public:
     void setItermax(int n);
     void makeId();
     void reset() override;
-    Move play(State const& state) override;
+    Move play(State const& state, float& certainty) override;
 };
 
 class MCTSDeepPlayer: public Player
@@ -92,7 +92,7 @@ public:
 
     void makeId();
     void reset() override;
-    Move play(State const& state) override;
+    Move play(State const& state, float& certainty) override;
     static void think(int itermax, float c_puct, State const& state, std::shared_ptr<FIRNet> net,
                       MCTSNode* root, bool add_noise_to_root = false);
 };
