@@ -75,7 +75,10 @@ MyErrCode Args::parse(po::command_line_parser& parser, bool init_logger)
             parser.positional(pos_args_);
         }
 
-        auto parsed_result = parser.run();
+        auto parsed_result =
+            parser
+                .style(po::command_line_style::unix_style & ~po::command_line_style::allow_guessing)
+                .run();
         po::store(parsed_result, vars_);
 
         if (init_logger) {

@@ -16,29 +16,52 @@ void runTrain(int64_t verno)
 void runPlay(int color, int64_t verno, int itermax)
 {
     ILOG("color={}, verno={}, itermax={}", color, verno, itermax);
-    // auto net = std::make_shared<FIRNet>(verno);
-    // auto p1 = MCTSDeepPlayer(net, itermax, kCpuct);
-    auto p1 = MCTSPurePlayer(itermax, kCpuct);
-    if (color == 0) {
-        auto p0 = HumanPlayer("human");
-        play(p0, p1, false);
-    } else if (color == 1) {
-        auto p0 = HumanPlayer("human");
-        play(p1, p0, false);
-    } else if (color == -1) {
-        // auto p0 = MCTSDeepPlayer(net, itermax, kCpuct);
-        // play(p0, p1, false);
+    std::shared_ptr<Player> p0, p1;
+    std::shared_ptr<FIRNet> net;
+    if (verno > 0) {
+        net = std::make_shared<FIRNet>(verno);
+        if (color == 0) {
+            p0 = std::make_shared<HumanPlayer>("human");
+            p1 = std::make_shared<MCTSDeepPlayer>(net, itermax, kCpuct);
+        } else if (color == 1) {
+            p0 = std::make_shared<MCTSDeepPlayer>(net, itermax, kCpuct);
+            p1 = std::make_shared<HumanPlayer>("human");
+        } else {
+            p0 = std::make_shared<MCTSDeepPlayer>(net, itermax, kCpuct);
+            p1 = std::make_shared<MCTSDeepPlayer>(net, itermax, kCpuct);
+        }
+    } else {
+        if (color == 0) {
+            p0 = std::make_shared<HumanPlayer>("human");
+            p1 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+        } else if (color == 1) {
+            p0 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+            p1 = std::make_shared<HumanPlayer>("human");
+        } else {
+            p0 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+            p1 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+        }
     }
+    play(*p0, *p1, false);
 }
 
-void runBenchmark(int64_t verno1, int64_t verno2, int itermax)
+void runBenchmark(int64_t verno1, int64_t verno2, int itermax, int round)
 {
-    ILOG("verno1={}, verno2={}, itermax={}", verno1, verno2, itermax);
-    auto net1 = std::make_shared<FIRNet>(verno1);
-    auto net2 = std::make_shared<FIRNet>(verno2);
-    auto p1 = MCTSDeepPlayer(net1, itermax, kCpuct);
-    auto p2 = MCTSDeepPlayer(net2, itermax, kCpuct);
-    benchmark(p1, p2, 10, false);
+    ILOG("verno1={}, verno2={}, itermax={}, round={}", verno1, verno2, itermax, round);
+    std::shared_ptr<Player> p1, p2;
+    if (verno1 > 0) {
+        auto net1 = std::make_shared<FIRNet>(verno1);
+        p1 = std::make_shared<MCTSDeepPlayer>(net1, itermax, kCpuct);
+    } else {
+        p1 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+    }
+    if (verno2 > 0) {
+        auto net2 = std::make_shared<FIRNet>(verno2);
+        p2 = std::make_shared<MCTSDeepPlayer>(net2, itermax, kCpuct);
+    } else {
+        p2 = std::make_shared<MCTSPurePlayer>(itermax, kCpuct);
+    }
+    benchmark(*p1, *p2, round, false);
 }
 
 int main(int argc, char** argv)
@@ -48,20 +71,23 @@ int main(int argc, char** argv)
 
     auto& train_args = args.addSub("train", "train model from scatch or checkpoint");
     train_args.positional("verno", po::value<int64_t>(),
-                          "verno of checkpoint; 0 to train from scratch", 1);
+                          "verno of checkpoint; 0 for training from scratch", 1);
 
     auto& play_args = args.addSub("play", "play with trained model");
     play_args.positional("color", po::value<int>(),
-                         "first hand color; human(0), computer(1), selfplay(-1)", 1);
-    play_args.positional("verno", po::value<int64_t>(), "verno of checkpoint", 1);
+                         "who play first hand; 0 for human, 1 for computer, 2 for selfplay", 1);
+    play_args.positional("verno", po::value<int64_t>(), "verno of checkpoint; 0 for pure mtsc", 1);
     play_args.positional("itermax", po::value<int>()->default_value(kTrainDeepItermax),
-                         "itermax for mcts deep player", 1);
+                         "itermax for mcts player", 1);
 
-    auto& benchmark_args = args.addSub("benchmark", "benchmark between two mcts deep players");
-    benchmark_args.positional("verno1", po::value<int64_t>(), "verno of checkpoint to compare", 1);
+    auto& benchmark_args = args.addSub("benchmark", "benchmark between two mcts players");
+    benchmark_args.positional("verno1", po::value<int64_t>(),
+                              "verno of checkpoint; 0 for pure mtsc", 1);
     benchmark_args.positional("verno2", po::value<int64_t>(), "see above", 1);
     benchmark_args.positional("itermax", po::value<int>()->default_value(kTrainDeepItermax),
-                              "itermax for mcts deep player", 1);
+                              "itermax for mcts player", 1);
+    benchmark_args.positional("round", po::value<int>()->default_value(10),
+                              "num of benchmark rounds", 1);
 
     args.parse();
 
@@ -78,7 +104,8 @@ int main(int argc, char** argv)
         auto verno1 = benchmark_args.get<int64_t>("verno1");
         auto verno2 = benchmark_args.get<int64_t>("verno2");
         auto itermax = benchmark_args.get<int>("itermax");
-        runBenchmark(verno1, verno2, itermax);
+        auto round = benchmark_args.get<int>("round");
+        runBenchmark(verno1, verno2, itermax, round);
     }
     MY_CATCH_RTI;
 }
