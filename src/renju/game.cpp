@@ -184,11 +184,8 @@ Player& play(Player& p1, Player& p2, bool silent)
         if (!silent) {
             std::cout << game;
             std::cout << "last move: " << ~game.current() << game.getLast();
-            if (meta.p_mov > -100) {
-                std::cout << FSTR(" act:{:.1f}%", meta.p_mov * 100);
-            }
-            if (meta.p_win > -100) {
-                std::cout << FSTR(" win:{:.1f}%", meta.p_win * 100);
+            if (meta.p_win >= 0) {
+                std::cout << FSTR(" | win%: {:.1f}", meta.p_win * 100);
             }
             std::cout << std::endl;
         }

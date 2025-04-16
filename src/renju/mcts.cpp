@@ -206,7 +206,7 @@ Move MCTSPurePlayer::play(State const& state, ActionMeta& meta)
     Move act = root_->actByProb(1e-3, move_priors);
     meta.p_mov = move_priors[act.z()];
     swapRoot(root_->cut(act));
-    meta.p_win = root_->getValue();
+    meta.p_win = (1 + root_->getValue()) / 2;
     return act;
 }
 
@@ -270,6 +270,6 @@ Move MCTSDeepPlayer::play(State const& state, ActionMeta& meta)
     Move act = root_->actByProb(1e-3, move_priors);
     meta.p_mov = move_priors[act.z()];
     swapRoot(root_->cut(act));
-    meta.p_win = root_->getValue();
+    meta.p_win = (1 + root_->getValue()) / 2;
     return act;
 }

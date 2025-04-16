@@ -140,8 +140,8 @@ std::ostream& operator<<(std::ostream& out, State const& state);
 
 struct ActionMeta
 {
-    float p_mov = -100;
-    float p_win = -100;
+    float p_mov = -1;
+    float p_win = -1;
 };
 
 struct Player
