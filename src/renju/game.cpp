@@ -18,8 +18,9 @@ Color operator~(const Color c)
         case Color::kEmpty:
             opposite = Color::kEmpty;
             break;
+        default:
+            MY_THROW("invalid color: {}", static_cast<int>(c));
     }
-    assert(opposite != Color::kEmpty);
     return opposite;
 }
 
@@ -59,24 +60,22 @@ bool Board::winFrom(Move mv) const
         return false;
     }
     Color side = get(mv);
-    assert(side != Color::kEmpty);
-    int direct[4][2] = {{0, 1}, {1, 0}, {-1, 1}, {1, 1}};
-    int sign[2] = {1, -1};
-    for (auto d: direct) {
-        int total = 0;
-        for (auto s: sign) {
-            Move probe = mv;
-            while (get(probe) == side) {
-                ++total;
-                auto r = probe.r() + d[0] * s;
-                auto c = probe.c() + d[1] * s;
-                if (!ON_BOARD(r, c)) {
-                    break;
-                }
-                probe = Move(r, c);
+    if (side == Color::kEmpty) {
+        return false;
+    }
+    int const directions[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+    for (auto const& dir: directions) {
+        int count = 1;
+        for (int sign = -1; sign <= 1; sign += 2) {
+            int r = mv.r() + sign * dir[0];
+            int c = mv.c() + sign * dir[1];
+            while (ON_BOARD(r, c) && get(Move(r, c)) == side) {
+                ++count;
+                r += sign * dir[0];
+                c += sign * dir[1];
             }
         }
-        if (total - 1 >= kFiveInRow) {
+        if (count >= kFiveInRow) {
             return true;
         }
     }
@@ -146,7 +145,6 @@ void State::fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const
 
 void State::next(Move mv)
 {
-    assert(valid(mv));
     Color side = current();
     board_.put(mv, side);
     if (board_.winFrom(mv)) {
@@ -179,15 +177,18 @@ Player& play(Player& p1, Player& p2, bool silent)
     }
     while (!game.over()) {
         auto player = player_color.at(game.current());
-        float certainty = -100;
-        auto act = player->play(game, certainty);
+        ActionMeta meta;
+        auto act = player->play(game, meta);
         game.next(act);
         ++turn;
         if (!silent) {
             std::cout << game;
             std::cout << "last move: " << ~game.current() << game.getLast();
-            if (certainty > -100) {
-                std::cout << " " << FSTR("{:.1f}%", certainty * 100);
+            if (meta.p_mov > -100) {
+                std::cout << FSTR(" act:{:.1f}%", meta.p_mov * 100);
+            }
+            if (meta.p_win > -100) {
+                std::cout << FSTR(" win:{:.1f}%", meta.p_win * 100);
             }
             std::cout << std::endl;
         }
@@ -202,7 +203,9 @@ Player& play(Player& p1, Player& p2, bool silent)
 
 float benchmark(Player& p1, Player& p2, int round, bool silent)
 {
-    assert(round > 0);
+    if (round <= 0) {
+        return 0.0f;
+    }
     int p1win = 0, p2win = 0, even = 0;
     Player *temp = nullptr, *pblack = &p1, *pwhite = &p2;
     for (int i = 0; i < round; ++i) {
@@ -212,8 +215,7 @@ float benchmark(Player& p1, Player& p2, int round, bool silent)
             ++even;
         } else if (winner == &p1) {
             ++p1win;
-        } else {
-            assert(winner == &p2);
+        } else if (winner == &p2) {
             ++p2win;
         }
         if (!silent) {
@@ -254,7 +256,7 @@ bool HumanPlayer::getMove(int& row, int& col)
     return true;
 }
 
-Move HumanPlayer::play(State const& state, float& certainty)
+Move HumanPlayer::play(State const& state, ActionMeta& meta)
 {
     int col, row;
     while (true) {

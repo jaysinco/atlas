@@ -3,7 +3,6 @@
 #include "toolkit/logging.h"
 #include <random>
 #include <algorithm>
-#include <cassert>
 #include <iostream>
 #include <vector>
 
@@ -45,11 +44,18 @@ class Move
     int index_;
 
 public:
-    explicit Move(int z): index_(z) { assert((z >= 0 && z < kBoardSize) || z == kNoMoveYet); }
+    explicit Move(int z): index_(z)
+    {
+        if ((z < 0 || z >= kBoardSize) && z != kNoMoveYet) {
+            MY_THROW("invalid move: {}", z);
+        }
+    }
 
     Move(int row, int col)
     {
-        assert(ON_BOARD(row, col));
+        if (!ON_BOARD(row, col)) {
+            MY_THROW("invalid move: ({}, {})", row, col);
+        }
         index_ = row * kBoardMaxCol + col;
     }
 
@@ -57,17 +63,9 @@ public:
 
     int z() const { return index_; }
 
-    int r() const
-    {
-        assert(index_ >= 0 && index_ < kBoardSize || index_ == kNoMoveYet);
-        return index_ / kBoardMaxCol;
-    }
+    int r() const { return index_ / kBoardMaxCol; }
 
-    int c() const
-    {
-        assert(index_ >= 0 && index_ < kBoardSize || index_ == kNoMoveYet);
-        return index_ % kBoardMaxCol;
-    }
+    int c() const { return index_ % kBoardMaxCol; }
 
     bool operator<(Move const& right) const { return index_ < right.index_; }
 
@@ -87,7 +85,9 @@ public:
 
     void put(Move mv, Color c)
     {
-        assert(get(mv) == Color::kEmpty);
+        if (get(mv) != Color::kEmpty) {
+            MY_THROW("invalid move: {}", mv);
+        }
         grid_[mv.z()] = c;
     }
 
@@ -124,11 +124,7 @@ public:
 
     void fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const;
 
-    std::vector<Move> const& getOptions() const
-    {
-        assert(!over());
-        return opts_;
-    };
+    std::vector<Move> const& getOptions() const { return opts_; };
 
     bool valid(Move mv) const { return std::find(opts_.cbegin(), opts_.cend(), mv) != opts_.end(); }
 
@@ -142,12 +138,18 @@ public:
 
 std::ostream& operator<<(std::ostream& out, State const& state);
 
+struct ActionMeta
+{
+    float p_mov = -100;
+    float p_win = -100;
+};
+
 struct Player
 {
     Player() = default;
     virtual void reset() = 0;
     virtual std::string const& name() const = 0;
-    virtual Move play(State const& state, float& certainty) = 0;
+    virtual Move play(State const& state, ActionMeta& meta) = 0;
     virtual ~Player() = default;
 };
 
@@ -165,7 +167,7 @@ public:
 
     std::string const& name() const override { return id_; }
 
-    Move play(State const& state, float& certainty) override { return state.getOptions().back(); }
+    Move play(State const& state, ActionMeta& meta) override { return state.getOptions().back(); }
 
     ~RandomPlayer() override = default;
 };
@@ -182,6 +184,6 @@ public:
 
     std::string const& name() const override { return id_; }
 
-    Move play(State const& state, float& certainty) override;
+    Move play(State const& state, ActionMeta& meta) override;
     ~HumanPlayer() override = default;
 };

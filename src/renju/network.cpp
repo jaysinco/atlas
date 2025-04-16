@@ -50,15 +50,12 @@ std::ostream& operator<<(std::ostream& out, SampleData const& sample)
             }
             if (kInputFeatureNum > 2) {
                 if (sample.data[2 * kBoardSize + row * kBoardMaxCol + col] > 0) {
-                    assert(last.z() == kNoMoveYet);
                     last = Move(row, col);
                 }
             }
             if (kInputFeatureNum > 3) {
                 if (first < 0) {
                     first = sample.data[3 * kBoardSize + row * kBoardMaxCol + col];
-                } else {
-                    assert(first == sample.data[3 * kBoardSize + row * kBoardMaxCol + col]);
                 }
             }
         }
@@ -111,7 +108,9 @@ void DataSet::pushWithTransform(SampleData* data)
 
 void DataSet::makeMiniBatch(MiniBatch* batch) const
 {
-    assert(index_ > kBatchSize);
+    if (index_ < kBatchSize) {
+        MY_THROW("not enough data to make mini batch");
+    }
     std::uniform_int_distribution<int> uniform(0, size() - 1);
     for (int i = 0; i < kBatchSize; i++) {
         int c = uniform(g_random_engine);

@@ -11,15 +11,17 @@ MCTSNode::~MCTSNode()
 
 void MCTSNode::expand(std::vector<std::pair<Move, float>> const& set)
 {
-    for (auto& mvp: set) {
-        children_[mvp.first] = new MCTSNode(this, mvp.first, mvp.second);
+    for (auto& [mv, p]: set) {
+        children_[mv] = new MCTSNode(this, mv, p);
     }
 }
 
 MCTSNode* MCTSNode::cut(Move occurred)
 {
     auto citer = children_.find(occurred);
-    assert(citer != children_.end());
+    if (citer == children_.end()) {
+        MY_THROW("move not found");
+    }
     auto child = citer->second;
     children_.erase(occurred);
     child->parent_ = nullptr;
@@ -28,65 +30,44 @@ MCTSNode* MCTSNode::cut(Move occurred)
 
 MCTSNode* MCTSNode::select(float c_puct) const
 {
-    MCTSNode* picked = nullptr;
-    float max_value = -1 * std::numeric_limits<float>::max();
+    MCTSNode* n = nullptr;
+    float u_max = -std::numeric_limits<float>::max();
     for (auto const& [_, node]: children_) {
-        float value = node->value(c_puct);
-        if (value > max_value) {
-            picked = node;
-            max_value = value;
+        float u = node->getUpperConfidenceBound(c_puct);
+        if (u > u_max) {
+            n = node;
+            u_max = u;
         }
     }
-    return picked;
+    return n;
 }
 
-Move MCTSNode::actByMostVisted(float& prob) const
+Move MCTSNode::actByProb(float temp, float move_priors[kBoardSize]) const
 {
-    int max_visit = -1 * std::numeric_limits<int>::max();
-    MCTSNode* act_node = nullptr;
     if (kDebugMCTSProb) {
         std::cout << *this << std::endl;
     }
-    for (auto const& [_, node]: children_) {
-        auto vn = node->visits_;
-        if (vn > max_visit) {
-            act_node = node;
-            max_visit = vn;
-        }
-    }
-    prob = static_cast<float>(act_node->visits_) / act_node->parent_->visits_;
-    return act_node->move();
-}
-
-Move MCTSNode::actByProb(float mcts_move_priors[kBoardSize], float temp) const
-{
     float move_priors_buffer[kBoardSize] = {0.0f};
-    if (mcts_move_priors == nullptr) {
-        mcts_move_priors = move_priors_buffer;
+    if (move_priors == nullptr) {
+        move_priors = move_priors_buffer;
     }
-    std::map<int, float> move_priors_map;
-    if (kDebugMCTSProb) {
-        std::cout << *this << std::endl;
-    }
-    float alpha = -1 * std::numeric_limits<float>::max();
+    float max_log_prob = -1 * std::numeric_limits<float>::max();
+    float const inv_temp = 1.0 / temp;
     for (auto const& [_, node]: children_) {
-        auto vn = node->visits_;
-        auto mv = node->move_;
-        move_priors_map[mv.z()] = 1.0f / temp * std::log(static_cast<float>(vn) + 1e-10);
-        if (move_priors_map[mv.z()] > alpha) {
-            alpha = move_priors_map[mv.z()];
-        }
+        float p = inv_temp * std::log(static_cast<float>(node->visits_) + 1e-10);
+        move_priors[node->move_.z()] = p;
+        max_log_prob = std::max(max_log_prob, p);
     }
-    float denominator = 0;
-    for (auto& mn: move_priors_map) {
-        float value = std::exp(mn.second - alpha);
-        move_priors_map[mn.first] = value;
-        denominator += value;
+    float sum_prob = 0;
+    for (auto const& [_, node]: children_) {
+        float p = std::exp(move_priors[node->move_.z()] - max_log_prob);
+        move_priors[node->move_.z()] = p;
+        sum_prob += p;
     }
-    for (auto& mn: move_priors_map) {
-        mcts_move_priors[mn.first] = mn.second / denominator;
+    for (auto const& [_, node]: children_) {
+        move_priors[node->move_.z()] /= sum_prob;
     }
-    std::discrete_distribution<int> discrete(mcts_move_priors, mcts_move_priors + kBoardSize);
+    std::discrete_distribution<int> discrete(move_priors, move_priors + kBoardSize);
     return Move(discrete(g_random_engine));
 }
 
@@ -129,12 +110,13 @@ void MCTSNode::addNoiseToChildPrior(float noise_rate)
     delete[] noise_added;
 }
 
-float MCTSNode::value(float c_puct) const
+float MCTSNode::getUpperConfidenceBound(float c_puct) const
 {
-    assert(!isRoot());
+    if (isRoot()) {
+        MY_THROW("root node have no value");
+    }
     float all_visits = static_cast<float>(parent_->visits_);
-    float mean_value = visits_ == 0 ? 0 : total_val_ / visits_;
-    return mean_value + (c_puct * prior_ * std::sqrt(all_visits) / (visits_ + 1));
+    return getValue() + (c_puct * prior_ * std::sqrt(all_visits) / (visits_ + 1));
 }
 
 void MCTSNode::dump(std::ostream& out, int max_depth, int depth) const
@@ -186,7 +168,7 @@ void MCTSPurePlayer::reset()
     root_ = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
 }
 
-Move MCTSPurePlayer::play(State const& state, float& certainty)
+Move MCTSPurePlayer::play(State const& state, ActionMeta& meta)
 {
     if (!(state.getLast().z() == kNoMoveYet) && !root_->isLeaf()) {
         swapRoot(root_->cut(state.getLast()));
@@ -197,7 +179,7 @@ Move MCTSPurePlayer::play(State const& state, float& certainty)
         MCTSNode* node = root_;
         while (!node->isLeaf()) {
             node = node->select(c_puct_);
-            state_copied.next(node->move());
+            state_copied.next(node->getMove());
         }
         Color enemy_side = state_copied.current();
         Color winner = state_copied.getWinner();
@@ -220,8 +202,11 @@ Move MCTSPurePlayer::play(State const& state, float& certainty)
         }
         node->updateRecursive(leaf_value);
     }
-    Move act = root_->actByMostVisted(certainty);
+    float move_priors[kBoardSize] = {0.0f};
+    Move act = root_->actByProb(1e-3, move_priors);
+    meta.p_mov = move_priors[act.z()];
     swapRoot(root_->cut(act));
+    meta.p_win = root_->getValue();
     return act;
 }
 
@@ -256,7 +241,7 @@ void MCTSDeepPlayer::think(int itermax, float c_puct, State const& state,
         MCTSNode* node = root;
         while (!node->isLeaf()) {
             node = node->select(c_puct);
-            state_copied.next(node->move());
+            state_copied.next(node->getMove());
         }
         float leaf_value;
         if (!state_copied.over()) {
@@ -275,13 +260,16 @@ void MCTSDeepPlayer::think(int itermax, float c_puct, State const& state,
     }
 }
 
-Move MCTSDeepPlayer::play(State const& state, float& certainty)
+Move MCTSDeepPlayer::play(State const& state, ActionMeta& meta)
 {
     if (!(state.getLast().z() == kNoMoveYet) && !root_->isLeaf()) {
         swapRoot(root_->cut(state.getLast()));
     }
     think(itermax_, c_puct_, state, net_, root_);
-    Move act = root_->actByProb(nullptr, 1e-3);
+    float move_priors[kBoardSize] = {0.0f};
+    Move act = root_->actByProb(1e-3, move_priors);
+    meta.p_mov = move_priors[act.z()];
     swapRoot(root_->cut(act));
+    meta.p_win = root_->getValue();
     return act;
 }

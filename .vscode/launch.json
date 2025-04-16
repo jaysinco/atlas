@@ -15,8 +15,13 @@
             "name": "Linux C++: Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/x86_64-debug/deep-samples",
-            "args": [],
+            "program": "${workspaceFolder}/bin/x86_64-debug/renju",
+            "args": [
+                "play",
+                "0",
+                "0",
+                "10000"
+            ],
             "environment": [],
             "cwd": "${workspaceFolder}/bin/x86_64-debug",
             "stopAtEntry": false,

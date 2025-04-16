@@ -57,7 +57,9 @@ public:
 
     SampleData const& get(int i) const
     {
-        assert(i < size());
+        if (i >= size() || i < 0) {
+            MY_THROW("invalid index: {}", i);
+        }
         return buf_[i];
     }
 
