@@ -30,13 +30,13 @@ std::ostream& outputColor(std::ostream& out, Color c, bool checked)
 {
     switch (c) {
         case Color::kEmpty:
-            out << (kBoardRichSymbol ? " " : " ");
+            out << (kBoardRichSymbol ? " " : " ");
             break;
         case Color::kBlack:
-            out << (kBoardRichSymbol ? (checked ? "" : "") : "x");
+            out << (kBoardRichSymbol ? (checked ? "" : "") : (checked ? "X" : "x"));
             break;
         case Color::kWhite:
-            out << (kBoardRichSymbol ? (checked ? "" : "") : "o");
+            out << (kBoardRichSymbol ? (checked ? "" : "") : (checked ? "O" : "o"));
             break;
     }
     return out;
@@ -102,8 +102,7 @@ std::ostream& outputBoard(std::ostream& out, Board const& board, Move last)
         for (int c = 0; c < kBoardMaxCol; ++c) {
             out << "|";
             Move mv(r, c);
-            bool checked = kBoardRichSymbol && mv == last;
-            outputColor(out, board.get(mv), checked);
+            outputColor(out, board.get(mv), mv == last);
         }
         out << "|\n";
     }
@@ -172,9 +171,6 @@ Color State::nextRandTillEnd()
 
 std::ostream& operator<<(std::ostream& out, State const& state)
 {
-    if (!kBoardRichSymbol) {
-        return out << state.board_;
-    }
     return outputBoard(out, state.board_, state.last_);
 }
 
