@@ -60,6 +60,7 @@ private:
     po::positional_options_description pos_args_;
     po::variables_map vars_;
     std::map<std::string, SubCmd> subs_;
+    std::vector<std::string> subs_order_;
 };
 
 }  // namespace toolkit

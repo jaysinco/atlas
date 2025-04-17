@@ -37,6 +37,7 @@ Args& Args::addSub(std::string const& name, std::string const& desc)
     auto pargs = std::shared_ptr<Args>(new Args);
     pargs->program_ = FSTR("{} {}", program_, name);
     subs_[name] = SubCmd{pargs, desc, false};
+    subs_order_.push_back(name);
     return *pargs;
 }
 
@@ -154,7 +155,8 @@ void Args::printUsage(std::ostream& os) const
         for (auto& [k, v]: subs_) {
             wmax = std::max(wmax, k.size());
         }
-        for (auto& [k, v]: subs_) {
+        for (auto& k: subs_order_) {
+            auto& v = subs_.at(k);
             os << "  " << k << std::string(wmax - k.size() + 4, ' ') << v.desc << std::endl;
         }
     }

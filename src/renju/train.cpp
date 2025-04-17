@@ -16,7 +16,7 @@ int selfplay(std::shared_ptr<FIRNet> net, DataSet& dataset, int itermax)
         SampleData one_step;
         *one_step.v_label = ind;
         game.fillFeatureArray(one_step.data);
-        MCTSDeepPlayer::think(itermax, kCpuct, game, net, root, true);
+        MCTSDeepPlayer::think(itermax, kTrainCpuct, game, net, root, true);
         Move act = root->actByProb(step <= kExploreStep ? 1.0f : 1e-3, one_step.p_label);
         record.push_back(one_step);
         game.next(act);
@@ -72,8 +72,8 @@ void train(std::shared_ptr<FIRNet> net)
     DataSet dataset;
 
     int test_itermax = kTestPureItermax;
-    auto test_player = MCTSPurePlayer(test_itermax, kCpuct);
-    auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kCpuct);
+    auto test_player = MCTSPurePlayer(test_itermax, kTrainCpuct);
+    auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kTrainCpuct);
 
     for (;;) {
         ++game_cnt;
