@@ -28,13 +28,13 @@ std::ostream& operator<<(std::ostream& out, Color c)
 {
     switch (c) {
         case Color::kEmpty:
-            out << ((kColorOccupySpace == 2) ? "  " : " ");
+            out << (kBoardWideSymbol ? " " : " ");
             break;
         case Color::kBlack:
-            out << ((kColorOccupySpace == 2) ? "●" : "x");
+            out << (kBoardWideSymbol ? "●" : "x");
             break;
         case Color::kWhite:
-            out << ((kColorOccupySpace == 2) ? "○" : "o");
+            out << (kBoardWideSymbol ? "○" : "o");
             break;
     }
     return out;
@@ -84,16 +84,17 @@ bool Board::winFrom(Move mv) const
 
 std::ostream& operator<<(std::ostream& out, Board const& board)
 {
-    if (kColorOccupySpace == 2) {
-        out << " ";
-    }
-    out << "# ";
+    static char const* sym_narrow[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "#"};
+    static char const* sym_wide[11] = {"𝟎", "𝟏", "𝟐", "𝟑", "𝟒", "𝟓", "𝟔", "𝟕", "𝟖", "𝟗", "#"};
+    char const** sym = kBoardWideSymbol ? sym_wide : sym_narrow;
+
+    out << sym[10] << " ";
     for (int c = 0; c < kBoardMaxCol; ++c) {
-        out << std::right << std::setw(kColorOccupySpace) << c % 10 << " ";
+        out << std::right << sym[c % 10] << " ";
     }
     out << "\n";
     for (int r = 0; r < kBoardMaxRow; ++r) {
-        out << std::right << std::setw(kColorOccupySpace) << r % 10;
+        out << std::right << sym[r % 10];
         for (int c = 0; c < kBoardMaxCol; ++c) {
             out << "|" << board.get(Move(r, c));
         }
@@ -182,17 +183,18 @@ Player& play(Player& p1, Player& p2, bool silent)
         game.next(act);
         ++turn;
         if (!silent) {
-            std::cout << game;
-            std::cout << "last move: " << ~game.current() << game.getLast();
+            std::cout << "\n" << game;
+            std::cout << FSTR("last move: {}{}", ~game.current(), game.getLast());
             if (meta.p_win >= 0) {
                 std::cout << FSTR(" | win%: {:.1f}", meta.p_win * 100);
             }
+            std::cout << FSTR(" | turn: {}", turn);
             std::cout << std::endl;
         }
     }
     auto winner = player_color.at(game.getWinner());
     if (!silent) {
-        std::cout << "winner: " << (winner == nullptr ? "no winner, even!" : winner->name())
+        std::cout << "\nwinner: " << (winner == nullptr ? "no winner, even!" : winner->name())
                   << std::endl;
     }
     return *winner;
@@ -229,9 +231,8 @@ float benchmark(Player& p1, Player& p2, int round, bool silent)
     float p2prob = static_cast<float>(p2win) / round;
     float eprob = static_cast<float>(even) / round;
     if (!silent) {
-        std::cout << "benchmark player win probality: " << p1.name() << "=" << p1prob << ", "
-                  << p2.name() << "=" << p2prob << ", even=" << eprob << ", sim=" << round
-                  << std::endl;
+        std::cout << "win: " << p1.name() << "=" << p1prob * 100 << "%, " << p2.name() << "="
+                  << p2prob * 100 << "%, even=" << eprob * 100 << "%, sim=" << round << std::endl;
     }
     return p1prob;
 }

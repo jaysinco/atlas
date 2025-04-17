@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
 #include <random>
@@ -6,29 +7,9 @@
 #include <iostream>
 #include <vector>
 
-/*
-    3 * 3 board looks like:
-
-      0 1 2
-    ------- Col
-    0|0 1 2
-    1|3 4 5
-    2|6 7 8
-
-    Row  => move z(5) = (r(1), c(2))
-*/
-
-constexpr int kFiveInRow = 5;
-constexpr int kBoardMaxCol = 9;
-constexpr int kBoardMaxRow = kBoardMaxCol;
-constexpr int kBoardSize = kBoardMaxRow * kBoardMaxCol;
-constexpr int kInputFeatureNum = 4;  // self, opponent[[, lastmove], color]
-constexpr int kNoMoveYet = -1;
-constexpr int kColorOccupySpace = 1;
+#define ON_BOARD(row, col) (row >= 0 && row < kBoardMaxRow && col >= 0 && col < kBoardMaxCol)
 
 extern std::mt19937 g_random_engine;
-
-#define ON_BOARD(row, col) (row >= 0 && row < kBoardMaxRow && col >= 0 && col < kBoardMaxCol)
 
 enum class Color
 {
@@ -36,7 +17,9 @@ enum class Color
     kBlack,
     kWhite
 };
+
 Color operator~(const Color c);
+
 std::ostream& operator<<(std::ostream& out, Color c);
 
 class Move

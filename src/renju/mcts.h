@@ -3,10 +3,6 @@
 #include "network.h"
 #include <map>
 
-constexpr float kNoiseRate = 0.2;
-constexpr float kDirichletAlpha = 0.3;
-constexpr bool kDebugMCTSProb = false;
-
 class MCTSNode
 {
     friend std::ostream& operator<<(std::ostream& out, MCTSNode const& node);

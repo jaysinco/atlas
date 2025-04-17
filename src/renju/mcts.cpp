@@ -149,12 +149,7 @@ MCTSPurePlayer::MCTSPurePlayer(int itermax, float c_puct): itermax_(itermax), c_
     root_ = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
 }
 
-void MCTSPurePlayer::makeId()
-{
-    std::ostringstream ids;
-    ids << "mcts" << itermax_;
-    id_ = ids.str();
-}
+void MCTSPurePlayer::makeId() { id_ = FSTR("i{}u{}", itermax_, c_puct_); }
 
 void MCTSPurePlayer::setItermax(int n)
 {
@@ -217,12 +212,7 @@ MCTSDeepPlayer::MCTSDeepPlayer(std::shared_ptr<FIRNet> nn, int itermax, float c_
     root_ = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
 }
 
-void MCTSDeepPlayer::makeId()
-{
-    std::ostringstream ids;
-    ids << "mcts" << itermax_ << "_net" << net_->verno();
-    id_ = ids.str();
-}
+void MCTSDeepPlayer::makeId() { id_ = FSTR("i{}u{}@{}", itermax_, c_puct_, net_->verno()); }
 
 void MCTSDeepPlayer::reset()
 {
