@@ -19,8 +19,8 @@ enum class Color
 };
 
 Color operator~(const Color c);
-
 std::ostream& operator<<(std::ostream& out, Color c);
+std::ostream& outputColor(std::ostream& out, Color c, bool checked = false);
 
 class Move
 {
@@ -79,6 +79,7 @@ public:
 };
 
 std::ostream& operator<<(std::ostream& out, Board const& board);
+std::ostream& outputBoard(std::ostream& out, Board const& board, Move last = Move(kNoMoveYet));
 
 class State
 {

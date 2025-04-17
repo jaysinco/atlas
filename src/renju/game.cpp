@@ -24,17 +24,19 @@ Color operator~(const Color c)
     return opposite;
 }
 
-std::ostream& operator<<(std::ostream& out, Color c)
+std::ostream& operator<<(std::ostream& out, Color c) { return outputColor(out, c); }
+
+std::ostream& outputColor(std::ostream& out, Color c, bool checked)
 {
     switch (c) {
         case Color::kEmpty:
-            out << (kBoardWideSymbol ? " " : " ");
+            out << (kBoardRichSymbol ? " " : " ");
             break;
         case Color::kBlack:
-            out << (kBoardWideSymbol ? "●" : "x");
+            out << (kBoardRichSymbol ? (checked ? "" : "") : "x");
             break;
         case Color::kWhite:
-            out << (kBoardWideSymbol ? "○" : "o");
+            out << (kBoardRichSymbol ? (checked ? "" : "") : "o");
             break;
     }
     return out;
@@ -82,11 +84,13 @@ bool Board::winFrom(Move mv) const
     return false;
 }
 
-std::ostream& operator<<(std::ostream& out, Board const& board)
+std::ostream& operator<<(std::ostream& out, Board const& board) { return outputBoard(out, board); }
+
+std::ostream& outputBoard(std::ostream& out, Board const& board, Move last)
 {
-    static char const* sym_narrow[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "#"};
-    static char const* sym_wide[11] = {"𝟎", "𝟏", "𝟐", "𝟑", "𝟒", "𝟓", "𝟔", "𝟕", "𝟖", "𝟗", "#"};
-    char const** sym = kBoardWideSymbol ? sym_wide : sym_narrow;
+    static char const* sym_ascii[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "#"};
+    static char const* sym_rich[11] = {"𝟎", "𝟏", "𝟐", "𝟑", "𝟒", "𝟓", "𝟔", "𝟕", "𝟖", "𝟗", "#"};
+    char const** sym = kBoardRichSymbol ? sym_rich : sym_ascii;
 
     out << sym[10] << " ";
     for (int c = 0; c < kBoardMaxCol; ++c) {
@@ -96,7 +100,10 @@ std::ostream& operator<<(std::ostream& out, Board const& board)
     for (int r = 0; r < kBoardMaxRow; ++r) {
         out << std::right << sym[r % 10];
         for (int c = 0; c < kBoardMaxCol; ++c) {
-            out << "|" << board.get(Move(r, c));
+            out << "|";
+            Move mv(r, c);
+            bool checked = kBoardRichSymbol && mv == last;
+            outputColor(out, board.get(mv), checked);
         }
         out << "|\n";
     }
@@ -163,13 +170,19 @@ Color State::nextRandTillEnd()
     return winner_;
 }
 
-std::ostream& operator<<(std::ostream& out, State const& state) { return out << state.board_; }
+std::ostream& operator<<(std::ostream& out, State const& state)
+{
+    if (!kBoardRichSymbol) {
+        return out << state.board_;
+    }
+    return outputBoard(out, state.board_, state.last_);
+}
 
 Player& play(Player& p1, Player& p2, bool silent)
 {
     const std::map<Color, Player*> player_color{
         {Color::kBlack, &p1}, {Color::kWhite, &p2}, {Color::kEmpty, nullptr}};
-    auto game = State();
+    State game;
     p1.reset();
     p2.reset();
     int turn = 0;
@@ -184,11 +197,8 @@ Player& play(Player& p1, Player& p2, bool silent)
         ++turn;
         if (!silent) {
             std::cout << "\n" << game;
-            std::cout << FSTR("last move: {}{}", ~game.current(), game.getLast());
-            if (meta.p_win >= 0) {
-                std::cout << FSTR(" | win%: {:.1f}", meta.p_win * 100);
-            }
-            std::cout << FSTR(" | turn: {}", turn);
+            std::cout << FSTR("{} @ {} win%: {}", ~game.current(), turn,
+                              meta.p_win >= 0 ? FSTR("{:.1f}", meta.p_win * 100) : "n/a");
             std::cout << std::endl;
         }
     }
