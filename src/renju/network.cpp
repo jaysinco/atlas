@@ -122,10 +122,10 @@ void DataSet::makeMiniBatch(MiniBatch* batch) const
     }
 }
 
-std::ostream& operator<<(std::ostream& out, DataSet const& set)
+std::ostream& operator<<(std::ostream& out, DataSet const& ds)
 {
-    for (int i = 0; i < set.size(); ++i) {
-        out << set.get(i) << std::endl;
+    for (int i = 0; i < ds.size(); ++i) {
+        out << ds.get(i) << std::endl;
     }
     return out;
 }

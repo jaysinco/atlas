@@ -85,7 +85,8 @@ public:
         grid_[mv.z()] = c;
     }
 
-    void pushValid(std::vector<Move>& set) const;
+    void pushValid(std::vector<Move>& opts) const;
+
     bool winFrom(Move mv) const;
 };
 
@@ -101,11 +102,7 @@ class State
     std::vector<Move> opts_;
 
 public:
-    State(): last_(kNoMoveYet)
-    {
-        board_.pushValid(opts_);
-        shuffleOptions();
-    }
+    State(): last_(kNoMoveYet) { board_.pushValid(opts_); }
 
     State(State const& state) = default;
 
@@ -125,9 +122,8 @@ public:
 
     bool over() const { return winner_ != Color::kEmpty || opts_.size() == 0; }
 
-    void shuffleOptions() { std::shuffle(opts_.begin(), opts_.end(), g_random_engine); }
-
     void next(Move mv);
+
     Color nextRandTillEnd();
 };
 
@@ -151,6 +147,7 @@ struct Player
 };
 
 Player& play(Player& p1, Player& p2, bool silent = true);
+
 float benchmark(Player& p1, Player& p2, int round, bool silent = true);
 
 class RandomPlayer: public Player
@@ -182,5 +179,6 @@ public:
     std::string name() const override { return id_; }
 
     Move play(State const& state, ActionMeta& meta) override;
+
     ~HumanPlayer() override = default;
 };

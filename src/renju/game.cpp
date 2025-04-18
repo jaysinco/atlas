@@ -47,11 +47,11 @@ std::ostream& operator<<(std::ostream& out, Move mv)
     return out << "(" << std::setw(2) << mv.r() << ", " << std::setw(2) << mv.c() << ")";
 }
 
-void Board::pushValid(std::vector<Move>& set) const
+void Board::pushValid(std::vector<Move>& opts) const
 {
     for (int i = 0; i < kBoardSize; ++i) {
         if (get(Move(i)) == Color::kEmpty) {
-            set.emplace_back(i);
+            opts.emplace_back(i);
         }
     }
 }
@@ -65,20 +65,19 @@ bool Board::winFrom(Move mv) const
     if (side == Color::kEmpty) {
         return false;
     }
-    int const directions[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
-    for (auto const& dir: directions) {
+    int constexpr kDirections[4][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+    for (auto const& dir: kDirections) {
         int count = 1;
         for (int sign = -1; sign <= 1; sign += 2) {
             int r = mv.r() + sign * dir[0];
             int c = mv.c() + sign * dir[1];
             while (ON_BOARD(r, c) && get(Move(r, c)) == side) {
-                ++count;
+                if (++count >= kFiveInRow) {
+                    return true;
+                }
                 r += sign * dir[0];
                 c += sign * dir[1];
             }
-        }
-        if (count >= kFiveInRow) {
-            return true;
         }
     }
     return false;
@@ -121,32 +120,26 @@ void State::fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const
 {
     if (last_.z() == kNoMoveYet) {
         if (kInputFeatureNum > 3) {
-            for (int r = 0; r < kBoardMaxRow; ++r) {
-                for (int c = 0; c < kBoardMaxCol; ++c) {
-                    data[3 * kBoardSize + r * kBoardMaxCol + c] = 1.0f;
-                }
-            }
+            std::fill_n(data + 3 * kBoardSize, kBoardSize, 1.0f);
         }
         return;
     }
     auto own_side = current();
     auto enemy_side = ~own_side;
     float first = firstHand() ? 1.0f : 0.0f;
-    for (int r = 0; r < kBoardMaxRow; ++r) {
-        for (int c = 0; c < kBoardMaxCol; ++c) {
-            auto side = board_.get(Move(r, c));
-            if (side == own_side) {
-                data[r * kBoardMaxCol + c] = 1.0f;
-            } else if (side == enemy_side) {
-                data[kBoardSize + r * kBoardMaxCol + c] = 1.0f;
-            }
-            if (kInputFeatureNum > 3) {
-                data[3 * kBoardSize + r * kBoardMaxCol + c] = first;
-            }
+    for (int i = 0; i < kBoardSize; ++i) {
+        const Color side = board_.get(Move(i));
+        if (side == own_side) {
+            data[i] = 1.0f;
+        } else if (side == enemy_side) {
+            data[kBoardSize + i] = 1.0f;
+        }
+        if (kInputFeatureNum > 3) {
+            data[3 * kBoardSize + i] = first;
         }
     }
     if (kInputFeatureNum > 2) {
-        data[2 * kBoardSize + last_.r() * kBoardMaxCol + last_.c()] = 1.0f;
+        data[2 * kBoardSize + last_.z()] = 1.0f;
     }
 }
 
@@ -158,13 +151,19 @@ void State::next(Move mv)
         winner_ = side;
     }
     last_ = mv;
-    opts_.erase(std::find(opts_.cbegin(), opts_.cend(), mv));
+    if (auto it = std::find(opts_.begin(), opts_.end(), mv); it != opts_.end()) {
+        *it = opts_.back();
+        opts_.pop_back();
+    } else {
+        MY_THROW("invalid move: {}", mv);
+    }
 }
 
 Color State::nextRandTillEnd()
 {
+    std::shuffle(opts_.begin(), opts_.end(), g_random_engine);
     while (!over()) {
-        next(opts_.back());
+        next(opts_.front());
     }
     return winner_;
 }

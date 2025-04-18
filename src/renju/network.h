@@ -56,7 +56,7 @@ public:
     void makeMiniBatch(MiniBatch* batch) const;
 };
 
-std::ostream& operator<<(std::ostream& out, DataSet const& set);
+std::ostream& operator<<(std::ostream& out, DataSet const& ds);
 
 class FIRNet
 {

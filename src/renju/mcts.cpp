@@ -214,7 +214,6 @@ void MCTSPurePlayer::eval(State& state, float& leaf_value,
         for (auto const mv: state.getOptions()) {
             act_priors.emplace_back(mv, p);
         }
-        state.shuffleOptions();
         winner = state.nextRandTillEnd();
     }
     if (winner == enemy_side) {
