@@ -51,7 +51,7 @@ void runPlay(std::string const& setup1, std::string const& setup2)
 {
     ILOG("player1='{}', player2='{}'", setup1, setup2);
     std::shared_ptr<Player> player1 = createPlayer(setup1);
-    std::shared_ptr<Player> player2 = createPlayer(setup2);
+    std::shared_ptr<Player> player2 = setup1 == setup2 ? player1 : createPlayer(setup2);
     play(*player1, *player2, false);
 }
 
@@ -73,14 +73,15 @@ int main(int argc, char** argv)
                           "verno of checkpoint, 0 to train from scratch", 1);
 
     auto& play_args = args.addSub("play", "play game with ai or selfplay");
-    play_args.positional("player1", po::value<std::string>(), "player setup like 'human'", 1);
-    play_args.positional("player2", po::value<std::string>(), "player setup like 'i1000u1.25@1'",
-                         1);
+    play_args.positional("player1", po::value<std::string>(),
+                         "player setup like i1000u1.25@1, human", 1);
+    play_args.positional("player2", po::value<std::string>()->default_value(""),
+                         "see above, omit if selfplay", 1);
 
     auto& mark_args = args.addSub("mark", "benchmark between two players");
-    mark_args.positional("player1", po::value<std::string>(), "player setup like 'i5000u2.4'", 1);
-    mark_args.positional("player2", po::value<std::string>(), "player setup like 'i1000u1.25@1'",
-                         1);
+    mark_args.positional("player1", po::value<std::string>(),
+                         "player setup like i1000u1.25@1, human", 1);
+    mark_args.positional("player2", po::value<std::string>(), "see above", 1);
     mark_args.positional("round", po::value<int>()->default_value(10), "num of benchmark rounds",
                          1);
 
@@ -93,6 +94,9 @@ int main(int argc, char** argv)
     } else if (args.hasSub("play")) {
         auto player1 = play_args.get<std::string>("player1");
         auto player2 = play_args.get<std::string>("player2");
+        if (player2 == "") {
+            player2 = player1;
+        }
         runPlay(player1, player2);
     } else if (args.hasSub("mark")) {
         auto player1 = mark_args.get<std::string>("player1");

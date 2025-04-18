@@ -3,31 +3,30 @@
 #include <chrono>
 #include <numeric>
 
-int selfplay(std::shared_ptr<FIRNet> net, DataSet& dataset, int itermax)
+int selfplay(Player& player, DataSet& dataset, int itermax)
 {
     State game;
     std::vector<SampleData> record;
-    MCTSNode* root = new MCTSNode(nullptr, Move(kNoMoveYet), 1.0f);
     float ind = -1.0f;
     int step = 0;
+    player.reset();
     while (!game.over()) {
         ++step;
         ind *= -1.0f;
         SampleData one_step;
         *one_step.v_label = ind;
         game.fillFeatureArray(one_step.data);
-        MCTSDeepPlayer::think(itermax, kTrainCpuct, game, net, root, true);
-        Move act = root->actByProb(step <= kExploreStep ? 1.0f : 1e-3, one_step.p_label);
+        ActionMeta meta;
+        meta.temperature = step <= kExploreStep ? 1.0f : 1e-3;
+        meta.add_noise_prior = true;
+        meta.move_priors = one_step.p_label;
+        Move act = player.play(game, meta);
         record.push_back(one_step);
         game.next(act);
-        auto temp = root->cut(act);
-        delete root;
-        root = temp;
         if (kDebugTrainData) {
             std::cout << game << std::endl;
         }
     }
-    delete root;
     if (game.getWinner() != Color::kEmpty) {
         if (ind < 0) {
             for (auto& step: record) {
@@ -77,7 +76,7 @@ void train(std::shared_ptr<FIRNet> net)
 
     for (;;) {
         ++game_cnt;
-        int step = selfplay(net, dataset, kTrainDeepItermax);
+        int step = selfplay(net_player, dataset, kTrainDeepItermax);
         steps_buf.push_back(step);
         if (dataset.total() > kBatchSize) {
             for (int epoch = 0; epoch < kEpochPerGame; ++epoch) {

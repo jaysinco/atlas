@@ -73,7 +73,7 @@ public:
     std::string makeParamFileName() const;
     float trainStep(MiniBatch* batch);
     void evalState(State const& state, float value[1],
-                   std::vector<std::pair<Move, float>>& move_priors);
+                   std::vector<std::pair<Move, float>>& act_priors);
 
 private:
     struct Impl;

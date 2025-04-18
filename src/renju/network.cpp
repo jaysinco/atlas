@@ -368,7 +368,7 @@ static Move mappingMove(int id, Move mv)
 }
 
 void FIRNet::evalState(State const& state, float value[1],
-                       std::vector<std::pair<Move, float>>& move_priors)
+                       std::vector<std::pair<Move, float>>& act_priors)
 {
     torch::NoGradGuard no_grad;
     impl_->module.eval();
@@ -384,17 +384,17 @@ void FIRNet::evalState(State const& state, float value[1],
     for (auto const mv: state.getOptions()) {
         Move mapped = mappingMove(transform_id, mv);
         float prior = x_act[0][mapped.z()].item<float>();
-        move_priors.emplace_back(mv, prior);
+        act_priors.emplace_back(mv, prior);
         priors_sum += prior;
     }
     if (priors_sum < 1e-8) {
         ILOG("wield policy prob, lr might be too large: sum={}, available_move_n={}", priors_sum,
-             move_priors.size());
-        for (auto& item: move_priors) {
-            item.second = 1.0f / static_cast<float>(move_priors.size());
+             act_priors.size());
+        for (auto& item: act_priors) {
+            item.second = 1.0f / static_cast<float>(act_priors.size());
         }
     } else {
-        for (auto& item: move_priors) {
+        for (auto& item: act_priors) {
             item.second /= priors_sum;
         }
     }

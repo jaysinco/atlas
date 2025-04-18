@@ -53,9 +53,20 @@ public:
     bool operator<(Move const& right) const { return index_ < right.index_; }
 
     bool operator==(Move const& right) const { return index_ == right.index_; }
+
+    bool operator!=(Move const& right) const { return !(*this == right); }
 };
 
 std::ostream& operator<<(std::ostream& out, Move mv);
+
+namespace std
+{
+template <>
+struct hash<Move>
+{
+    size_t operator()(Move const& m) const noexcept { return hash<int>{}(m.z()); }
+};
+}  // namespace std
 
 class Board
 {
@@ -124,15 +135,17 @@ std::ostream& operator<<(std::ostream& out, State const& state);
 
 struct ActionMeta
 {
-    float p_mov = -1;
-    float p_win = -1;
+    float temperature = 1e-3;
+    bool add_noise_prior = false;
+    float value = -10;
+    float* move_priors = nullptr;
 };
 
 struct Player
 {
     Player() = default;
     virtual void reset() = 0;
-    virtual std::string const& name() const = 0;
+    virtual std::string name() const = 0;
     virtual Move play(State const& state, ActionMeta& meta) = 0;
     virtual ~Player() = default;
 };
@@ -149,7 +162,7 @@ public:
 
     void reset() override {}
 
-    std::string const& name() const override { return id_; }
+    std::string name() const override { return id_; }
 
     Move play(State const& state, ActionMeta& meta) override { return state.getOptions().back(); }
 
@@ -166,7 +179,7 @@ public:
 
     void reset() override {}
 
-    std::string const& name() const override { return id_; }
+    std::string name() const override { return id_; }
 
     Move play(State const& state, ActionMeta& meta) override;
     ~HumanPlayer() override = default;

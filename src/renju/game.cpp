@@ -193,8 +193,9 @@ Player& play(Player& p1, Player& p2, bool silent)
         ++turn;
         if (!silent) {
             std::cout << "\n" << game;
-            std::cout << FSTR("{} @ {} win%: {}", ~game.current(), turn,
-                              meta.p_win >= 0 ? FSTR("{:.1f}", meta.p_win * 100) : "n/a");
+            std::cout << FSTR(
+                "{} @ {} win%: {}", ~game.current(), turn,
+                meta.value >= -1 ? FSTR("{:.1f}", (1 + meta.value) / 2 * 100) : "n/a");
             std::cout << std::endl;
         }
     }
