@@ -4,6 +4,7 @@
 #include <string>
 #include <regex>
 #include <map>
+#include <boost/timer/timer.hpp>
 
 Color operator~(const Color c)
 {
@@ -185,14 +186,16 @@ Player& play(Player& p1, Player& p2, bool silent)
     while (!game.over()) {
         auto player = player_color.at(game.current());
         ActionMeta meta;
+        boost::timer::cpu_timer timer;
         auto act = player->play(game, meta);
+        timer.stop();
         game.next(act);
         ++turn;
         if (!silent) {
             std::cout << "\n" << game;
             std::cout << FSTR(
-                "{} @ {} win%: {}", ~game.current(), turn,
-                meta.value >= -1 ? FSTR("{:.1f}", (1 + meta.value) / 2 * 100) : "n/a");
+                "{} {} @ {:.3f}s {}", ~game.current(), turn, timer.elapsed().wall * 1e-9,
+                meta.value >= -1 ? FSTR("{:.1f}%", (1 + meta.value) / 2 * 100) : "n/a");
             std::cout << std::endl;
         }
     }

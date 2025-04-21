@@ -11,6 +11,7 @@ MCTSNode::~MCTSNode()
 
 void MCTSNode::expand(std::vector<std::pair<Move, float>> const& act_priors)
 {
+    children_.reserve(act_priors.size());
     for (auto& [mv, p]: act_priors) {
         children_[mv] = new MCTSNode(this, mv, p);
     }
@@ -29,18 +30,20 @@ MCTSNode* MCTSNode::cut(Move occurred)
 
 MCTSNode* MCTSNode::select(float c_puct) const
 {
-    MCTSNode* n = nullptr;
-    float u_max = -std::numeric_limits<float>::max();
-    int u_visit = std::numeric_limits<int>::max();
+    MCTSNode* best_node = nullptr;
+    float visits_sqrt = std::sqrt(visits_);
+    float best_score = -std::numeric_limits<float>::max();
+    int best_visits = std::numeric_limits<int>::max();
     for (auto const& [_, node]: children_) {
-        float u = node->getUpperConfidenceBound(c_puct);
-        if (u > u_max || (u == u_max && node->visits_ < u_visit)) {
-            n = node;
-            u_max = u;
-            u_visit = node->visits_;
+        float score =
+            node->getValue() + (c_puct * node->prior_ * visits_sqrt / (node->visits_ + 1));
+        if (score > best_score || (score == best_score && node->visits_ < best_visits)) {
+            best_node = node;
+            best_score = score;
+            best_visits = node->visits_;
         }
     }
-    return n;
+    return best_node;
 }
 
 Move MCTSNode::actByProb(float temp, float move_priors[kBoardSize]) const
@@ -108,15 +111,6 @@ void MCTSNode::addNoiseToChildPrior(float noise_rate)
         node->prior_ = (1 - noise_rate) * node->prior_ + noise_rate * noise[i];
         ++i;
     }
-}
-
-float MCTSNode::getUpperConfidenceBound(float c_puct) const
-{
-    if (isRoot()) {
-        MY_THROW("root node have no value");
-    }
-    float all_visits = static_cast<float>(parent_->visits_);
-    return getValue() + (c_puct * prior_ * std::sqrt(all_visits) / (visits_ + 1));
 }
 
 void MCTSNode::dump(std::ostream& out, int max_depth, int depth) const

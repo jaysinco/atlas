@@ -17,7 +17,7 @@ public:
     AutoCpuTimer(std::string const& desc, toolkit::LogLevel level = toolkit::LogLevel::kINFO)
         : desc_(desc), level_(level)
     {
-        start();
+        // start();
     }
 
     ~AutoCpuTimer()

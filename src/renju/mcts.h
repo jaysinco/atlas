@@ -6,12 +6,12 @@
 class MCTSNode
 {
     friend std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
-    MCTSNode* parent_;
-    std::unordered_map<Move, MCTSNode*> children_;
-    Move move_;
     int visits_ = 0;
     float total_val_ = 0;
     float prior_;
+    MCTSNode* parent_;
+    std::unordered_map<Move, MCTSNode*> children_;
+    Move move_;
 
 public:
     MCTSNode(MCTSNode* node_p = nullptr, Move mv = Move(kNoMoveYet), float prior_p = 1.0f)
@@ -28,7 +28,6 @@ public:
     void updateRecursive(float leaf_value);
     void addNoiseToChildPrior(float noise_rate);
     void dump(std::ostream& out, int max_depth, int depth = 0) const;
-    float getUpperConfidenceBound(float c_puct) const;
 
     float getValue() const { return visits_ == 0 ? 0 : total_val_ / visits_; }
 
