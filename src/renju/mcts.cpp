@@ -9,6 +9,17 @@ MCTSNode::~MCTSNode()
     }
 }
 
+MCTSNode::MCTSNode(MCTSNode const& rhs): MCTSNode(nullptr, rhs.move_, rhs.prior_)
+{
+    visits_ = rhs.visits_;
+    total_val_ = rhs.total_val_;
+    for (auto const& [_, node]: rhs.children_) {
+        auto d = new MCTSNode(*node);
+        d->parent_ = this;
+        children_[d->move_] = d;
+    }
+}
+
 void MCTSNode::expand(std::vector<std::pair<Move, float>> const& act_priors)
 {
     children_.reserve(act_priors.size());
@@ -144,6 +155,13 @@ MCTSPlayer::MCTSPlayer(int itermax, float c_puct): itermax_(itermax), c_puct_(c_
 
 MCTSPlayer::~MCTSPlayer() { delete root_; }
 
+MCTSPlayer::MCTSPlayer(MCTSPlayer const& rhs)
+{
+    this->itermax_ = rhs.itermax_;
+    this->c_puct_ = rhs.c_puct_;
+    this->root_ = new MCTSNode(*rhs.root_);
+}
+
 float MCTSPlayer::getCpuct() const { return c_puct_; }
 
 int MCTSPlayer::getItermax() const { return itermax_; }
@@ -198,6 +216,11 @@ MCTSPurePlayer::~MCTSPurePlayer() = default;
 
 std::string MCTSPurePlayer::name() const { return FSTR("i{}u{}", getItermax(), getCpuct()); }
 
+std::shared_ptr<Player> MCTSPurePlayer::clone() const
+{
+    return std::make_shared<MCTSPurePlayer>(*this);
+}
+
 void MCTSPurePlayer::eval(State& state, float& leaf_value,
                           std::vector<std::pair<Move, float>>& act_priors)
 {
@@ -229,6 +252,11 @@ MCTSDeepPlayer::~MCTSDeepPlayer() = default;
 std::string MCTSDeepPlayer::name() const
 {
     return FSTR("i{}u{}@{}", getItermax(), getCpuct(), net_->verno());
+}
+
+std::shared_ptr<Player> MCTSDeepPlayer::clone() const
+{
+    return std::make_shared<MCTSDeepPlayer>(*this);
 }
 
 void MCTSDeepPlayer::eval(State& state, float& leaf_value,

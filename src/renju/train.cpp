@@ -2,15 +2,16 @@
 #include "mcts.h"
 #include <chrono>
 #include <numeric>
+#include <thread>
 
-int selfplay(Player& player, DataSet& dataset, int itermax)
+static void selfplayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
 {
     State game;
     std::vector<SampleData> record;
     float ind = -1.0f;
     int step = 0;
     player.reset();
-    while (!game.over()) {
+    while (!game.over() && !meta.stop) {
         ++step;
         ind *= -1.0f;
         SampleData one_step;
@@ -27,24 +28,42 @@ int selfplay(Player& player, DataSet& dataset, int itermax)
             std::cout << game << std::endl;
         }
     }
-    if (game.getWinner() != Color::kEmpty) {
-        if (ind < 0) {
+    if (game.over()) {
+        if (game.getWinner() != Color::kEmpty) {
+            if (ind < 0) {
+                for (auto& step: record) {
+                    (*step.v_label) *= -1;
+                }
+            }
+        } else {
             for (auto& step: record) {
-                (*step.v_label) *= -1;
+                (*step.v_label) = 0.0f;
             }
         }
-    } else {
         for (auto& step: record) {
-            (*step.v_label) = 0.0f;
+            if (kDebugTrainData) {
+                std::cout << step << std::endl;
+            }
+            dataset.pushWithTransform(&step);
         }
     }
-    for (auto& step: record) {
-        if (kDebugTrainData) {
-            std::cout << step << std::endl;
-        }
-        dataset.pushWithTransform(&step);
+}
+
+void selfplay(Player& player, DataSet& dataset, int nthreads, SelfPlayMeta& meta)
+{
+    meta.stop = false;
+    std::vector<std::thread> workers;
+    for (int i = 0; i < nthreads; ++i) {
+        workers.emplace_back([&]() {
+            auto p = player.clone();
+            while (!meta.stop) {
+                selfplayOne(*p, dataset, meta);
+            }
+        });
     }
-    return step;
+    for (auto& w: workers) {
+        w.join();
+    }
 }
 
 static bool triggerTimer(std::chrono::time_point<std::chrono::system_clock>& last, int per_minute)
@@ -66,8 +85,6 @@ void train(std::shared_ptr<FIRNet> net)
     auto last_save = std::chrono::system_clock::now();
     auto last_benchmark = std::chrono::system_clock::now();
 
-    int64_t game_cnt = 0;
-    std::vector<int> steps_buf;
     DataSet dataset;
 
     int test_itermax = kTestPureItermax;
@@ -75,21 +92,17 @@ void train(std::shared_ptr<FIRNet> net)
     auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kTrainCpuct);
 
     for (;;) {
-        ++game_cnt;
-        int step = selfplay(net_player, dataset, kTrainDeepItermax);
-        steps_buf.push_back(step);
+        SelfPlayMeta meta;
+        selfplay(net_player, dataset, 10, meta);
         if (dataset.total() > kBatchSize) {
             for (int epoch = 0; epoch < kEpochPerGame; ++epoch) {
                 auto batch = new MiniBatch();
                 dataset.makeMiniBatch(batch);
                 float loss = net->trainStep(batch);
                 if (triggerTimer(last_log, kMinutePerLog)) {
-                    int avg_turn =
-                        std::round(std::accumulate(steps_buf.begin(), steps_buf.end(), 0) /
-                                   static_cast<float>(steps_buf.size()));
-                    steps_buf.clear();
+                    int avg_turn = static_cast<float>(meta.turns) / meta.rounds;
                     ILOG("loss={}, dataset_total={}, update_cnt={}, avg_turn={}, game_cnt={}", loss,
-                         dataset.total(), net->verno(), avg_turn, game_cnt);
+                         dataset.total(), net->verno(), avg_turn, meta.rounds);
                 }
                 delete batch;
             }

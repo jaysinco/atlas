@@ -14,12 +14,14 @@ class MCTSNode
     Move move_;
 
 public:
-    MCTSNode(MCTSNode* node_p = nullptr, Move mv = Move(kNoMoveYet), float prior_p = 1.0f)
-        : parent_(node_p), move_(mv), prior_(prior_p)
+    MCTSNode(MCTSNode* parent = nullptr, Move mv = Move(kNoMoveYet), float prior = 1.0f)
+        : parent_(parent), move_(mv), prior_(prior)
     {
     }
 
     ~MCTSNode();
+    MCTSNode(MCTSNode const& rhs);
+    MCTSNode& operator=(MCTSNode const&) = delete;
     void expand(std::vector<std::pair<Move, float>> const& act_priors);
     MCTSNode* cut(Move occurred);
     MCTSNode* select(float c_puct) const;
@@ -45,7 +47,7 @@ class MCTSPlayer: public Player
 public:
     MCTSPlayer(int itermax, float c_puct);
     ~MCTSPlayer() override;
-    MCTSPlayer(MCTSPlayer const&) = delete;
+    MCTSPlayer(MCTSPlayer const& rhs);
     MCTSPlayer& operator=(MCTSPlayer const&) = delete;
     float getCpuct() const;
     int getItermax() const;
@@ -71,6 +73,7 @@ public:
     MCTSPurePlayer(int itermax, float c_puct);
     ~MCTSPurePlayer() override;
     std::string name() const override;
+    std::shared_ptr<Player> clone() const override;
 
 protected:
     void eval(State& state, float& leaf_value,
@@ -83,6 +86,7 @@ public:
     MCTSDeepPlayer(std::shared_ptr<FIRNet> net, int itermax, float c_puct);
     ~MCTSDeepPlayer() override;
     std::string name() const override;
+    std::shared_ptr<Player> clone() const override;
 
 protected:
     void eval(State& state, float& leaf_value,

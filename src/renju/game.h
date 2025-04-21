@@ -143,6 +143,7 @@ struct Player
     virtual void reset() = 0;
     virtual std::string name() const = 0;
     virtual Move play(State const& state, ActionMeta& meta) = 0;
+    virtual std::shared_ptr<Player> clone() const = 0;
     virtual ~Player() = default;
 };
 
@@ -163,6 +164,8 @@ public:
 
     Move play(State const& state, ActionMeta& meta) override { return state.getOptions().back(); }
 
+    std::shared_ptr<Player> clone() const override { return std::make_shared<RandomPlayer>(*this); }
+
     ~RandomPlayer() override = default;
 };
 
@@ -179,6 +182,8 @@ public:
     std::string name() const override { return id_; }
 
     Move play(State const& state, ActionMeta& meta) override;
+
+    std::shared_ptr<Player> clone() const override { return std::make_shared<HumanPlayer>(*this); }
 
     ~HumanPlayer() override = default;
 };
