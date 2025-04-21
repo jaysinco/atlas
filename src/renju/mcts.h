@@ -1,6 +1,7 @@
 #pragma once
 #include "game.h"
 #include "network.h"
+#include <atomic>
 #include <unordered_map>
 
 class MCTSNode
@@ -9,18 +10,15 @@ class MCTSNode
     int visits_ = 0;
     float total_val_ = 0;
     float prior_;
+    std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
     MCTSNode* parent_;
     std::unordered_map<Move, MCTSNode*> children_;
     Move move_;
 
 public:
-    MCTSNode(MCTSNode* parent = nullptr, Move mv = Move(kNoMoveYet), float prior = 1.0f)
-        : parent_(parent), move_(mv), prior_(prior)
-    {
-    }
-
-    ~MCTSNode();
+    MCTSNode(MCTSNode* parent = nullptr, Move mv = Move(kNoMoveYet), float prior = 1.0f);
     MCTSNode(MCTSNode const& rhs);
+    ~MCTSNode();
     MCTSNode& operator=(MCTSNode const&) = delete;
     void expand(std::vector<std::pair<Move, float>> const& act_priors);
     MCTSNode* cut(Move occurred);
@@ -30,14 +28,12 @@ public:
     void updateRecursive(float leaf_value);
     void addNoiseToChildPrior(float noise_rate);
     void dump(std::ostream& out, int max_depth, int depth = 0) const;
-
-    float getValue() const { return visits_ == 0 ? 0 : total_val_ / visits_; }
-
-    Move getMove() const { return move_; }
-
-    bool isLeaf() const { return children_.size() == 0; }
-
-    bool isRoot() const { return parent_ == nullptr; }
+    float getValue() const;
+    Move getMove() const;
+    bool isLeaf() const;
+    bool isRoot() const;
+    void lock();
+    void unlock();
 };
 
 std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
@@ -45,7 +41,7 @@ std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
 class MCTSPlayer: public Player
 {
 public:
-    MCTSPlayer(int itermax, float c_puct);
+    MCTSPlayer(int itermax, float c_puct, int nthreads = kParallelMCTS);
     ~MCTSPlayer() override;
     MCTSPlayer(MCTSPlayer const& rhs);
     MCTSPlayer& operator=(MCTSPlayer const&) = delete;

@@ -2,6 +2,11 @@
 #include <iomanip>
 #include <sstream>
 
+MCTSNode::MCTSNode(MCTSNode* parent, Move mv, float prior)
+    : parent_(parent), move_(mv), prior_(prior)
+{
+}
+
 MCTSNode::~MCTSNode()
 {
     for (auto const& [_, node]: children_) {
@@ -142,13 +147,29 @@ void MCTSNode::dump(std::ostream& out, int max_depth, int depth) const
     }
 }
 
+float MCTSNode::getValue() const { return visits_ == 0 ? 0 : total_val_ / visits_; }
+
+Move MCTSNode::getMove() const { return move_; }
+
+bool MCTSNode::isLeaf() const { return children_.size() == 0; }
+
+bool MCTSNode::isRoot() const { return parent_ == nullptr; }
+
+void MCTSNode::lock()
+{
+    while (lck_.test_and_set(std::memory_order_acquire)) {
+    }
+}
+
+void MCTSNode::unlock() { lck_.clear(std::memory_order_release); }
+
 std::ostream& operator<<(std::ostream& out, MCTSNode const& node)
 {
     node.dump(out, 1);
     return out;
 }
 
-MCTSPlayer::MCTSPlayer(int itermax, float c_puct): itermax_(itermax), c_puct_(c_puct)
+MCTSPlayer::MCTSPlayer(int itermax, float c_puct, int nthreads): itermax_(itermax), c_puct_(c_puct)
 {
     root_ = new MCTSNode;
 }

@@ -4,14 +4,14 @@
 #include <numeric>
 #include <thread>
 
-static void selfplayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
+static void selfPlayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
 {
     State game;
     std::vector<SampleData> record;
     float ind = -1.0f;
     int step = 0;
     player.reset();
-    while (!game.over() && !meta.stop) {
+    while (!game.over()) {
         ++step;
         ind *= -1.0f;
         SampleData one_step;
@@ -28,41 +28,29 @@ static void selfplayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
             std::cout << game << std::endl;
         }
     }
-    if (game.over()) {
-        if (game.getWinner() != Color::kEmpty) {
-            if (ind < 0) {
-                for (auto& step: record) {
-                    (*step.v_label) *= -1;
-                }
-            }
-        } else {
+    if (game.getWinner() != Color::kEmpty) {
+        if (ind < 0) {
             for (auto& step: record) {
-                (*step.v_label) = 0.0f;
+                (*step.v_label) *= -1;
             }
         }
+    } else {
         for (auto& step: record) {
-            if (kDebugTrainData) {
-                std::cout << step << std::endl;
-            }
-            dataset.pushWithTransform(&step);
+            (*step.v_label) = 0.0f;
         }
+    }
+    for (auto& step: record) {
+        if (kDebugTrainData) {
+            std::cout << step << std::endl;
+        }
+        dataset.pushWithTransform(&step);
     }
 }
 
-void selfplay(Player& player, DataSet& dataset, int nthreads, SelfPlayMeta& meta)
+void selfPlay(Player& player, DataSet& dataset, SelfPlayMeta& meta)
 {
-    meta.stop = false;
-    std::vector<std::thread> workers;
-    for (int i = 0; i < nthreads; ++i) {
-        workers.emplace_back([&]() {
-            auto p = player.clone();
-            while (!meta.stop) {
-                selfplayOne(*p, dataset, meta);
-            }
-        });
-    }
-    for (auto& w: workers) {
-        w.join();
+    for (int i = 0; i < 1; ++i) {
+        selfPlayOne(player, dataset, meta);
     }
 }
 
@@ -93,7 +81,7 @@ void train(std::shared_ptr<FIRNet> net)
 
     for (;;) {
         SelfPlayMeta meta;
-        selfplay(net_player, dataset, 10, meta);
+        selfPlay(net_player, dataset, meta);
         if (dataset.total() > kBatchSize) {
             for (int epoch = 0; epoch < kEpochPerGame; ++epoch) {
                 auto batch = new MiniBatch();
