@@ -2,7 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
-#include <sstream>
+#include <regex>
 #include <map>
 
 Color operator~(const Color c)
@@ -30,7 +30,7 @@ std::ostream& outputColor(std::ostream& out, Color c, bool checked)
 {
     switch (c) {
         case Color::kEmpty:
-            out << (kBoardRichSymbol ? " " : " ");
+            out << (kBoardRichSymbol ? "·" : "·");
             break;
         case Color::kBlack:
             out << (kBoardRichSymbol ? (checked ? "" : "") : (checked ? "X" : "x"));
@@ -87,23 +87,21 @@ std::ostream& operator<<(std::ostream& out, Board const& board) { return outputB
 
 std::ostream& outputBoard(std::ostream& out, Board const& board, Move last)
 {
-    static char const* sym_ascii[11] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "#"};
-    static char const* sym_rich[11] = {"𝟎", "𝟏", "𝟐", "𝟑", "𝟒", "𝟓", "𝟔", "𝟕", "𝟖", "𝟗", "#"};
-    char const** sym = kBoardRichSymbol ? sym_rich : sym_ascii;
-
-    out << sym[10] << " ";
+    static char const* symtbl[16] = {"0", "1", "2", "3", "4", "5", "6", "7",
+                                     "8", "9", "a", "b", "c", "d", "e", "#"};
+    out << symtbl[15] << " ";
     for (int c = 0; c < kBoardMaxCol; ++c) {
-        out << std::right << sym[c % 10] << " ";
+        out << std::right << symtbl[c] << " ";
     }
     out << "\n";
     for (int r = 0; r < kBoardMaxRow; ++r) {
-        out << std::right << sym[r % 10];
+        out << std::right << symtbl[r];
         for (int c = 0; c < kBoardMaxCol; ++c) {
-            out << "|";
+            out << " ";
             Move mv(r, c);
             outputColor(out, board.get(mv), mv == last);
         }
-        out << "|\n";
+        out << " \n";
     }
     return out;
 }
@@ -245,18 +243,17 @@ float benchmark(Player& p1, Player& p2, int round, bool silent)
 
 bool HumanPlayer::getMove(int& row, int& col)
 {
-    std::string line, srow;
+    static std::regex pattern(R"(^([0-9a-eA-E])(?:[, \t]+)([0-9a-eA-E])$)");
+    std::string line;
     if (!std::getline(std::cin, line)) {
         return false;
     }
-    std::istringstream line_stream(line);
-    if (!std::getline(line_stream, srow, ',') || !(line_stream >> col)) {
+    std::smatch matches;
+    if (!std::regex_match(line, matches, pattern)) {
         return false;
     }
-    std::istringstream row_stream(srow);
-    if (!(row_stream >> row)) {
-        return false;
-    }
+    row = std::stoi(matches[1].str(), nullptr, 16);
+    col = std::stoi(matches[2].str(), nullptr, 16);
     return true;
 }
 

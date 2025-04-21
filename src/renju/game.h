@@ -11,7 +11,7 @@
 
 extern std::mt19937 g_random_engine;
 
-enum class Color
+enum class Color : unsigned char
 {
     kEmpty,
     kBlack,
@@ -24,7 +24,7 @@ std::ostream& outputColor(std::ostream& out, Color c, bool checked = false);
 
 class Move
 {
-    int index_;
+    unsigned char index_;
 
 public:
     explicit Move(int z): index_(z)
