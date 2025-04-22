@@ -19,10 +19,11 @@ constexpr int kBoardSize = kBoardMaxRow * kBoardMaxCol;
 constexpr bool kBoardRichSymbol = true;
 constexpr int kInputFeatureNum = 2;  // self, opponent[[, lastmove], color]
 constexpr unsigned char kNoMoveYet = 0xff;
-constexpr int kParallelMCTS = 4;
+constexpr int kMCTSThreadNum = 8;
 constexpr float kNoiseRate = 0.2;
 constexpr float kDirichletAlpha = 0.03;
 constexpr bool kDebugMCTSProb = false;
+
 constexpr int kResidualLayers = 7;
 constexpr int kResidualFilters = 64;
 constexpr int kBatchSize = 512;

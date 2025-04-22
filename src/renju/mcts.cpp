@@ -1,6 +1,9 @@
 #include "mcts.h"
 #include <iomanip>
 #include <sstream>
+#include <bshoshany/BS_thread_pool.hpp>
+
+static BS::thread_pool g_thread_pool(kMCTSThreadNum);
 
 MCTSNode::MCTSNode(MCTSNode* parent, Move mv, float prior)
     : parent_(parent), move_(mv), prior_(prior)
@@ -27,10 +30,12 @@ MCTSNode::MCTSNode(MCTSNode const& rhs): MCTSNode(nullptr, rhs.move_, rhs.prior_
 
 void MCTSNode::expand(std::vector<std::pair<Move, float>> const& act_priors)
 {
+    lock();
     children_.reserve(act_priors.size());
     for (auto& [mv, p]: act_priors) {
         children_[mv] = new MCTSNode(this, mv, p);
     }
+    unlock();
 }
 
 MCTSNode* MCTSNode::cut(Move occurred)
@@ -46,19 +51,25 @@ MCTSNode* MCTSNode::cut(Move occurred)
 
 MCTSNode* MCTSNode::select(float c_puct) const
 {
+    lock();
     MCTSNode* best_node = nullptr;
     float visits_sqrt = std::sqrt(visits_);
     float best_score = -std::numeric_limits<float>::max();
     int best_visits = std::numeric_limits<int>::max();
     for (auto const& [_, node]: children_) {
+        node->lock();
+        float adjusted_visits = node->visits_ + node->virtual_loss_;
+        float adjusted_value =
+            (adjusted_visits == 0) ? 0 : (node->total_val_ - node->virtual_loss_) / adjusted_visits;
         float score =
-            node->getValue() + (c_puct * node->prior_ * visits_sqrt / (node->visits_ + 1));
-        if (score > best_score || (score == best_score && node->visits_ < best_visits)) {
+            adjusted_value + (c_puct * node->prior_ * visits_sqrt / (adjusted_visits + 1));
+        if (score > best_score) {
             best_node = node;
             best_score = score;
-            best_visits = node->visits_;
         }
+        node->unlock();
     }
+    unlock();
     return best_node;
 }
 
@@ -91,18 +102,20 @@ Move MCTSNode::actByProb(float temp, float move_priors[kBoardSize]) const
     return Move(discrete(g_random_engine));
 }
 
-void MCTSNode::update(float leaf_value)
+void MCTSNode::applyVirtualLoss()
 {
-    ++visits_;
-    total_val_ += leaf_value;
+    lock();
+    virtual_loss_ += 1;
+    unlock();
 }
 
-void MCTSNode::updateRecursive(float leaf_value)
+void MCTSNode::updateAndRevertVirtualLoss(float leaf_value)
 {
-    if (parent_ != nullptr) {
-        parent_->updateRecursive(-1 * leaf_value);
-    }
-    update(leaf_value);
+    lock();
+    virtual_loss_ -= 1;
+    ++visits_;
+    total_val_ += leaf_value;
+    unlock();
 }
 
 static void genRanDirichlet(const size_t k, float alpha, float theta[])
@@ -151,17 +164,23 @@ float MCTSNode::getValue() const { return visits_ == 0 ? 0 : total_val_ / visits
 
 Move MCTSNode::getMove() const { return move_; }
 
-bool MCTSNode::isLeaf() const { return children_.size() == 0; }
+bool MCTSNode::isLeaf() const
+{
+    lock();
+    bool leaf = children_.size() == 0;
+    unlock();
+    return leaf;
+}
 
 bool MCTSNode::isRoot() const { return parent_ == nullptr; }
 
-void MCTSNode::lock()
+void MCTSNode::lock() const
 {
     while (lck_.test_and_set(std::memory_order_acquire)) {
     }
 }
 
-void MCTSNode::unlock() { lck_.clear(std::memory_order_release); }
+void MCTSNode::unlock() const { lck_.clear(std::memory_order_release); }
 
 std::ostream& operator<<(std::ostream& out, MCTSNode const& node)
 {
@@ -169,8 +188,11 @@ std::ostream& operator<<(std::ostream& out, MCTSNode const& node)
     return out;
 }
 
-MCTSPlayer::MCTSPlayer(int itermax, float c_puct, int nthreads): itermax_(itermax), c_puct_(c_puct)
+MCTSPlayer::MCTSPlayer(int itermax, float c_puct): itermax_(itermax), c_puct_(c_puct)
 {
+    if (itermax < kMCTSThreadNum || itermax % kMCTSThreadNum != 0) {
+        MY_THROW("itermax({}) % kMCTSThreadNum({}) != 0", itermax, kMCTSThreadNum);
+    }
     root_ = new MCTSNode;
 }
 
@@ -201,6 +223,32 @@ void MCTSPlayer::swapRoot(MCTSNode* new_root)
     root_ = new_root;
 }
 
+void MCTSPlayer::think(State const& state, int iter_begin, int iter_end)
+{
+    for (int i = iter_begin; i < iter_end; ++i) {
+        State state_copied(state);
+        root_->applyVirtualLoss();
+        std::vector<MCTSNode*> path{root_};
+        MCTSNode* node = root_;
+        while (!node->isLeaf()) {
+            node = node->select(c_puct_);
+            node->applyVirtualLoss();
+            path.push_back(node);
+            state_copied.next(node->getMove());
+        }
+        float leaf_value;
+        std::vector<std::pair<Move, float>> act_priors;
+        eval(state_copied, leaf_value, act_priors);
+        if (!act_priors.empty()) {
+            node->expand(act_priors);
+        }
+        for (auto it = path.rbegin(); it != path.rend(); ++it) {
+            (*it)->updateAndRevertVirtualLoss(leaf_value);
+            leaf_value *= -1;
+        }
+    }
+}
+
 Move MCTSPlayer::play(State const& state, ActionMeta& meta)
 {
     if (state.getLast().z() != kNoMoveYet && !root_->isLeaf() &&
@@ -210,21 +258,9 @@ Move MCTSPlayer::play(State const& state, ActionMeta& meta)
     if (meta.add_noise_prior) {
         root_->addNoiseToChildPrior(kNoiseRate);
     }
-    for (int i = 0; i < itermax_; ++i) {
-        State state_copied(state);
-        MCTSNode* node = root_;
-        while (!node->isLeaf()) {
-            node = node->select(c_puct_);
-            state_copied.next(node->getMove());
-        }
-        float leaf_value;
-        std::vector<std::pair<Move, float>> act_priors;
-        eval(state_copied, leaf_value, act_priors);
-        if (!act_priors.empty()) {
-            node->expand(act_priors);
-        }
-        node->updateRecursive(leaf_value);
-    }
+    BS::multi_future<void> loop_future = g_thread_pool.parallelize_loop(
+        0, itermax_, [&](int a, int b) { think(state, a, b); }, kMCTSThreadNum);
+    loop_future.wait();
     Move act = root_->actByProb(meta.temperature, meta.move_priors);
     swapRoot(root_->cut(act));
     meta.value = root_->getValue();

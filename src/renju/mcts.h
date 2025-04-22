@@ -10,9 +10,10 @@ class MCTSNode
     int visits_ = 0;
     float total_val_ = 0;
     float prior_;
-    std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
+    mutable std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
     MCTSNode* parent_;
     std::unordered_map<Move, MCTSNode*> children_;
+    float virtual_loss_ = 0;
     Move move_;
 
 public:
@@ -24,16 +25,16 @@ public:
     MCTSNode* cut(Move occurred);
     MCTSNode* select(float c_puct) const;
     Move actByProb(float temp, float move_priors[kBoardSize] = nullptr) const;
-    void update(float leaf_value);
-    void updateRecursive(float leaf_value);
+    void applyVirtualLoss();
+    void updateAndRevertVirtualLoss(float leaf_value);
     void addNoiseToChildPrior(float noise_rate);
     void dump(std::ostream& out, int max_depth, int depth = 0) const;
     float getValue() const;
     Move getMove() const;
     bool isLeaf() const;
     bool isRoot() const;
-    void lock();
-    void unlock();
+    void lock() const;
+    void unlock() const;
 };
 
 std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
@@ -41,7 +42,7 @@ std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
 class MCTSPlayer: public Player
 {
 public:
-    MCTSPlayer(int itermax, float c_puct, int nthreads = kParallelMCTS);
+    MCTSPlayer(int itermax, float c_puct);
     ~MCTSPlayer() override;
     MCTSPlayer(MCTSPlayer const& rhs);
     MCTSPlayer& operator=(MCTSPlayer const&) = delete;
@@ -56,6 +57,7 @@ protected:
                       std::vector<std::pair<Move, float>>& act_priors) = 0;
 
 private:
+    void think(State const& state, int iter_begin, int iter_end);
     void swapRoot(MCTSNode* new_root);
 
     int itermax_;
