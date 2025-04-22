@@ -13,29 +13,31 @@ std::shared_ptr<Player> createPlayer(std::string const& setup)
     if (setup == "human") {
         return std::make_shared<HumanPlayer>("human");
     }
-    static std::regex pattern(R"(i(\d+)u([\d.]+)(?:@(\d+))?)");
+    static std::regex pattern(R"(i(\d+)u([\d.]+)t(\d+)(?:@(\d+))?)");
     int itermax;
     float c_puct;
+    int nthreads;
     std::optional<int64_t> verno;
     std::smatch matches;
     if (std::regex_match(setup, matches, pattern)) {
-        if (matches.size() >= 3) {
-            itermax = std::stoi(matches[1].str());
-            c_puct = std::stof(matches[2].str());
-            if (matches.size() > 3 && matches[3].matched) {
-                verno = std::stoi(matches[3].str());
-            }
+        itermax = std::stoi(matches[1].str());
+        c_puct = std::stof(matches[2].str());
+        nthreads = std::stoi(matches[3].str());
+        if (matches.size() > 4 && matches[4].matched) {
+            verno = std::stoi(matches[4].str());
         }
+
     } else {
         MY_THROW("failed to parse player setup: {}", setup);
     }
-    ILOG("itermax={}, c_puct={}{}", itermax, c_puct, verno ? FSTR(", verno={}", *verno) : "");
+    ILOG("itermax={}, c_puct={}, nthreads={}{}", itermax, c_puct, nthreads,
+         verno ? FSTR(", verno={}", *verno) : "");
     std::shared_ptr<Player> player;
     if (verno) {
         auto net = std::make_shared<FIRNet>(*verno);
-        player = std::make_shared<MCTSDeepPlayer>(net, itermax, c_puct);
+        player = std::make_shared<MCTSDeepPlayer>(net, itermax, c_puct, nthreads);
     } else {
-        player = std::make_shared<MCTSPurePlayer>(itermax, c_puct);
+        player = std::make_shared<MCTSPurePlayer>(itermax, c_puct, nthreads);
     }
     return player;
 }
@@ -74,13 +76,13 @@ int main(int argc, char** argv)
 
     auto& play_args = args.addSub("play", "play game with ai or selfplay");
     play_args.positional("player1", po::value<std::string>(),
-                         "player setup like i1000u1.25@1, human", 1);
+                         "player setup like i1000u1.25t8@1, human", 1);
     play_args.positional("player2", po::value<std::string>()->default_value(""),
                          "see above, omit if selfplay", 1);
 
     auto& mark_args = args.addSub("mark", "benchmark between two players");
     mark_args.positional("player1", po::value<std::string>(),
-                         "player setup like i1000u1.25@1, human", 1);
+                         "player setup like i1000u1.25t8@1, human", 1);
     mark_args.positional("player2", po::value<std::string>(), "see above", 1);
     mark_args.positional("round", po::value<int>()->default_value(10), "num of benchmark rounds",
                          1);

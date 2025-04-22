@@ -2,7 +2,7 @@
 #include "game.h"
 #include "network.h"
 #include <atomic>
-#include <unordered_map>
+#include <bshoshany/BS_thread_pool.hpp>
 
 class MCTSNode
 {
@@ -12,7 +12,7 @@ class MCTSNode
     float prior_;
     mutable std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
     MCTSNode* parent_;
-    std::unordered_map<Move, MCTSNode*> children_;
+    std::vector<MCTSNode*> children_;
     float virtual_loss_ = 0;
     Move move_;
 
@@ -42,12 +42,13 @@ std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
 class MCTSPlayer: public Player
 {
 public:
-    MCTSPlayer(int itermax, float c_puct);
+    MCTSPlayer(int itermax, float c_puct, int nthreads);
     ~MCTSPlayer() override;
     MCTSPlayer(MCTSPlayer const& rhs);
     MCTSPlayer& operator=(MCTSPlayer const&) = delete;
     float getCpuct() const;
     int getItermax() const;
+    int getNumThreads() const;
     void setItermax(int i);
     void reset() override;
     Move play(State const& state, ActionMeta& meta) override;
@@ -62,13 +63,15 @@ private:
 
     int itermax_;
     float c_puct_;
+    int nthreads_;
+    BS::thread_pool pool_;
     MCTSNode* root_;
 };
 
 class MCTSPurePlayer: public MCTSPlayer
 {
 public:
-    MCTSPurePlayer(int itermax, float c_puct);
+    MCTSPurePlayer(int itermax, float c_puct, int nthreads);
     ~MCTSPurePlayer() override;
     std::string name() const override;
     std::shared_ptr<Player> clone() const override;
@@ -81,7 +84,7 @@ protected:
 class MCTSDeepPlayer: public MCTSPlayer
 {
 public:
-    MCTSDeepPlayer(std::shared_ptr<FIRNet> net, int itermax, float c_puct);
+    MCTSDeepPlayer(std::shared_ptr<FIRNet> net, int itermax, float c_puct, int nthreads);
     ~MCTSDeepPlayer() override;
     std::string name() const override;
     std::shared_ptr<Player> clone() const override;

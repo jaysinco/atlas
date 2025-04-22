@@ -76,8 +76,8 @@ void train(std::shared_ptr<FIRNet> net)
     DataSet dataset;
 
     int test_itermax = kTestPureItermax;
-    auto test_player = MCTSPurePlayer(test_itermax, kTrainCpuct);
-    auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kTrainCpuct);
+    auto test_player = MCTSPurePlayer(test_itermax, kTrainCpuct, kTrainThreadNum);
+    auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kTrainCpuct, kTrainThreadNum);
 
     for (;;) {
         SelfPlayMeta meta;
