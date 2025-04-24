@@ -42,7 +42,7 @@ MCTSNode* MCTSNode::cut(Move occurred)
     auto it = std::find_if(children_.begin(), children_.end(),
                            [=](MCTSNode const* node) { return occurred == node->move_; });
     if (it == children_.end()) {
-        MY_THROW("move not found");
+        MY_THROW("move not found: {}", occurred);
     }
     MCTSNode* c = *it;
     *it = children_.back();
@@ -211,33 +211,36 @@ void MCTSPlayer::swapRoot(MCTSNode* new_root)
     root_ = new_root;
 }
 
-void MCTSPlayer::think(State const& state, int iter_begin, int iter_end)
+MyErrCode MCTSPlayer::think(State const& state, int iter_begin, int iter_end)
 {
+    MY_TRY
     for (int i = iter_begin; i < iter_end; ++i) {
         State state_copied(state);
         std::vector<MCTSNode*> path;
         MCTSNode* node = root_;
-        node->lock();
-        node->applyVirtualLoss();
-        path.push_back(node);
-        while (!node->isLeaf()) {
-            auto selected = node->select(c_puct_);
-            node->unlock();
-            node = selected;
+        while (true) {
             node->lock();
             node->applyVirtualLoss();
+            if (node->isLeaf()) {
+                node->unlock();
+                break;
+            }
+            MCTSNode* selected = node->select(c_puct_);
+            node->unlock();
             path.push_back(node);
+            node = selected;
             state_copied.next(node->getMove());
         }
-        node->unlock();
         float leaf_value;
         std::vector<std::pair<Move, float>> act_priors;
         eval(state_copied, leaf_value, act_priors);
+        node->lock();
         if (!act_priors.empty()) {
-            node->lock();
             node->expand(act_priors);
-            node->unlock();
         }
+        node->updateAndRevertVirtualLoss(leaf_value);
+        node->unlock();
+        leaf_value *= -1;
         for (auto it = path.rbegin(); it != path.rend(); ++it) {
             MCTSNode* curr = *it;
             curr->lock();
@@ -246,6 +249,8 @@ void MCTSPlayer::think(State const& state, int iter_begin, int iter_end)
             leaf_value *= -1;
         }
     }
+    return MyErrCode::kOk;
+    MY_CATCH_RET
 }
 
 Move MCTSPlayer::play(State const& state, ActionMeta& meta)
@@ -257,9 +262,13 @@ Move MCTSPlayer::play(State const& state, ActionMeta& meta)
     if (meta.add_noise_prior) {
         root_->addNoiseToChildPrior(kNoiseRate);
     }
-    BS::multi_future<void> loop_future = pool_.parallelize_loop(
-        0, itermax_, [&](int a, int b) { think(state, a, b); }, nthreads_);
-    loop_future.wait();
+    BS::multi_future<MyErrCode> loop_future = pool_.parallelize_loop(
+        0, itermax_, [&](int a, int b) { return think(state, a, b); }, nthreads_);
+    std::vector<MyErrCode> res = loop_future.get();
+    if (!std::all_of(res.begin(), res.end(),
+                     [](MyErrCode code) { return code == MyErrCode::kOk; })) {
+        MY_THROW("mcts think failed");
+    }
     Move act = root_->actByProb(meta.temperature, meta.move_priors);
     swapRoot(root_->cut(act));
     meta.value = root_->getValue();

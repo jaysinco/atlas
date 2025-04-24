@@ -75,7 +75,13 @@ class Board
 public:
     Board() = default;
 
-    Color get(Move mv) const { return grid_[mv.z()]; }
+    Color get(Move mv) const
+    {
+        if (mv.z() >= kBoardSize) {
+            MY_THROW("invalid move: {}", mv);
+        }
+        return grid_[mv.z()];
+    }
 
     void put(Move mv, Color c)
     {

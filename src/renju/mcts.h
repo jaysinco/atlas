@@ -6,16 +6,6 @@
 
 class MCTSNode
 {
-    friend std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
-    int visits_ = 0;
-    float total_val_ = 0;
-    float prior_;
-    mutable std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
-    MCTSNode* parent_;
-    std::vector<MCTSNode*> children_;
-    float virtual_loss_ = 0;
-    Move move_;
-
 public:
     MCTSNode(MCTSNode* parent = nullptr, Move mv = Move(kNoMoveYet), float prior = 1.0f);
     MCTSNode(MCTSNode const& rhs);
@@ -35,6 +25,17 @@ public:
     bool isRoot() const;
     void lock() const;
     void unlock() const;
+
+private:
+    friend std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
+    int visits_ = 0;
+    float total_val_ = 0;
+    float prior_;
+    mutable std::atomic_flag lck_ = ATOMIC_FLAG_INIT;
+    MCTSNode* parent_;
+    std::vector<MCTSNode*> children_;
+    float virtual_loss_ = 0;
+    Move const move_;
 };
 
 std::ostream& operator<<(std::ostream& out, MCTSNode const& node);
@@ -58,7 +59,7 @@ protected:
                       std::vector<std::pair<Move, float>>& act_priors) = 0;
 
 private:
-    void think(State const& state, int iter_begin, int iter_end);
+    MyErrCode think(State const& state, int iter_begin, int iter_end);
     void swapRoot(MCTSNode* new_root);
 
     int itermax_;
