@@ -12,6 +12,7 @@ public:
     ~MCTSNode();
     MCTSNode& operator=(MCTSNode const&) = delete;
     void expand(std::vector<std::pair<Move, float>> const& act_priors);
+    void deleteAllChildren();
     MCTSNode* cut(Move occurred);
     MCTSNode* select(float c_puct) const;
     Move actByProb(float temp, float move_priors[kBoardSize] = nullptr) const;

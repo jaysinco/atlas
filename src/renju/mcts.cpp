@@ -1,18 +1,14 @@
 #include "mcts.h"
 #include <iomanip>
 #include <sstream>
+#include <stack>
 
 MCTSNode::MCTSNode(MCTSNode* parent, Move mv, float prior)
     : parent_(parent), move_(mv), prior_(prior)
 {
 }
 
-MCTSNode::~MCTSNode()
-{
-    for (auto const& node: children_) {
-        delete node;
-    }
-}
+MCTSNode::~MCTSNode() = default;
 
 MCTSNode::MCTSNode(MCTSNode const& rhs): MCTSNode(nullptr, rhs.move_, rhs.prior_)
 {
@@ -35,6 +31,23 @@ void MCTSNode::expand(std::vector<std::pair<Move, float>> const& act_priors)
     for (auto& [mv, p]: act_priors) {
         children_.push_back(new MCTSNode(this, mv, p));
     }
+}
+
+void MCTSNode::deleteAllChildren()
+{
+    std::stack<MCTSNode*> nodes_to_delete;
+    for (MCTSNode* node: children_) {
+        nodes_to_delete.push(node);
+    }
+    while (!nodes_to_delete.empty()) {
+        MCTSNode* current = nodes_to_delete.top();
+        nodes_to_delete.pop();
+        for (MCTSNode* node: current->children_) {
+            nodes_to_delete.push(node);
+        }
+        delete current;
+    }
+    children_.clear();
 }
 
 MCTSNode* MCTSNode::cut(Move occurred)
@@ -182,7 +195,11 @@ MCTSPlayer::MCTSPlayer(int itermax, float c_puct, int nthreads)
     root_ = new MCTSNode;
 }
 
-MCTSPlayer::~MCTSPlayer() { delete root_; }
+MCTSPlayer::~MCTSPlayer()
+{
+    root_->deleteAllChildren();
+    delete root_;
+}
 
 MCTSPlayer::MCTSPlayer(MCTSPlayer const& rhs)
 {
@@ -201,12 +218,14 @@ void MCTSPlayer::setItermax(int i) { itermax_ = i; }
 
 void MCTSPlayer::reset()
 {
+    root_->deleteAllChildren();
     delete root_;
     root_ = new MCTSNode;
 }
 
 void MCTSPlayer::swapRoot(MCTSNode* new_root)
 {
+    root_->deleteAllChildren();
     delete root_;
     root_ = new_root;
 }
