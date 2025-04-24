@@ -212,24 +212,27 @@ float benchmark(Player& p1, Player& p2, int round, bool silent)
     if (round <= 0) {
         return 0.0f;
     }
-    int p1win = 0, p2win = 0, even = 0;
-    Player *temp = nullptr, *pblack = &p1, *pwhite = &p2;
+    int p1win = 0, p1win_white = 0, p2win = 0, p2win_white = 0, even = 0;
+    Player *pblack = &p1, *pwhite = &p2;
+    std::cout << FSTR("\rwin: sim=0 even=0 {}=0|0 {}=0|0", p1.name(), p2.name()) << std::flush;
     for (int i = 0; i < round; ++i) {
-        temp = pblack, pblack = pwhite, pwhite = temp;
         Player* winner = &play(*pblack, *pwhite);
+        int winner_is_white = winner == pwhite ? 1 : 0;
         if (winner == nullptr) {
             ++even;
         } else if (winner == &p1) {
             ++p1win;
+            p1win_white += winner_is_white;
         } else if (winner == &p2) {
             ++p2win;
+            p2win_white += winner_is_white;
         }
         if (!silent) {
-            std::cout << std::setfill('0') << "\rscore: total=" << std::setw(4) << i + 1 << ", "
-                      << p1.name() << "=" << std::setw(4) << p1win << ", " << p2.name() << "="
-                      << std::setw(4) << p2win;
-            std::cout.flush();
+            std::cout << FSTR("\rwin: sim={} even={} {}={}|{} {}={}|{}", i + 1, even, p1.name(),
+                              p1win, p1win_white, p2.name(), p2win, p2win_white)
+                      << std::flush;
         }
+        std::swap(pblack, pwhite);
     }
     if (!silent) {
         std::cout << std::endl;
@@ -238,8 +241,9 @@ float benchmark(Player& p1, Player& p2, int round, bool silent)
     float p2prob = static_cast<float>(p2win) / round;
     float eprob = static_cast<float>(even) / round;
     if (!silent) {
-        std::cout << "win: " << p1.name() << "=" << p1prob * 100 << "%, " << p2.name() << "="
-                  << p2prob * 100 << "%, even=" << eprob * 100 << "%, sim=" << round << std::endl;
+        std::cout << FSTR("win: sim={} even={:.0f}% {}={:.0f}% {}={:.0f}%", round, eprob * 100,
+                          p1.name(), p1prob * 100, p2.name(), p2prob * 100)
+                  << std::endl;
     }
     return p1prob;
 }
