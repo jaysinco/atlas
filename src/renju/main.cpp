@@ -46,7 +46,8 @@ void runTrain(int64_t verno)
 {
     ILOG("verno={}", verno);
     auto net = std::make_shared<FIRNet>(verno);
-    train(net);
+    TrainingMeta meta;
+    train(net, meta);
 }
 
 void runPlay(std::string const& setup1, std::string const& setup2)

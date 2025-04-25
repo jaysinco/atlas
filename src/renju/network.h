@@ -24,10 +24,6 @@ std::ostream& operator<<(std::ostream& out, MiniBatch const& batch);
 
 class DataSet
 {
-private:
-    int64_t index_ = 0;
-    SampleData* buf_;
-
 public:
     DataSet() { buf_ = new SampleData[kBufferSize]; }
 
@@ -37,13 +33,13 @@ public:
 
     int64_t total() const { return index_; }
 
-    void pushBack(SampleData const* data)
+    void add(SampleData const* data)
     {
         buf_[index_ % kBufferSize] = *data;
         ++index_;
     }
 
-    void pushWithTransform(SampleData* data);
+    void addWithTransform(SampleData* data);
 
     SampleData const& get(int i) const
     {
@@ -54,28 +50,36 @@ public:
     }
 
     void makeMiniBatch(MiniBatch* batch) const;
+
+private:
+    int64_t index_ = 0;
+    SampleData* buf_;
 };
 
 std::ostream& operator<<(std::ostream& out, DataSet const& ds);
+
+struct TrainingMeta
+{
+    float learning_rate = 1e-3;
+    int selfplay_rounds = 0;
+    int selfplay_turns = 0;
+};
 
 class FIRNet
 {
 public:
     explicit FIRNet(int64_t verno);
     ~FIRNet();
-
     int64_t verno() const;
-    void saveParam();
-    void loadParam();
-    void setLR(float lr);
-    float calcInitLR() const;
-    void adjustLR();
-    std::string makeParamFileName() const;
-    float trainStep(MiniBatch* batch);
-    void evalState(State const& state, float value[1],
-                   std::vector<std::pair<Move, float>>& act_priors);
+    float train(MiniBatch* batch, TrainingMeta& meta);
+    void eval(State const& state, float value[1], std::vector<std::pair<Move, float>>& act_priors);
+    void save();
 
 private:
+    void load();
+    void setLearningRate(float lr);
+    std::string savePath() const;
+
     struct Impl;
     Impl* impl_;
 };

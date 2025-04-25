@@ -356,7 +356,7 @@ void MCTSDeepPlayer::eval(State& state, float& leaf_value,
                           std::vector<std::pair<Move, float>>& act_priors)
 {
     if (!state.over()) {
-        net_->evalState(state, &leaf_value, act_priors);
+        net_->eval(state, &leaf_value, act_priors);
         leaf_value *= -1;
     } else {
         if (state.getWinner() != Color::kEmpty) {

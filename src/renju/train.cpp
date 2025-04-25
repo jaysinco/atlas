@@ -4,7 +4,7 @@
 #include <numeric>
 #include <thread>
 
-static void selfPlayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
+static void selfPlayOne(Player& player, DataSet& dataset, TrainingMeta& train_meta)
 {
     State game;
     std::vector<SampleData> record;
@@ -17,11 +17,11 @@ static void selfPlayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
         SampleData one_step;
         *one_step.v_label = ind;
         game.fillFeatureArray(one_step.data);
-        ActionMeta meta;
-        meta.temperature = step <= kExploreStep ? 1.0f : 1e-3;
-        meta.add_noise_prior = true;
-        meta.move_priors = one_step.p_label;
-        Move act = player.play(game, meta);
+        ActionMeta act_meta;
+        act_meta.temperature = step <= kExploreStep ? 1.0f : 1e-3;
+        act_meta.add_noise_prior = true;
+        act_meta.move_priors = one_step.p_label;
+        Move act = player.play(game, act_meta);
         record.push_back(one_step);
         game.next(act);
         if (kDebugTrainData) {
@@ -43,14 +43,14 @@ static void selfPlayOne(Player& player, DataSet& dataset, SelfPlayMeta& meta)
         if (kDebugTrainData) {
             std::cout << step << std::endl;
         }
-        dataset.pushWithTransform(&step);
+        dataset.addWithTransform(&step);
     }
 }
 
-void selfPlay(Player& player, DataSet& dataset, SelfPlayMeta& meta)
+static void selfPlay(Player& player, DataSet& dataset, TrainingMeta& train_meta)
 {
     for (int i = 0; i < 1; ++i) {
-        selfPlayOne(player, dataset, meta);
+        selfPlayOne(player, dataset, train_meta);
     }
 }
 
@@ -65,7 +65,7 @@ static bool triggerTimer(std::chrono::time_point<std::chrono::system_clock>& las
     return false;
 }
 
-void train(std::shared_ptr<FIRNet> net)
+void train(std::shared_ptr<FIRNet> net, TrainingMeta& meta)
 {
     ILOG("start training...");
 
@@ -80,17 +80,16 @@ void train(std::shared_ptr<FIRNet> net)
     auto net_player = MCTSDeepPlayer(net, kTrainDeepItermax, kTrainCpuct, kTrainThreadNum);
 
     for (;;) {
-        SelfPlayMeta meta;
         selfPlay(net_player, dataset, meta);
         if (dataset.total() > kBatchSize) {
             for (int epoch = 0; epoch < kEpochPerGame; ++epoch) {
                 auto batch = new MiniBatch();
                 dataset.makeMiniBatch(batch);
-                float loss = net->trainStep(batch);
+                float loss = net->train(batch, meta);
                 if (triggerTimer(last_log, kMinutePerLog)) {
-                    int avg_turn = static_cast<float>(meta.turns) / meta.rounds;
+                    int avg_turn = static_cast<float>(meta.selfplay_turns) / meta.selfplay_rounds;
                     ILOG("loss={}, dataset_total={}, update_cnt={}, avg_turn={}, game_cnt={}", loss,
-                         dataset.total(), net->verno(), avg_turn, meta.rounds);
+                         dataset.total(), net->verno(), avg_turn, meta.selfplay_rounds);
                 }
                 delete batch;
             }
@@ -104,7 +103,7 @@ void train(std::shared_ptr<FIRNet> net)
             }
         }
         if (triggerTimer(last_save, kMinutePerSave)) {
-            net->saveParam();
+            net->save();
         }
     }
 }

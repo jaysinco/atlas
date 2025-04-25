@@ -96,13 +96,13 @@ std::ostream& operator<<(std::ostream& out, MiniBatch const& batch)
     return out;
 }
 
-void DataSet::pushWithTransform(SampleData* data)
+void DataSet::addWithTransform(SampleData* data)
 {
     for (int i = 0; i < 4; ++i) {
         data->transpose();
-        pushBack(data);
+        add(data);
         data->flipVerticing();
-        pushBack(data);
+        add(data);
     }
 }
 
@@ -130,89 +130,84 @@ std::ostream& operator<<(std::ostream& out, DataSet const& ds)
     return out;
 }
 
-class ResidualBlock: public torch::nn::Module
+class ResidualBlockImpl: public torch::nn::Module
 {
 public:
-    explicit ResidualBlock(int channel_n);
-    torch::Tensor forward(torch::Tensor input);
+    explicit ResidualBlockImpl(int channel_n)
+    {
+        using namespace torch::nn;
+        conv_ = register_module(
+            "conv", Sequential(Conv2d(Conv2dOptions(channel_n, channel_n, 3).padding(1)),
+                               BatchNorm2d(BatchNorm2dOptions(channel_n)), ReLU(),
+                               Conv2d(Conv2dOptions(channel_n, channel_n, 3).padding(1)),
+                               BatchNorm2d(BatchNorm2dOptions(channel_n))));
+    }
+
+    torch::Tensor forward(torch::Tensor input)
+    {
+        auto x = conv_->forward(input);
+        return torch::relu(x + input);
+    }
 
 private:
-    torch::nn::Sequential conv1_;
-    torch::nn::Sequential conv2_;
+    torch::nn::Sequential conv_ = nullptr;
 };
 
-ResidualBlock::ResidualBlock(int channel_n)
-    : conv1_(torch::nn::Conv2d(torch::nn::Conv2dOptions(channel_n, channel_n, 3).padding(1)),
-             torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(channel_n)), torch::nn::ReLU()),
-      conv2_(torch::nn::Conv2d(torch::nn::Conv2dOptions(channel_n, channel_n, 3).padding(1)),
-             torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(channel_n)))
-{
-    register_module("conv1", conv1_);
-    register_module("conv2", conv2_);
-}
+TORCH_MODULE(ResidualBlock);
 
-torch::Tensor ResidualBlock::forward(torch::Tensor input)
-{
-    auto x = conv1_->forward(input);
-    x = conv2_->forward(x);
-    x = x + input;
-    return torch::relu(x);
-}
-
-class FIRNetModule: public torch::nn::Module
+class FIRModelImpl: public torch::nn::Module
 {
 public:
-    explicit FIRNetModule(int res_layers, int res_filters);
-    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor input);
+    FIRModelImpl(int res_layers, int res_filters)
+    {
+        using namespace torch::nn;
+
+        mid_conv_ = register_module(
+            "mid_conv",
+            Sequential(Conv2d(Conv2dOptions(kInputFeatureNum, res_filters, 3).padding(1)),
+                       BatchNorm2d(BatchNorm2dOptions(res_filters)), ReLU()));
+
+        mid_res_blks_ = register_module("mid_res_blks", Sequential());
+        for (int i = 0; i < res_layers; ++i) {
+            mid_res_blks_->push_back(ResidualBlock(res_filters));
+        }
+
+        act_ = register_module("act", Sequential(Conv2d(Conv2dOptions(res_filters, 2, 1)),
+                                                 BatchNorm2d(BatchNorm2dOptions(2)), ReLU(),
+                                                 Flatten(), Linear(2 * kBoardSize, kBoardSize)));
+
+        val_ = register_module("val", Sequential(Conv2d(Conv2dOptions(res_filters, 1, 1)),
+                                                 BatchNorm2d(BatchNorm2dOptions(1)), ReLU(),
+                                                 Flatten(), Linear(1 * kBoardSize, res_filters),
+                                                 ReLU(), Linear(res_filters, 1), Tanh()));
+    }
+
+    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor input)
+    {
+        auto x = mid_conv_->forward(input);
+        x = mid_res_blks_->forward(x);
+        return {act_->forward(x), val_->forward(x)};
+    }
 
 private:
-    torch::nn::Conv2d mid_conv_;
-    torch::nn::ModuleList mid_res_blks_;
-    torch::nn::Sequential act_;
-    torch::nn::Sequential val_;
+    torch::nn::Sequential mid_conv_ = nullptr;
+    torch::nn::Sequential mid_res_blks_ = nullptr;
+    torch::nn::Sequential act_ = nullptr;
+    torch::nn::Sequential val_ = nullptr;
 };
 
-FIRNetModule::FIRNetModule(int res_layers, int res_filters)
-    : mid_conv_(torch::nn::Conv2dOptions(kInputFeatureNum, res_filters, 3).padding(1)),
-      act_(torch::nn::Conv2d(torch::nn::Conv2dOptions(res_filters, 2, 1)),
-           torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(2)), torch::nn::ReLU(),
-           torch::nn::Flatten(), torch::nn::Linear(2 * kBoardSize, kBoardSize)),
-      val_(torch::nn::Conv2d(torch::nn::Conv2dOptions(res_filters, 1, 1)),
-           torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(1)), torch::nn::ReLU(),
-           torch::nn::Flatten(), torch::nn::Linear(1 * kBoardSize, res_filters), torch::nn::ReLU(),
-           torch::nn::Linear(res_filters, 1), torch::nn::Tanh())
-{
-    for (int i = 0; i < res_layers; ++i) {
-        mid_res_blks_->push_back(ResidualBlock(res_filters));
-    }
-    register_module("mid_conv", mid_conv_);
-    register_module("mid_res_blks", mid_res_blks_);
-    register_module("act", act_);
-    register_module("val", val_);
-}
-
-std::pair<torch::Tensor, torch::Tensor> FIRNetModule::forward(torch::Tensor input)
-{
-    auto x = torch::relu(mid_conv_->forward(input));
-    for (auto& r: *mid_res_blks_) {
-        x = r->as<ResidualBlock>()->forward(x);
-    }
-    auto x_act = act_->forward(x);
-    x_act = torch::softmax(x_act, 1);
-    auto x_val = val_->forward(x);
-    return {x_act, x_val};
-}
+TORCH_MODULE(FIRModel);
 
 struct FIRNet::Impl
 {
     explicit Impl(int64_t verno)
-        : module(kResidualLayers, kResidualFilters),
+        : model(kResidualLayers, kResidualFilters),
           update_cnt(verno),
-          optimizer(module.parameters(), kWeightDecay)
+          optimizer(model->parameters(), torch::optim::AdamOptions().weight_decay(kWeightDecay))
     {
     }
 
-    FIRNetModule module;
+    FIRModel model;
     int64_t update_cnt;
     torch::optim::Adam optimizer;
 };
@@ -220,190 +215,86 @@ struct FIRNet::Impl
 FIRNet::FIRNet(int64_t verno): impl_(new Impl(verno))
 {
     if (impl_->update_cnt > 0) {
-        loadParam();
+        load();
     }
-    this->setLR(calcInitLR());
 }
+
+FIRNet::~FIRNet() { delete impl_; }
 
 int64_t FIRNet::verno() const { return impl_->update_cnt; }
 
-float FIRNet::calcInitLR() const
+void FIRNet::setLearningRate(float lr)
 {
-    float multiplier;
-    if (impl_->update_cnt < kDropStepLR1) {
-        multiplier = 1.0f;
-    } else if (impl_->update_cnt >= kDropStepLR1 && impl_->update_cnt < kDropStepLR2) {
-        multiplier = 1e-1;
-    } else if (impl_->update_cnt >= kDropStepLR2 && impl_->update_cnt < kDropStepLR3) {
-        multiplier = 1e-2;
-    } else {
-        multiplier = 1e-3;
-    }
-    float lr = kInitLearningRate * multiplier;
-    ILOG("init learning_rate={}", lr);
-    return lr;
-}
-
-void FIRNet::adjustLR()
-{
-    float multiplier = 1.0f;
-    switch (impl_->update_cnt) {
-        case kDropStepLR1:
-            multiplier = 1e-1;
-            break;
-        case kDropStepLR2:
-            multiplier = 1e-2;
-            break;
-        case kDropStepLR3:
-            multiplier = 1e-3;
-            break;
-    }
-    if (multiplier < 1.0f) {
-        float lr = kInitLearningRate * multiplier;
-        this->setLR(lr);
-        ILOG("adjusted learning_rate={}", lr);
-    }
-}
-
-void FIRNet::setLR(float lr)
-{
-    for (auto& group: impl_->optimizer.param_groups()) {
-        if (group.has_options()) {
-            auto& options = static_cast<torch::optim::AdamOptions&>(group.options());
+    for (auto& param_group: impl_->optimizer.param_groups()) {
+        if (param_group.has_options()) {
+            auto& options = dynamic_cast<torch::optim::AdamOptions&>(param_group.options());
             options.lr(lr);
         }
     }
 }
 
-FIRNet::~FIRNet() { delete impl_; };
-
-std::string FIRNet::makeParamFileName() const
+std::string FIRNet::savePath() const
 {
-    std::ostringstream filename;
-    filename << "FIR-" << kBoardMaxRow << "x" << kBoardMaxCol << "-r" << kResidualLayers << "c"
-             << kResidualFilters << "@" << impl_->update_cnt << ".pt";
-    return (toolkit::currentExeDir() / filename.str()).string();
+    std::string fp = FSTR("FIR-{}x{}-r{}c{}@{}.pt", kBoardMaxRow, kBoardMaxCol, kResidualLayers,
+                          kResidualFilters, impl_->update_cnt);
+    return (toolkit::getTempDir() / fp).string();
 }
 
-void FIRNet::loadParam()
+void FIRNet::load()
 {
-    auto file_name = makeParamFileName();
-    ILOG("loading parameters from {}", file_name);
-    if (!std::filesystem::exists(file_name)) {
-        MY_THROW("file not exist: {}", file_name);
+    auto fp = savePath();
+    ILOG("loading checkpoint from {}", fp);
+    if (!std::filesystem::exists(fp)) {
+        MY_THROW("file not exist: {}", fp);
     }
     torch::serialize::InputArchive input_archive;
-    input_archive.load_from(file_name);
-    impl_->module.load(input_archive);
+    input_archive.load_from(fp);
+    impl_->model->load(input_archive);
 }
 
-void FIRNet::saveParam()
+void FIRNet::save()
 {
-    auto file_name = makeParamFileName();
-    ILOG("saving parameters into {}", file_name);
+    auto fp = savePath();
+    ILOG("saving checkpoint into {}", fp);
     torch::serialize::OutputArchive output_archive;
-    impl_->module.save(output_archive);
-    output_archive.save_to(file_name);
+    impl_->model->save(output_archive);
+    output_archive.save_to(fp);
 }
 
-static void mappingData(int id, float data[kInputFeatureNum * kBoardSize])
-{
-    int n = 0;
-    while (true) {
-        if (n == id) {
-            break;
-        }
-        // transpose
-        for (int row = 0; row < kBoardMaxRow; ++row) {
-            for (int col = row + 1; col < kBoardMaxCol; ++col) {
-                int a = row * kBoardMaxCol + col;
-                int b = col * kBoardMaxCol + row;
-                std::iter_swap(data + a, data + b);
-                std::iter_swap(data + kBoardSize + a, data + kBoardSize + b);
-                if (kInputFeatureNum > 2) {
-                    std::iter_swap(data + 2 * kBoardSize + a, data + 2 * kBoardSize + b);
-                }
-            }
-        }
-        ++n;
-        if (n == id) {
-            break;
-        }
-        // flip_verticing
-        for (int row = 0; row < kBoardMaxRow; ++row) {
-            for (int col = 0; col < kBoardMaxCol / 2; ++col) {
-                int a = row * kBoardMaxCol + col;
-                int b = row * kBoardMaxCol + kBoardMaxCol - col - 1;
-                std::iter_swap(data + a, data + b);
-                std::iter_swap(data + kBoardSize + a, data + kBoardSize + b);
-                if (kInputFeatureNum > 2) {
-                    std::iter_swap(data + 2 * kBoardSize + a, data + 2 * kBoardSize + b);
-                }
-            }
-        }
-        ++n;
-    }
-}
-
-static Move mappingMove(int id, Move mv)
-{
-    int n = 0, r, c;
-    while (true) {
-        if (n == id) {
-            break;
-        }
-        // transpose
-        r = mv.c(), c = mv.r();
-        mv = Move(r, c);
-        ++n;
-        if (n == id) {
-            break;
-        }
-        // flip_verticing
-        r = mv.r(), c = kBoardMaxCol - mv.c() - 1;
-        mv = Move(r, c);
-        ++n;
-    }
-    return mv;
-}
-
-void FIRNet::evalState(State const& state, float value[1],
-                       std::vector<std::pair<Move, float>>& act_priors)
+void FIRNet::eval(State const& state, float value[1],
+                  std::vector<std::pair<Move, float>>& act_priors)
 {
     torch::NoGradGuard no_grad;
-    impl_->module.eval();
+    impl_->model->eval();
     float buf[kInputFeatureNum * kBoardSize] = {0.0f};
     state.fillFeatureArray(buf);
-    std::uniform_int_distribution<int> uniform(0, 7);
-    int transform_id = uniform(g_random_engine);
-    mappingData(transform_id, buf);
     auto data = torch::from_blob(
         buf, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {}, torch::kFloat32);
-    auto&& [x_act, x_val] = impl_->module.forward(data);
+    auto&& [x_act_logits, x_val] = impl_->model(data);
+    auto x_act = torch::softmax(x_act_logits, 1);
     float priors_sum = 0.0f;
     for (auto const mv: state.getOptions()) {
-        Move mapped = mappingMove(transform_id, mv);
-        float prior = x_act[0][mapped.z()].item<float>();
+        float prior = x_act[0][mv.z()].item<float>();
         act_priors.emplace_back(mv, prior);
         priors_sum += prior;
     }
     if (priors_sum < 1e-8) {
         ILOG("wield policy prob, lr might be too large: sum={}, available_move_n={}", priors_sum,
              act_priors.size());
-        for (auto& item: act_priors) {
-            item.second = 1.0f / static_cast<float>(act_priors.size());
+        for (auto& mvp: act_priors) {
+            mvp.second = 1.0f / static_cast<float>(act_priors.size());
         }
     } else {
-        for (auto& item: act_priors) {
-            item.second /= priors_sum;
+        for (auto& mvp: act_priors) {
+            mvp.second /= priors_sum;
         }
     }
     value[0] = x_val[0][0].item<float>();
 }
 
-float FIRNet::trainStep(MiniBatch* batch)
+float FIRNet::train(MiniBatch* batch, TrainingMeta& meta)
 {
-    impl_->module.train();
+    impl_->model->train();
     auto data = torch::from_blob(
         batch->data, {kBatchSize, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
         torch::kFloat32);
@@ -411,14 +302,17 @@ float FIRNet::trainStep(MiniBatch* batch)
         batch->p_label, {kBatchSize, kBoardSize}, [](void* buf) {}, torch::kFloat32);
     auto val_label = torch::from_blob(
         batch->p_label, {kBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
-    auto&& [x_act, x_val] = impl_->module.forward(data);
+
+    auto&& [x_act_logits, x_val] = impl_->model(data);
     auto value_loss = torch::mse_loss(x_val, val_label);
-    auto policy_loss = -torch::mean(torch::sum(plc_label * torch::log(x_act), 1));
+    auto policy_loss = torch::cross_entropy_loss(x_act_logits, plc_label);
     auto loss = value_loss + policy_loss;
+
+    setLearningRate(meta.learning_rate);
     impl_->optimizer.zero_grad();
     loss.backward();
     impl_->optimizer.step();
-    adjustLR();
+
     ++impl_->update_cnt;
     return loss.item<float>();
 }
