@@ -1,7 +1,9 @@
+#include <torch/torch.h>
 #include "network.h"
 #include <iomanip>
 #include <filesystem>
-#include <torch/torch.h>
+#include <moodycamel/blockingconcurrentqueue.h>
+#include <future>
 
 void SampleData::flipVerticing()
 {
@@ -84,7 +86,7 @@ std::ostream& operator<<(std::ostream& out, SampleData const& sample)
 
 std::ostream& operator<<(std::ostream& out, MiniBatch const& batch)
 {
-    for (int i = 0; i < kBatchSize; ++i) {
+    for (int i = 0; i < kTrainBatchSize; ++i) {
         SampleData item;
         std::copy(batch.data + i * kInputFeatureNum * kBoardSize,
                   batch.data + (i + 1) * kInputFeatureNum * kBoardSize, item.data);
@@ -108,11 +110,11 @@ void DataSet::addWithTransform(SampleData* data)
 
 void DataSet::makeMiniBatch(MiniBatch* batch) const
 {
-    if (index_ < kBatchSize) {
+    if (index_ < kTrainBatchSize) {
         MY_THROW("not enough data to make mini batch");
     }
     std::uniform_int_distribution<int> uniform(0, size() - 1);
-    for (int i = 0; i < kBatchSize; i++) {
+    for (int i = 0; i < kTrainBatchSize; i++) {
         int c = uniform(g_random_engine);
         SampleData* r = buf_ + c;
         std::copy(std::begin(r->data), std::end(r->data),
@@ -198,28 +200,53 @@ private:
 
 TORCH_MODULE(FIRModel);
 
-struct FIRNet::Impl
+struct EvalTask
 {
-    explicit Impl(int64_t verno)
-        : model(kResidualLayers, kResidualFilters),
-          update_cnt(verno),
-          optimizer(model->parameters(), torch::optim::AdamOptions().weight_decay(kWeightDecay))
-    {
-    }
-
-    FIRModel model;
-    int64_t update_cnt;
-    torch::optim::Adam optimizer;
+    State const* state;
+    float* value;
+    std::vector<std::pair<Move, float>>* act_priors;
+    std::promise<MyErrCode> promise;
 };
 
-FIRNet::FIRNet(int64_t verno): impl_(new Impl(verno))
+struct FIRNet::Impl
+{
+    Impl(int64_t verno, bool use_gpu, int eval_batch_size)
+        : update_cnt(verno),
+          device(use_gpu ? torch::kCUDA : torch::kCPU,
+                 use_gpu ? torch::cuda::device_count() - 1 : -1),
+          eval_batch_size(eval_batch_size),
+          model(kResidualLayers, kResidualFilters),
+          optimizer(model->parameters(), torch::optim::AdamOptions().weight_decay(kWeightDecay))
+    {
+        if (use_gpu) {
+            model->to(device);
+        }
+    }
+
+    int64_t update_cnt;
+    torch::Device const device;
+    int const eval_batch_size;
+    FIRModel model;
+    torch::optim::Adam optimizer;
+    moodycamel::BlockingConcurrentQueue<EvalTask*> eval_queue;
+    std::thread eval_thread;
+};
+
+FIRNet::FIRNet(int64_t verno, bool use_gpu, int eval_batch_size)
+    : impl_(new Impl(verno, use_gpu, eval_batch_size))
 {
     if (impl_->update_cnt > 0) {
-        load();
+        loadModel();
     }
+    impl_->eval_thread = std::thread([this]() { evalThreadEntry(); });
 }
 
-FIRNet::~FIRNet() { delete impl_; }
+FIRNet::~FIRNet()
+{
+    impl_->eval_queue.enqueue(nullptr);
+    impl_->eval_thread.join();
+    delete impl_;
+}
 
 int64_t FIRNet::verno() const { return impl_->update_cnt; }
 
@@ -233,75 +260,103 @@ void FIRNet::setLearningRate(float lr)
     }
 }
 
-std::string FIRNet::savePath() const
+std::string FIRNet::saveModelPath() const
 {
     std::string fp = FSTR("FIR-{}x{}-r{}c{}@{}.pt", kBoardMaxRow, kBoardMaxCol, kResidualLayers,
                           kResidualFilters, impl_->update_cnt);
     return (toolkit::getTempDir() / fp).string();
 }
 
-void FIRNet::load()
+void FIRNet::loadModel()
 {
-    auto fp = savePath();
+    auto fp = saveModelPath();
     ILOG("loading checkpoint from {}", fp);
     if (!std::filesystem::exists(fp)) {
         MY_THROW("file not exist: {}", fp);
     }
     torch::serialize::InputArchive input_archive;
-    input_archive.load_from(fp);
+    input_archive.load_from(fp, impl_->device);
     impl_->model->load(input_archive);
 }
 
-void FIRNet::save()
+void FIRNet::saveModel()
 {
-    auto fp = savePath();
+    auto fp = saveModelPath();
     ILOG("saving checkpoint into {}", fp);
     torch::serialize::OutputArchive output_archive;
     impl_->model->save(output_archive);
     output_archive.save_to(fp);
 }
 
-void FIRNet::eval(State const& state, float value[1],
-                  std::vector<std::pair<Move, float>>& act_priors)
+void FIRNet::evalThreadEntry()
 {
-    torch::NoGradGuard no_grad;
-    impl_->model->eval();
-    float buf[kInputFeatureNum * kBoardSize] = {0.0f};
-    state.fillFeatureArray(buf);
-    auto data = torch::from_blob(
-        buf, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {}, torch::kFloat32);
-    auto&& [x_act_logits, x_val] = impl_->model(data);
-    auto x_act = torch::softmax(x_act_logits, 1);
-    float priors_sum = 0.0f;
-    for (auto const mv: state.getOptions()) {
-        float prior = x_act[0][mv.z()].item<float>();
-        act_priors.emplace_back(mv, prior);
-        priors_sum += prior;
-    }
-    if (priors_sum < 1e-8) {
-        ILOG("wield policy prob, lr might be too large: sum={}, available_move_n={}", priors_sum,
-             act_priors.size());
-        for (auto& mvp: act_priors) {
-            mvp.second = 1.0f / static_cast<float>(act_priors.size());
+    while (true) {
+        EvalTask* task = nullptr;
+        impl_->eval_queue.wait_dequeue(task);
+        if (task == nullptr) {
+            break;
         }
-    } else {
-        for (auto& mvp: act_priors) {
-            mvp.second /= priors_sum;
+        try {
+            torch::NoGradGuard no_grad;
+            impl_->model->eval();
+            float buf[kInputFeatureNum * kBoardSize] = {0.0f};
+            task->state->fillFeatureArray(buf);
+            auto data = torch::from_blob(
+                buf, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
+                torch::kFloat32);
+            data = data.to(impl_->device);
+            auto&& [x_act_logits, x_val] = impl_->model(data);
+            auto x_act = torch::softmax(x_act_logits, 1);
+            float priors_sum = 0.0f;
+            for (auto const mv: task->state->getOptions()) {
+                float prior = x_act[0][mv.z()].item<float>();
+                task->act_priors->emplace_back(mv, prior);
+                priors_sum += prior;
+            }
+            if (priors_sum < 1e-8) {
+                int acts_num = task->act_priors->size();
+                ILOG("wield policy prob, lr might be too large: sum={}, available_move={}",
+                     priors_sum, acts_num);
+                for (auto& mvp: *task->act_priors) {
+                    mvp.second = 1.0f / acts_num;
+                }
+            } else {
+                for (auto& mvp: *task->act_priors) {
+                    mvp.second /= priors_sum;
+                }
+            }
+            *task->value = x_val[0][0].item<float>();
+            task->promise.set_value(MyErrCode::kOk);
+        } catch (std::exception const& e) {
+            ILOG("eval failed: {}", e.what());
+            task->promise.set_value(MyErrCode::kException);
         }
     }
-    value[0] = x_val[0][0].item<float>();
+    DLOG("eval thread exit");
 }
 
-float FIRNet::train(MiniBatch* batch, TrainingMeta& meta)
+MyErrCode FIRNet::eval(State const& state, float value[1],
+                       std::vector<std::pair<Move, float>>& act_priors)
+{
+    EvalTask task;
+    task.state = &state;
+    task.value = value;
+    task.act_priors = &act_priors;
+    auto future = task.promise.get_future();
+    impl_->eval_queue.enqueue(&task);
+    return future.get();
+}
+
+float FIRNet::step(MiniBatch* batch, TrainMeta& meta)
 {
     impl_->model->train();
     auto data = torch::from_blob(
-        batch->data, {kBatchSize, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
-        torch::kFloat32);
+        batch->data, {kTrainBatchSize, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+        [](void* buf) {}, torch::kFloat32);
     auto plc_label = torch::from_blob(
-        batch->p_label, {kBatchSize, kBoardSize}, [](void* buf) {}, torch::kFloat32);
+        batch->p_label, {kTrainBatchSize, kBoardSize}, [](void* buf) {}, torch::kFloat32);
     auto val_label = torch::from_blob(
-        batch->p_label, {kBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
+        batch->p_label, {kTrainBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
 
     auto&& [x_act_logits, x_val] = impl_->model(data);
     auto value_loss = torch::mse_loss(x_val, val_label);

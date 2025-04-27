@@ -21,20 +21,29 @@ constexpr int kInputFeatureNum = 2;  // self, opponent[[, lastmove], color]
 constexpr unsigned char kNoMoveYet = 0xff;
 constexpr float kNoiseRate = 0.2;
 constexpr float kDirichletAlpha = 0.03;
-constexpr bool kDebugMCTSProb = false;
 constexpr int kResidualLayers = 16;
 constexpr int kResidualFilters = 128;
-constexpr int kBatchSize = 64;
-constexpr int kBufferSize = 10240;
+constexpr int kTrainDataBufferSize = 51200;
+constexpr int kTrainBatchSize = 64;
 constexpr float kWeightDecay = 1e-3;
-
-constexpr int kEpochPerGame = 1;
-constexpr int kExploreStep = 30;
-constexpr int kTestPureItermax = 1000;
-constexpr int kTrainDeepItermax = 400;
-constexpr float kTrainCpuct = 2.4;
-constexpr int kTrainThreadNum = 8;
-constexpr int kMinutePerLog = 5;
-constexpr int kMinutePerSave = 30;
-constexpr int kMinutePerBenchmark = 45;
+constexpr bool kDebugMCTSProb = false;
 constexpr bool kDebugTrainData = false;
+
+struct ActionMeta
+{
+    float temperature = 1e-3;
+    bool add_noise_prior = false;
+    float value = -10;
+    float* move_priors = nullptr;
+};
+
+struct TrainMeta
+{
+    int thread_num = 16;
+    int itermax = 1200;
+    float c_puct = 2.4;
+    float learning_rate = 1e-3;
+    int explore_step = 30;
+    int selfplay_turns_per_train = 5;
+    float selfplay_avg_rounds = 0;
+};

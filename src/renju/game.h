@@ -135,14 +135,6 @@ public:
 
 std::ostream& operator<<(std::ostream& out, State const& state);
 
-struct ActionMeta
-{
-    float temperature = 1e-3;
-    bool add_noise_prior = false;
-    float value = -10;
-    float* move_priors = nullptr;
-};
-
 struct Player
 {
     Player() = default;

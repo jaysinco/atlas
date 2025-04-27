@@ -15,9 +15,9 @@ std::ostream& operator<<(std::ostream& out, SampleData const& sample);
 
 struct MiniBatch
 {
-    float data[kBatchSize * kInputFeatureNum * kBoardSize] = {0.0f};
-    float p_label[kBatchSize * kBoardSize] = {0.0f};
-    float v_label[kBatchSize * 1] = {0.0f};
+    float data[kTrainBatchSize * kInputFeatureNum * kBoardSize] = {0.0f};
+    float p_label[kTrainBatchSize * kBoardSize] = {0.0f};
+    float v_label[kTrainBatchSize * 1] = {0.0f};
 };
 
 std::ostream& operator<<(std::ostream& out, MiniBatch const& batch);
@@ -25,17 +25,17 @@ std::ostream& operator<<(std::ostream& out, MiniBatch const& batch);
 class DataSet
 {
 public:
-    DataSet() { buf_ = new SampleData[kBufferSize]; }
+    DataSet() { buf_ = new SampleData[kTrainDataBufferSize]; }
 
     ~DataSet() { delete[] buf_; }
 
-    int size() const { return (index_ > kBufferSize) ? kBufferSize : index_; }
+    int size() const { return (index_ > kTrainDataBufferSize) ? kTrainDataBufferSize : index_; }
 
     int64_t total() const { return index_; }
 
     void add(SampleData const* data)
     {
-        buf_[index_ % kBufferSize] = *data;
+        buf_[index_ % kTrainDataBufferSize] = *data;
         ++index_;
     }
 
@@ -58,27 +58,22 @@ private:
 
 std::ostream& operator<<(std::ostream& out, DataSet const& ds);
 
-struct TrainingMeta
-{
-    float learning_rate = 1e-3;
-    int selfplay_rounds = 0;
-    int selfplay_turns = 0;
-};
-
 class FIRNet
 {
 public:
-    explicit FIRNet(int64_t verno);
+    explicit FIRNet(int64_t verno, bool use_gpu, int eval_batch_size);
     ~FIRNet();
+    float step(MiniBatch* batch, TrainMeta& meta);
+    MyErrCode eval(State const& state, float value[1],
+                   std::vector<std::pair<Move, float>>& act_priors);
+    void saveModel();
     int64_t verno() const;
-    float train(MiniBatch* batch, TrainingMeta& meta);
-    void eval(State const& state, float value[1], std::vector<std::pair<Move, float>>& act_priors);
-    void save();
 
 private:
-    void load();
+    void loadModel();
     void setLearningRate(float lr);
-    std::string savePath() const;
+    std::string saveModelPath() const;
+    void evalThreadEntry();
 
     struct Impl;
     Impl* impl_;
