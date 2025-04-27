@@ -17,10 +17,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/x86_64-debug/renju",
             "args": [
+                "-g",
                 "play",
-                "0",
-                "0",
-                "10000"
+                "i1600u3t16@0"
             ],
             "environment": [],
             "cwd": "${workspaceFolder}/bin/x86_64-debug",

@@ -335,8 +335,8 @@ void MCTSPurePlayer::eval(State& state, float& leaf_value,
 MCTSDeepPlayer::MCTSDeepPlayer(std::shared_ptr<FIRNet> net, int itermax, float c_puct, int nthreads)
     : MCTSPlayer(itermax, c_puct, nthreads), net_(net)
 {
-    if (itermax < nthreads || itermax % nthreads != 0 || nthreads % 2 != 0) {
-        MY_THROW("invalid mcts deep player setup");
+    if (itermax < nthreads || itermax % nthreads != 0) {
+        MY_THROW("itermax({}) must be multiple of nthreads({})", itermax, nthreads);
     }
 }
 
@@ -355,10 +355,13 @@ std::shared_ptr<Player> MCTSDeepPlayer::clone() const
 void MCTSDeepPlayer::eval(State& state, float& leaf_value,
                           std::vector<std::pair<Move, float>>& act_priors)
 {
+    float state_feature[kInputFeatureNum * kBoardSize] = {0.0f};
+    state.fillFeatureArray(state_feature);
+    if (auto err = net_->eval(state, state_feature, &leaf_value, act_priors);
+        err != MyErrCode::kOk) {
+        MY_THROW("eval state failed");
+    }
     if (!state.over()) {
-        if (auto err = net_->eval(state, &leaf_value, act_priors); err != MyErrCode::kOk) {
-            MY_THROW("eval state failed");
-        }
         leaf_value *= -1;
     } else {
         if (state.getWinner() != Color::kEmpty) {

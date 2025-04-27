@@ -34,7 +34,7 @@ std::shared_ptr<Player> createPlayer(std::string const& setup, bool use_gpu)
          verno ? FSTR(", verno={}", *verno) : "");
     std::shared_ptr<Player> player;
     if (verno) {
-        auto net = std::make_shared<FIRNet>(*verno, use_gpu, (nthreads + 1) / 2);
+        auto net = std::make_shared<FIRNet>(*verno, use_gpu, nthreads);
         player = std::make_shared<MCTSDeepPlayer>(net, itermax, c_puct, nthreads);
     } else {
         player = std::make_shared<MCTSPurePlayer>(itermax, c_puct, nthreads);
@@ -45,7 +45,7 @@ std::shared_ptr<Player> createPlayer(std::string const& setup, bool use_gpu)
 void runTrain(int64_t verno, bool use_gpu, TrainMeta& meta)
 {
     ILOG("verno={}", verno);
-    auto net = std::make_shared<FIRNet>(verno, use_gpu, (meta.thread_num + 1) / 2);
+    auto net = std::make_shared<FIRNet>(verno, use_gpu, meta.thread_num);
     train(net, meta);
 }
 

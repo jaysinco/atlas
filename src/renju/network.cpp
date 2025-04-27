@@ -203,6 +203,7 @@ TORCH_MODULE(FIRModel);
 struct EvalTask
 {
     State const* state;
+    float const* state_feature;
     float* value;
     std::vector<std::pair<Move, float>>* act_priors;
     std::promise<MyErrCode> promise;
@@ -290,56 +291,84 @@ void FIRNet::saveModel()
 
 void FIRNet::evalThreadEntry()
 {
+    std::vector<EvalTask*> batch_task;
+    batch_task.reserve(impl_->eval_batch_size);
+    std::vector<float> batch_buf(impl_->eval_batch_size * kInputFeatureNum * kBoardSize);
+
     while (true) {
-        EvalTask* task = nullptr;
-        impl_->eval_queue.wait_dequeue(task);
-        if (task == nullptr) {
+        EvalTask* curr_task = nullptr;
+        impl_->eval_queue.wait_dequeue(curr_task);
+        if (curr_task == nullptr) {
             break;
         }
+
+        int curr_idx = batch_task.size();
+        batch_task.push_back(curr_task);
+        std::copy(curr_task->state_feature,
+                  curr_task->state_feature + kInputFeatureNum * kBoardSize,
+                  batch_buf.data() + curr_idx * kInputFeatureNum * kBoardSize);
+
+        if (curr_idx + 1 < impl_->eval_batch_size) {
+            continue;
+        }
+
+        bool eval_succ = true;
+        torch::Tensor x_act, x_val;
         try {
             torch::NoGradGuard no_grad;
             impl_->model->eval();
-            float buf[kInputFeatureNum * kBoardSize] = {0.0f};
-            task->state->fillFeatureArray(buf);
             auto data = torch::from_blob(
-                buf, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
-                torch::kFloat32);
+                batch_buf.data(),
+                {impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+                [](void* buf) {}, torch::kFloat32);
             data = data.to(impl_->device);
-            auto&& [x_act_logits, x_val] = impl_->model(data);
-            auto x_act = torch::softmax(x_act_logits, 1);
+            auto out = impl_->model(data);
+            x_act = torch::softmax(out.first, 1);
+            x_val = out.second;
+        } catch (std::exception const& e) {
+            ILOG("eval failed: {}", e.what());
+            eval_succ = false;
+        }
+
+        for (int i = 0; i < impl_->eval_batch_size; ++i) {
+            if (!eval_succ) {
+                batch_task[i]->promise.set_value(MyErrCode::kFailed);
+                continue;
+            }
             float priors_sum = 0.0f;
-            for (auto const mv: task->state->getOptions()) {
-                float prior = x_act[0][mv.z()].item<float>();
-                task->act_priors->emplace_back(mv, prior);
+            auto& act_priors = *batch_task[i]->act_priors;
+            for (auto const& mv: batch_task[i]->state->getOptions()) {
+                float prior = x_act[i][mv.z()].item<float>();
+                act_priors.emplace_back(mv, prior);
                 priors_sum += prior;
             }
             if (priors_sum < 1e-8) {
-                int acts_num = task->act_priors->size();
+                int acts_num = act_priors.size();
                 ILOG("wield policy prob, lr might be too large: sum={}, available_move={}",
                      priors_sum, acts_num);
-                for (auto& mvp: *task->act_priors) {
+                for (auto& mvp: act_priors) {
                     mvp.second = 1.0f / acts_num;
                 }
             } else {
-                for (auto& mvp: *task->act_priors) {
+                for (auto& mvp: act_priors) {
                     mvp.second /= priors_sum;
                 }
             }
-            *task->value = x_val[0][0].item<float>();
-            task->promise.set_value(MyErrCode::kOk);
-        } catch (std::exception const& e) {
-            ILOG("eval failed: {}", e.what());
-            task->promise.set_value(MyErrCode::kException);
+            batch_task[i]->value[0] = x_val[i][0].item<float>();
+            batch_task[i]->promise.set_value(MyErrCode::kOk);
         }
+
+        batch_task.clear();
     }
     DLOG("eval thread exit");
 }
 
-MyErrCode FIRNet::eval(State const& state, float value[1],
-                       std::vector<std::pair<Move, float>>& act_priors)
+MyErrCode FIRNet::eval(State const& state, float const state_feature[kInputFeatureNum * kBoardSize],
+                       float value[1], std::vector<std::pair<Move, float>>& act_priors)
 {
     EvalTask task;
     task.state = &state;
+    task.state_feature = state_feature;
     task.value = value;
     task.act_priors = &act_priors;
     auto future = task.promise.get_future();
