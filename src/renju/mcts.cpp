@@ -352,6 +352,12 @@ std::shared_ptr<Player> MCTSDeepPlayer::clone() const
     return std::make_shared<MCTSDeepPlayer>(*this);
 }
 
+Move MCTSDeepPlayer::play(State const& state, ActionMeta& meta)
+{
+    net_->train(false);
+    return MCTSPlayer::play(state, meta);
+}
+
 void MCTSDeepPlayer::eval(State& state, float& leaf_value,
                           std::vector<std::pair<Move, float>>& act_priors)
 {

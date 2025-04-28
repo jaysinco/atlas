@@ -63,8 +63,10 @@ class FIRNet
 public:
     explicit FIRNet(int64_t verno, bool use_gpu, int eval_batch_size);
     ~FIRNet();
+    void train(bool on = true);
     float step(MiniBatch* batch, TrainMeta& meta);
-    MyErrCode eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1]);
+    MyErrCode eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1],
+                   bool batched = true);
     void saveModel();
     int64_t verno() const;
 

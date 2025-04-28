@@ -287,6 +287,15 @@ void FIRNet::saveModel()
     output_archive.save_to(fp);
 }
 
+void FIRNet::train(bool on)
+{
+    if (on) {
+        impl_->model->train();
+    } else {
+        impl_->model->eval();
+    }
+}
+
 void FIRNet::evalThreadEntry()
 {
     std::vector<EvalTask*> batch_task;
@@ -322,7 +331,6 @@ void FIRNet::evalThreadEntry()
         idx = 0;
         try {
             torch::NoGradGuard no_grad;
-            impl_->model->eval();
             if (impl_->device.is_cuda()) {
                 batch_data.copy_(batch_buf);
             }
@@ -348,19 +356,33 @@ void FIRNet::evalThreadEntry()
     DLOG("eval thread exit");
 }
 
-MyErrCode FIRNet::eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1])
+MyErrCode FIRNet::eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1],
+                       bool batched)
 {
-    EvalTask task;
-    task.state_feature = state_feature;
-    task.value = value;
-    auto future = task.promise.get_future();
-    impl_->eval_queue.enqueue(&task);
-    return future.get();
+    if (batched) {
+        EvalTask task;
+        task.state_feature = state_feature;
+        task.value = value;
+        auto future = task.promise.get_future();
+        impl_->eval_queue.enqueue(&task);
+        return future.get();
+    } else {
+        torch::NoGradGuard no_grad;
+        auto data = torch::from_blob(
+            state_feature, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
+            torch::kFloat32);
+        auto&& [x_act, x_val] = impl_->model(data.to(impl_->device));
+        x_act = torch::softmax(x_act, 1);
+        auto act_prob = torch::from_blob(
+            state_feature, {kBoardSize}, [](void* buf) {}, torch::kFloat32);
+        act_prob.copy_(x_act[0]);
+        value[0] = x_val[0][0].item<float>();
+        return MyErrCode::kOk;
+    }
 }
 
 float FIRNet::step(MiniBatch* batch, TrainMeta& meta)
 {
-    impl_->model->train();
     auto data = torch::from_blob(
         batch->data, {kTrainBatchSize, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
         [](void* buf) {}, torch::kFloat32);

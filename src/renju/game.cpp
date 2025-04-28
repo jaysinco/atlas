@@ -84,6 +84,17 @@ bool Board::winFrom(Move mv) const
     return false;
 }
 
+bool Board::operator==(Board const& right) const
+{
+    for (int i = 0; i < kBoardSize; ++i) {
+        Move mv(i);
+        if (get(mv) != right.get(mv)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::ostream& operator<<(std::ostream& out, Board const& board) { return outputBoard(out, board); }
 
 std::ostream& outputBoard(std::ostream& out, Board const& board, Move last)
@@ -113,6 +124,38 @@ Color State::current() const
         return Color::kBlack;
     }
     return ~board_.get(last_);
+}
+
+State::State(float const data[kInputFeatureNum * kBoardSize]): last_(kNoMoveYet)
+{
+    if (kInputFeatureNum < 4) {
+        MY_THROW("feature number must >= 4");
+    }
+    auto own_side = Color::kWhite;
+    if (data[3 * kBoardSize + 0] > 0) {
+        own_side = Color::kBlack;
+    }
+    auto enemy_side = ~own_side;
+    for (int row = 0; row < kBoardMaxRow; ++row) {
+        for (int col = 0; col < kBoardMaxCol; ++col) {
+            Move mv(row, col);
+            if (data[2 * kBoardSize + row * kBoardMaxCol + col] > 0) {
+                last_ = mv;
+            }
+            Color side = Color::kEmpty;
+            if (data[row * kBoardMaxCol + col] > 0) {
+                side = own_side;
+            } else if (data[kBoardSize + row * kBoardMaxCol + col] > 0) {
+                side = enemy_side;
+            } else {
+                opts_.push_back(mv);
+            }
+            board_.put(mv, side);
+            if (side != Color::kEmpty && board_.winFrom(mv)) {
+                winner_ = side;
+            }
+        }
+    }
 }
 
 void State::fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const
@@ -165,6 +208,28 @@ Color State::nextRandTillEnd()
         next(opts_.front());
     }
     return winner_;
+}
+
+bool State::operator==(State const& right) const
+{
+    if (board_ != right.board_) {
+        return false;
+    }
+    if (last_ != right.last_) {
+        return false;
+    }
+    if (winner_ != right.winner_) {
+        return false;
+    }
+    if (opts_.size() != right.opts_.size()) {
+        return false;
+    }
+    for (int i = 0; i < opts_.size(); ++i) {
+        if (std::find(right.opts_.begin(), right.opts_.end(), opts_[i]) == right.opts_.end()) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::ostream& operator<<(std::ostream& out, State const& state)

@@ -94,6 +94,10 @@ public:
     void pushValid(std::vector<Move>& opts) const;
 
     bool winFrom(Move mv) const;
+
+    bool operator==(Board const& right) const;
+
+    bool operator!=(Board const& right) const { return !(*this == right); }
 };
 
 std::ostream& operator<<(std::ostream& out, Board const& board);
@@ -109,6 +113,8 @@ class State
 
 public:
     State(): last_(kNoMoveYet) { board_.pushValid(opts_); }
+
+    explicit State(float const data[kInputFeatureNum * kBoardSize]);
 
     State(State const& state) = default;
 
@@ -131,6 +137,10 @@ public:
     void next(Move mv);
 
     Color nextRandTillEnd();
+
+    bool operator==(State const& right) const;
+
+    bool operator!=(State const& right) const { return !(*this == right); }
 };
 
 std::ostream& operator<<(std::ostream& out, State const& state);

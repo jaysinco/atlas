@@ -90,6 +90,7 @@ public:
     ~MCTSDeepPlayer() override;
     std::string name() const override;
     std::shared_ptr<Player> clone() const override;
+    Move play(State const& state, ActionMeta& meta) override;
 
 protected:
     void eval(State& state, float& leaf_value,

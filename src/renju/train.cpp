@@ -70,6 +70,7 @@ void train(std::shared_ptr<FIRNet> net, TrainMeta& meta)
 
     for (;;) {
         selfPlay(net_player, dataset, meta);
+        net->train();
         if (dataset.total() > kTrainBatchSize) {
             for (int epoch = 0; epoch < 1; ++epoch) {
                 auto batch = new MiniBatch();
