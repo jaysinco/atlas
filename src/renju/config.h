@@ -28,6 +28,7 @@ constexpr int kTrainBatchSize = 64;
 constexpr float kWeightDecay = 1e-3;
 constexpr bool kDebugMCTSProb = false;
 constexpr bool kDebugTrainData = false;
+constexpr bool kCheckBatchEval = false;
 
 struct ActionMeta
 {

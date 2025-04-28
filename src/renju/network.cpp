@@ -322,7 +322,7 @@ void FIRNet::evalThreadEntry()
         float* data_ptr =
             (impl_->device.is_cuda() ? batch_buf : batch_data).mutable_data_ptr<float>();
         memcpy(data_ptr + idx * kInputFeatureNum * kBoardSize, curr_task->state_feature,
-               kInputFeatureNum * kBoardSize);
+               kInputFeatureNum * kBoardSize * sizeof(float));
 
         if (idx + 1 < impl_->eval_batch_size) {
             continue;
@@ -372,10 +372,11 @@ MyErrCode FIRNet::eval(float state_feature[kInputFeatureNum * kBoardSize], float
             state_feature, {1, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol}, [](void* buf) {},
             torch::kFloat32);
         auto&& [x_act, x_val] = impl_->model(data.to(impl_->device));
-        x_act = torch::softmax(x_act, 1);
-        auto act_prob = torch::from_blob(
-            state_feature, {kBoardSize}, [](void* buf) {}, torch::kFloat32);
-        act_prob.copy_(x_act[0]);
+        x_act = torch::softmax(x_act, 1).cpu();
+        auto act_prob = x_act[0];
+        for (int i = 0; i < kBoardSize; ++i) {
+            state_feature[i] = act_prob[i].item<float>();
+        }
         value[0] = x_val[0][0].item<float>();
         return MyErrCode::kOk;
     }

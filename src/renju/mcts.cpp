@@ -363,8 +363,35 @@ void MCTSDeepPlayer::eval(State& state, float& leaf_value,
 {
     float state_feature[kInputFeatureNum * kBoardSize] = {0.0f};
     state.fillFeatureArray(state_feature);
-    if (auto err = net_->eval(state_feature, &leaf_value); err != MyErrCode::kOk) {
+    if (auto err = net_->eval(state_feature, &leaf_value, true); err != MyErrCode::kOk) {
         MY_THROW("eval state failed");
+    }
+
+    if (kCheckBatchEval) {
+        float state_feature2[kInputFeatureNum * kBoardSize] = {0.0f};
+        float value2[1];
+        state.fillFeatureArray(state_feature2);
+        if (State(state_feature2) != state) {
+            ELOG("state feature mismatch");
+        }
+        if (auto err = net_->eval(state_feature2, value2, false); err != MyErrCode::kOk) {
+            MY_THROW("eval state failed");
+        }
+        float epsilon = 1e-4;
+        if (std::abs(value2[0] - leaf_value) > epsilon) {
+            ELOG("\n\n{}value mismatch: {} != {}", state, value2[0], leaf_value);
+        }
+        float sum = 0.0f;
+        for (int i = 0; i < kBoardSize; ++i) {
+            if (std::abs(state_feature2[i] - state_feature[i]) > epsilon) {
+                ELOG("\n\n{}move{} mismatch: {} != {}", state, Move(i), state_feature2[i],
+                     state_feature[i]);
+            }
+            sum += state_feature[i];
+        }
+        if (std::abs(sum - 1.0) > epsilon) {
+            ELOG("sum mismatch: {} != {}", sum, 1.0);
+        }
     }
 
     if (!state.over()) {

@@ -66,7 +66,7 @@ public:
     void train(bool on = true);
     float step(MiniBatch* batch, TrainMeta& meta);
     MyErrCode eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1],
-                   bool batched = true);
+                   bool batched);
     void saveModel();
     int64_t verno() const;
 
