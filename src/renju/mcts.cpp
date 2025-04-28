@@ -90,7 +90,7 @@ MCTSNode* MCTSNode::select(float c_puct) const
 Move MCTSNode::actByProb(float temp, float move_priors[kBoardSize]) const
 {
     if (kDebugMCTSProb) {
-        std::cout << *this << std::endl;
+        std::cout << std::endl << *this;
     }
     float move_priors_buffer[kBoardSize] = {0.0f};
     if (move_priors == nullptr) {
