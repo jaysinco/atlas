@@ -79,13 +79,13 @@ int main(int argc, char** argv)
 
     auto& play_args = args.addSub("play", "play game with ai or selfplay");
     play_args.positional("player1", po::value<std::string>(),
-                         "player setup like i1000u1.25t8@1, human", 1);
+                         "player setup like i1280u2.4t16@1, human", 1);
     play_args.positional("player2", po::value<std::string>()->default_value(""),
                          "see above, omit if selfplay", 1);
 
     auto& mark_args = args.addSub("mark", "benchmark between two players");
     mark_args.positional("player1", po::value<std::string>(),
-                         "player setup like i1000u1.25t8@1, human", 1);
+                         "player setup like i1280u2.4t16@1, human", 1);
     mark_args.positional("player2", po::value<std::string>(), "see above", 1);
     mark_args.positional("round", po::value<int>()->default_value(10), "num of benchmark rounds",
                          1);

@@ -64,8 +64,7 @@ public:
     explicit FIRNet(int64_t verno, bool use_gpu, int eval_batch_size);
     ~FIRNet();
     float step(MiniBatch* batch, TrainMeta& meta);
-    MyErrCode eval(State const& state, float const state_feature[kInputFeatureNum * kBoardSize],
-                   float value[1], std::vector<std::pair<Move, float>>& act_priors);
+    MyErrCode eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1]);
     void saveModel();
     int64_t verno() const;
 

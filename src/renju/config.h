@@ -13,7 +13,7 @@
 */
 
 constexpr int kFiveInRow = 5;
-constexpr int kBoardMaxCol = 9;
+constexpr int kBoardMaxCol = 15;
 constexpr int kBoardMaxRow = kBoardMaxCol;
 constexpr int kBoardSize = kBoardMaxRow * kBoardMaxCol;
 constexpr bool kBoardRichSymbol = true;
@@ -21,7 +21,7 @@ constexpr int kInputFeatureNum = 2;  // self, opponent[[, lastmove], color]
 constexpr unsigned char kNoMoveYet = 0xff;
 constexpr float kNoiseRate = 0.2;
 constexpr float kDirichletAlpha = 0.03;
-constexpr int kResidualLayers = 12;
+constexpr int kResidualLayers = kBoardMaxCol + 1;
 constexpr int kResidualFilters = 128;
 constexpr int kTrainDataBufferSize = 51200;
 constexpr int kTrainBatchSize = 64;
@@ -40,7 +40,7 @@ struct ActionMeta
 struct TrainMeta
 {
     int thread_num = 16;
-    int itermax = 1200;
+    int itermax = 1280;
     float c_puct = 2.4;
     float learning_rate = 1e-3;
     int explore_step = 30;

@@ -202,10 +202,8 @@ TORCH_MODULE(FIRModel);
 
 struct EvalTask
 {
-    State const* state;
-    float const* state_feature;
+    float* state_feature;
     float* value;
-    std::vector<std::pair<Move, float>>* act_priors;
     std::promise<MyErrCode> promise;
 };
 
@@ -293,7 +291,15 @@ void FIRNet::evalThreadEntry()
 {
     std::vector<EvalTask*> batch_task;
     batch_task.reserve(impl_->eval_batch_size);
-    std::vector<float> batch_buf(impl_->eval_batch_size * kInputFeatureNum * kBoardSize);
+    torch::Tensor batch_buf;
+    if (impl_->device.is_cuda()) {
+        batch_buf =
+            torch::empty({impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+                         torch::TensorOptions().dtype(torch::kFloat32).pinned_memory(true));
+    }
+    auto batch_data =
+        torch::empty({impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+                     torch::TensorOptions().dtype(torch::kFloat32).device(impl_->device));
 
     while (true) {
         EvalTask* curr_task = nullptr;
@@ -302,60 +308,39 @@ void FIRNet::evalThreadEntry()
             break;
         }
 
-        int curr_idx = batch_task.size();
+        int idx = batch_task.size();
         batch_task.push_back(curr_task);
-        std::copy(curr_task->state_feature,
-                  curr_task->state_feature + kInputFeatureNum * kBoardSize,
-                  batch_buf.data() + curr_idx * kInputFeatureNum * kBoardSize);
+        float* data_ptr =
+            (impl_->device.is_cuda() ? batch_buf : batch_data).mutable_data_ptr<float>();
+        memcpy(data_ptr + idx * kInputFeatureNum * kBoardSize, curr_task->state_feature,
+               kInputFeatureNum * kBoardSize);
 
-        if (curr_idx + 1 < impl_->eval_batch_size) {
+        if (idx + 1 < impl_->eval_batch_size) {
             continue;
         }
 
-        bool eval_succ = true;
-        torch::Tensor x_act, x_val;
+        idx = 0;
         try {
             torch::NoGradGuard no_grad;
             impl_->model->eval();
-            auto data = torch::from_blob(
-                batch_buf.data(),
-                {impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
-                [](void* buf) {}, torch::kFloat32);
-            data = data.to(impl_->device);
-            auto out = impl_->model(data);
-            x_act = torch::softmax(out.first, 1);
-            x_val = out.second;
+            if (impl_->device.is_cuda()) {
+                batch_data.copy_(batch_buf);
+            }
+            auto&& [x_act, x_val] = impl_->model(batch_data);
+            x_act = torch::softmax(x_act, 1);
+            for (; idx < impl_->eval_batch_size; ++idx) {
+                auto act_prob = torch::from_blob(
+                    batch_task[idx]->state_feature, {kBoardSize}, [](void* buf) {},
+                    torch::kFloat32);
+                act_prob.copy_(x_act[idx]);
+                batch_task[idx]->value[0] = x_val[idx][0].item<float>();
+                batch_task[idx]->promise.set_value(MyErrCode::kOk);
+            }
         } catch (std::exception const& e) {
             ILOG("eval failed: {}", e.what());
-            eval_succ = false;
-        }
-
-        for (int i = 0; i < impl_->eval_batch_size; ++i) {
-            if (!eval_succ) {
-                batch_task[i]->promise.set_value(MyErrCode::kFailed);
-                continue;
+            for (; idx < impl_->eval_batch_size; ++idx) {
+                batch_task[idx]->promise.set_value(MyErrCode::kFailed);
             }
-            float priors_sum = 0.0f;
-            auto& act_priors = *batch_task[i]->act_priors;
-            for (auto const& mv: batch_task[i]->state->getOptions()) {
-                float prior = x_act[i][mv.z()].item<float>();
-                act_priors.emplace_back(mv, prior);
-                priors_sum += prior;
-            }
-            if (priors_sum < 1e-8) {
-                int acts_num = act_priors.size();
-                ILOG("wield policy prob, lr might be too large: sum={}, available_move={}",
-                     priors_sum, acts_num);
-                for (auto& mvp: act_priors) {
-                    mvp.second = 1.0f / acts_num;
-                }
-            } else {
-                for (auto& mvp: act_priors) {
-                    mvp.second /= priors_sum;
-                }
-            }
-            batch_task[i]->value[0] = x_val[i][0].item<float>();
-            batch_task[i]->promise.set_value(MyErrCode::kOk);
         }
 
         batch_task.clear();
@@ -363,14 +348,11 @@ void FIRNet::evalThreadEntry()
     DLOG("eval thread exit");
 }
 
-MyErrCode FIRNet::eval(State const& state, float const state_feature[kInputFeatureNum * kBoardSize],
-                       float value[1], std::vector<std::pair<Move, float>>& act_priors)
+MyErrCode FIRNet::eval(float state_feature[kInputFeatureNum * kBoardSize], float value[1])
 {
     EvalTask task;
-    task.state = &state;
     task.state_feature = state_feature;
     task.value = value;
-    task.act_priors = &act_priors;
     auto future = task.promise.get_future();
     impl_->eval_queue.enqueue(&task);
     return future.get();
