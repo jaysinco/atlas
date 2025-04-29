@@ -330,7 +330,7 @@ void FIRNet::evalThreadEntry()
             }
         } else {
             if (batch_task.empty()) {
-                std::this_thread::yield();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
         }
@@ -397,8 +397,8 @@ float FIRNet::step(MiniBatch* batch, TrainMeta& meta)
         [](void* buf) {}, torch::kFloat32);
     auto plc_label = torch::from_blob(
         batch->p_label, {kTrainBatchSize, kBoardSize}, [](void* buf) {}, torch::kFloat32);
-    auto val_label =
-        torch::from_blob(batch->p_label, {kTrainBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
+    auto val_label = torch::from_blob(
+        batch->p_label, {kTrainBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
 
     auto&& [x_act_logits, x_val] = impl_->model(data);
     auto value_loss = torch::mse_loss(x_val, val_label);

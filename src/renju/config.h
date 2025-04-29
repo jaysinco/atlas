@@ -40,6 +40,7 @@ struct ActionMeta
 
 struct TrainMeta
 {
+    bool use_gpu = false;
     int thread_num = 16;
     int itermax = 1280;
     float c_puct = 2.4;

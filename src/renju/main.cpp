@@ -43,10 +43,10 @@ std::shared_ptr<Player> createPlayer(std::string const& setup)
     return player;
 }
 
-void runTrain(int64_t verno, bool use_gpu, TrainMeta& meta)
+void runTrain(int64_t verno, TrainMeta& meta)
 {
     ILOG("verno={}", verno);
-    auto net = std::make_shared<FIRNet>(verno, use_gpu, meta.thread_num);
+    auto net = std::make_shared<FIRNet>(verno, meta.use_gpu, meta.thread_num);
     train(net, meta);
 }
 
@@ -96,11 +96,11 @@ int main(int argc, char** argv)
     // run cmd
     if (args.hasSub("train")) {
         auto verno = train_args.get<int64_t>("verno");
-        auto use_gpu = train_args.get<bool>("gpu");
         TrainMeta meta;
+        meta.use_gpu = train_args.get<bool>("gpu");
         meta.itermax = train_args.get<int>("itermax");
         meta.thread_num = train_args.get<int>("thread");
-        runTrain(verno, use_gpu, meta);
+        runTrain(verno, meta);
     } else if (args.hasSub("play")) {
         auto player1 = play_args.get<std::string>("player1");
         auto player2 = play_args.get<std::string>("player2");
