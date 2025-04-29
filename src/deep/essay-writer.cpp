@@ -404,7 +404,7 @@ struct EssayNetImpl: torch::nn::Module
     }
 
 private:
-    const TransformerStackOptions o_;
+    TransformerStackOptions const o_;
     torch::nn::Embedding token_embed_ = nullptr;
     torch::nn::Embedding pos_embed_ = nullptr;
     TransformerStack tf_ = nullptr;

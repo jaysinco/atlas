@@ -61,7 +61,7 @@ std::ostream& operator<<(std::ostream& out, DataSet const& ds);
 class FIRNet
 {
 public:
-    explicit FIRNet(int64_t verno, bool use_gpu, int eval_batch_size);
+    explicit FIRNet(int64_t verno, bool use_gpu, int max_eval_batch_size);
     ~FIRNet();
     void train(bool on = true);
     float step(MiniBatch* batch, TrainMeta& meta);

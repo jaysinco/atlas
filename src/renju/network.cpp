@@ -209,11 +209,11 @@ struct EvalTask
 
 struct FIRNet::Impl
 {
-    Impl(int64_t verno, bool use_gpu, int eval_batch_size)
+    Impl(int64_t verno, bool use_gpu, int max_eval_batch_size)
         : update_cnt(verno),
           device(use_gpu ? torch::kCUDA : torch::kCPU,
                  use_gpu ? torch::cuda::device_count() - 1 : -1),
-          eval_batch_size(eval_batch_size),
+          max_eval_batch_size(max_eval_batch_size),
           model(kResidualLayers, kResidualFilters),
           optimizer(model->parameters(), torch::optim::AdamOptions().weight_decay(kWeightDecay))
     {
@@ -224,15 +224,15 @@ struct FIRNet::Impl
 
     int64_t update_cnt;
     torch::Device const device;
-    int const eval_batch_size;
+    int const max_eval_batch_size;
     FIRModel model;
     torch::optim::Adam optimizer;
     moodycamel::BlockingConcurrentQueue<EvalTask*> eval_queue;
     std::thread eval_thread;
 };
 
-FIRNet::FIRNet(int64_t verno, bool use_gpu, int eval_batch_size)
-    : impl_(new Impl(verno, use_gpu, eval_batch_size))
+FIRNet::FIRNet(int64_t verno, bool use_gpu, int max_eval_batch_size)
+    : impl_(new Impl(verno, use_gpu, max_eval_batch_size))
 {
     if (impl_->update_cnt > 0) {
         loadModel();
@@ -299,44 +299,52 @@ void FIRNet::train(bool on)
 void FIRNet::evalThreadEntry()
 {
     std::vector<EvalTask*> batch_task;
-    batch_task.reserve(impl_->eval_batch_size);
+    batch_task.reserve(impl_->max_eval_batch_size);
     torch::Tensor batch_buf;
     if (impl_->device.is_cuda()) {
         batch_buf =
-            torch::empty({impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+            torch::empty({impl_->max_eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
                          torch::TensorOptions().dtype(torch::kFloat32).pinned_memory(true));
     }
     auto batch_data =
-        torch::empty({impl_->eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
+        torch::empty({impl_->max_eval_batch_size, kInputFeatureNum, kBoardMaxRow, kBoardMaxCol},
                      torch::TensorOptions().dtype(torch::kFloat32).device(impl_->device));
 
     while (true) {
         EvalTask* curr_task = nullptr;
-        impl_->eval_queue.wait_dequeue(curr_task);
-        if (curr_task == nullptr) {
-            break;
+        bool has_task = impl_->eval_queue.try_dequeue(curr_task);
+        if (has_task) {
+            if (curr_task == nullptr) {
+                break;
+            }
+
+            int idx = batch_task.size();
+            batch_task.push_back(curr_task);
+            float* data_ptr =
+                (impl_->device.is_cuda() ? batch_buf : batch_data).mutable_data_ptr<float>();
+            memcpy(data_ptr + idx * kInputFeatureNum * kBoardSize, curr_task->state_feature,
+                   kInputFeatureNum * kBoardSize * sizeof(float));
+
+            if (idx + 1 < impl_->max_eval_batch_size) {
+                continue;
+            }
+        } else {
+            if (batch_task.empty()) {
+                std::this_thread::yield();
+                continue;
+            }
         }
 
-        int idx = batch_task.size();
-        batch_task.push_back(curr_task);
-        float* data_ptr =
-            (impl_->device.is_cuda() ? batch_buf : batch_data).mutable_data_ptr<float>();
-        memcpy(data_ptr + idx * kInputFeatureNum * kBoardSize, curr_task->state_feature,
-               kInputFeatureNum * kBoardSize * sizeof(float));
-
-        if (idx + 1 < impl_->eval_batch_size) {
-            continue;
-        }
-
-        idx = 0;
+        int idx = 0;
+        int task_size = batch_task.size();
         try {
             torch::NoGradGuard no_grad;
             if (impl_->device.is_cuda()) {
-                batch_data.copy_(batch_buf);
+                batch_data.slice(0, 0, task_size).copy_(batch_buf.slice(0, 0, task_size));
             }
-            auto&& [x_act, x_val] = impl_->model(batch_data);
+            auto&& [x_act, x_val] = impl_->model(batch_data.slice(0, 0, task_size));
             x_act = torch::softmax(x_act, 1);
-            for (; idx < impl_->eval_batch_size; ++idx) {
+            for (; idx < task_size; ++idx) {
                 auto act_prob = torch::from_blob(
                     batch_task[idx]->state_feature, {kBoardSize}, [](void* buf) {},
                     torch::kFloat32);
@@ -346,7 +354,7 @@ void FIRNet::evalThreadEntry()
             }
         } catch (std::exception const& e) {
             ILOG("eval failed: {}", e.what());
-            for (; idx < impl_->eval_batch_size; ++idx) {
+            for (; idx < task_size; ++idx) {
                 batch_task[idx]->promise.set_value(MyErrCode::kFailed);
             }
         }
@@ -389,8 +397,8 @@ float FIRNet::step(MiniBatch* batch, TrainMeta& meta)
         [](void* buf) {}, torch::kFloat32);
     auto plc_label = torch::from_blob(
         batch->p_label, {kTrainBatchSize, kBoardSize}, [](void* buf) {}, torch::kFloat32);
-    auto val_label = torch::from_blob(
-        batch->p_label, {kTrainBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
+    auto val_label =
+        torch::from_blob(batch->p_label, {kTrainBatchSize, 1}, [](void* buf) {}, torch::kFloat32);
 
     auto&& [x_act_logits, x_val] = impl_->model(data);
     auto value_loss = torch::mse_loss(x_val, val_label);

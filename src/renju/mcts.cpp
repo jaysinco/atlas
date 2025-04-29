@@ -125,7 +125,7 @@ void MCTSNode::updateAndRevertVirtualLoss(float leaf_value)
     total_val_ += leaf_value;
 }
 
-static void genRanDirichlet(const size_t k, float alpha, float theta[])
+static void genRanDirichlet(size_t const k, float alpha, float theta[])
 {
     std::gamma_distribution<float> gamma(alpha, 1.0f);
     float sum = 0.0;
@@ -282,7 +282,7 @@ Move MCTSPlayer::play(State const& state, ActionMeta& meta)
         root_->addNoiseToChildPrior(kNoiseRate);
     }
     BS::multi_future<MyErrCode> loop_future = pool_.parallelize_loop(
-        0, itermax_, [&](int a, int b) { return think(state, a, b); }, nthreads_);
+        0, itermax_, [&](int a, int b) { return think(state, a, b); }, itermax_);
     std::vector<MyErrCode> res = loop_future.get();
     if (!std::all_of(res.begin(), res.end(),
                      [](MyErrCode code) { return code == MyErrCode::kOk; })) {
@@ -335,9 +335,6 @@ void MCTSPurePlayer::eval(State& state, float& leaf_value,
 MCTSDeepPlayer::MCTSDeepPlayer(std::shared_ptr<FIRNet> net, int itermax, float c_puct, int nthreads)
     : MCTSPlayer(itermax, c_puct, nthreads), net_(net)
 {
-    if (itermax < nthreads || itermax % nthreads != 0) {
-        MY_THROW("itermax({}) must be multiple of nthreads({})", itermax, nthreads);
-    }
 }
 
 MCTSDeepPlayer::~MCTSDeepPlayer() = default;

@@ -6,7 +6,7 @@
 #include <map>
 #include <boost/timer/timer.hpp>
 
-Color operator~(const Color c)
+Color operator~(Color const c)
 {
     Color opposite;
     switch (c) {
@@ -175,7 +175,7 @@ void State::fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const
     auto enemy_side = ~own_side;
     float first = firstHand() ? 1.0f : 0.0f;
     for (int i = 0; i < kBoardSize; ++i) {
-        const Color side = board_.get(Move(i));
+        Color const side = board_.get(Move(i));
         if (side == own_side) {
             data[i] = 1.0f;
         } else if (side == enemy_side) {
@@ -245,7 +245,7 @@ std::ostream& operator<<(std::ostream& out, State const& state)
 
 Player& play(Player& p1, Player& p2, bool silent)
 {
-    const std::map<Color, Player*> player_color{
+    std::map<Color, Player*> const player_color{
         {Color::kBlack, &p1}, {Color::kWhite, &p2}, {Color::kEmpty, nullptr}};
     State game;
     p1.reset();

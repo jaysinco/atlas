@@ -18,7 +18,7 @@ enum class Color : unsigned char
     kWhite
 };
 
-Color operator~(const Color c);
+Color operator~(Color const c);
 std::ostream& operator<<(std::ostream& out, Color c);
 std::ostream& outputColor(std::ostream& out, Color c, bool checked = false);
 
