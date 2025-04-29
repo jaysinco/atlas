@@ -5,9 +5,9 @@ namespace toolkit
 {
 
 Args::Args()
-    : cmd_opt_args_("Optional arguments", 70),
-      log_opt_args_("Logging arguments", 70),
-      pos_opt_args_("Positional arguments", 70)
+    : cmd_opt_args_("Optional arguments", 100),
+      log_opt_args_("Logging arguments", 100),
+      pos_opt_args_("Positional arguments", 100)
 {
 }
 
