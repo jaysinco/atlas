@@ -126,7 +126,7 @@ Color State::current() const
     return ~board_.get(last_);
 }
 
-State::State(float const data[kInputFeatureNum * kBoardSize]): last_(kNoMoveYet)
+State::State(float const data[kInputFeatureNum * kBoardSize])
 {
     if (kInputFeatureNum < 4) {
         MY_THROW("feature number must >= 4");
@@ -150,11 +150,16 @@ State::State(float const data[kInputFeatureNum * kBoardSize]): last_(kNoMoveYet)
             } else {
                 opts_.push_back(mv);
             }
-            board_.put(mv, side);
-            if (side != Color::kEmpty && board_.winFrom(mv)) {
-                winner_ = side;
+            if (side != Color::kEmpty) {
+                board_.put(mv, side);
+                if (board_.winFrom(mv)) {
+                    winner_ = side;
+                }
             }
         }
+    }
+    if (winner_ != Color::kEmpty) {
+        opts_.clear();
     }
 }
 
@@ -187,17 +192,18 @@ void State::fillFeatureArray(float data[kInputFeatureNum * kBoardSize]) const
 
 void State::next(Move mv)
 {
-    Color side = current();
-    board_.put(mv, side);
-    if (board_.winFrom(mv)) {
-        winner_ = side;
-    }
-    last_ = mv;
     if (auto it = std::find(opts_.begin(), opts_.end(), mv); it != opts_.end()) {
         *it = opts_.back();
         opts_.pop_back();
     } else {
         MY_THROW("invalid move: {}", mv);
+    }
+    Color side = current();
+    board_.put(mv, side);
+    last_ = mv;
+    if (board_.winFrom(mv)) {
+        winner_ = side;
+        opts_.clear();
     }
 }
 

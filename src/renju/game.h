@@ -107,12 +107,12 @@ class State
 {
     friend std::ostream& operator<<(std::ostream& out, State const& state);
     Board board_;
-    Move last_;
+    Move last_{kNoMoveYet};
     Color winner_ = Color::kEmpty;
     std::vector<Move> opts_;
 
 public:
-    State(): last_(kNoMoveYet) { board_.pushValid(opts_); }
+    State() { board_.pushValid(opts_); }
 
     explicit State(float const data[kInputFeatureNum * kBoardSize]);
 

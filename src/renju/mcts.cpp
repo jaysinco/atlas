@@ -396,29 +396,28 @@ void MCTSDeepPlayer::eval(State& state, float& leaf_value,
 
     if (!state.over()) {
         leaf_value *= -1;
+        float p_sum = 0.0f;
+        for (auto const& mv: state.getOptions()) {
+            float p = state_feature[mv.z()];
+            act_priors.emplace_back(mv, p);
+            p_sum += p;
+        }
+        if (p_sum < 1e-8) {
+            int n_act = act_priors.size();
+            ILOG("wield policy prob, lr might be too large: sum={}, act={}", p_sum, n_act);
+            for (auto& [mv, p]: act_priors) {
+                p = 1.0f / n_act;
+            }
+        } else {
+            for (auto& [mv, p]: act_priors) {
+                p /= p_sum;
+            }
+        }
     } else {
         if (state.getWinner() != Color::kEmpty) {
             leaf_value = 1.0f;
         } else {
             leaf_value = 0.0f;
-        }
-    }
-
-    float p_sum = 0.0f;
-    for (auto const& mv: state.getOptions()) {
-        float p = state_feature[mv.z()];
-        act_priors.emplace_back(mv, p);
-        p_sum += p;
-    }
-    if (p_sum < 1e-8) {
-        int n_act = act_priors.size();
-        ILOG("wield policy prob, lr might be too large: sum={}, act={}", p_sum, n_act);
-        for (auto& [mv, p]: act_priors) {
-            p = 1.0f / n_act;
-        }
-    } else {
-        for (auto& [mv, p]: act_priors) {
-            p /= p_sum;
         }
     }
 }
