@@ -22,7 +22,8 @@ struct HasToStr: std::false_type
 };
 
 template <typename T>
-struct HasToStr<T, std::void_t<decltype(std::declval<T>().toStr())>>: std::true_type
+struct HasToStr<T, std::void_t<decltype(std::declval<T>().toStr())>>
+    : std::is_same<decltype(std::declval<T>().toStr()), std::string>
 {
 };
 
