@@ -40,7 +40,8 @@ struct CanToString: std::false_type
 };
 
 template <typename T>
-struct CanToString<T, std::void_t<decltype(toString(std::declval<T>()))>>: std::true_type
+struct CanToString<T, std::void_t<decltype(toString(std::declval<T>()))>>
+    : std::is_same<decltype(toString(std::declval<T>())), std::string>
 {
 };
 
