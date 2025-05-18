@@ -23,13 +23,14 @@ int main(int argc, char** argv)
         pts_b_dy.push_back(-cos(theta) * 0.1);
     }
 
-    Gnuplot gp;
+    Gnuplot gp("gnuplot");
     gp << "plot sin(x)" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(3));
     gp << "set xrange [-2:2]\nset yrange [-2:2]\n";
     gp << "plot '-' with vectors title 'pts_A', '-' with vectors title 'pts_B'\n";
     gp.send1d(pts_a);
     gp.send1d(std::make_tuple(pts_b_x, pts_b_y, pts_b_dx, pts_b_dy));
+    std::cin.get();
 
     return 0;
 }
