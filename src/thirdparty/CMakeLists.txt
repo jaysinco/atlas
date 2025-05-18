@@ -25,6 +25,10 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libboost_program_options.so
         ${TC_INSTALL_DIR}/lib/libboost_timer.so
         ${TC_INSTALL_DIR}/lib/libboost_chrono.so
+        ${TC_INSTALL_DIR}/lib/libboost_iostreams.so
+        ${TC_INSTALL_DIR}/lib/libboost_system.so
+        ${TC_INSTALL_DIR}/lib/libboost_filesystem.so
+        ${TC_INSTALL_DIR}/lib/libboost_atomic.so
         ${TC_INSTALL_DIR}/lib/libcharset.so.1
         ${TC_INSTALL_DIR}/lib/libiconv.so.2
         ${TC_INSTALL_DIR}/lib/libsqlite3.so.0

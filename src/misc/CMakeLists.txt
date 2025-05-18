@@ -10,6 +10,9 @@ target_link_libraries(${TARGET_NAME}-https-server toolkit uwebsockets zlib opens
 add_executable(${TARGET_NAME}-https-client misc-https-client.cpp)
 target_link_libraries(${TARGET_NAME}-https-client toolkit libcpr)
 
+add_executable(${TARGET_NAME}-gnuplot misc-gnuplot.cpp)
+target_link_libraries(${TARGET_NAME}-gnuplot toolkit)
+
 file(COPY
     data/cert.pem
     data/key.pem
