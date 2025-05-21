@@ -11,7 +11,8 @@ ip neigh | grep <mac or ip>
 ```
 
 ### Sample Mac
-* a4:17:91:0f:fe:04 router
+* 5c:f7:96:35:aa:01 router
+* d8:bb:c1:df:b9:d0 compile
 * ec:d6:8a:d6:7d:82 sinco
 * ec:d6:8a:d6:75:9e nat
 * 00:e0:4c:4f:c2:0a seven

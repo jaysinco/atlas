@@ -35,7 +35,7 @@ public:
 
 public:
     static Packet arp(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip,
-                      bool reply = false, bool reverse = false);
+                      bool reply = false, bool reverse = false, Mac const& rmac = Mac::kBroadcast);
 
     static Packet ping(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip,
                        uint8_t ttl = 128, std::string const& echo = "", bool forbid_slice = false);

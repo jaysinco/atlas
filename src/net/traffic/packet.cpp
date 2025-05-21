@@ -170,11 +170,11 @@ MyErrCode Packet::decodeLayer(Protocol::Type type, uint8_t const* const start, u
 }
 
 Packet Packet::arp(Mac const& smac, Ip4 const& sip, Mac const& dmac, Ip4 const& dip, bool reply,
-                   bool reverse)
+                   bool reverse, Mac const& rmac)
 {
     Packet p;
-    p.d_.layers.push_back(std::make_shared<Ethernet>(smac, Mac::kBroadcast,
-                                                     reverse ? Protocol::kRARP : Protocol::kARP));
+    p.d_.layers.push_back(
+        std::make_shared<Ethernet>(smac, rmac, reverse ? Protocol::kRARP : Protocol::kARP));
     p.d_.layers.push_back(std::make_shared<Arp>(smac, sip, dmac, dip, reply, reverse));
     return p;
 }

