@@ -7,13 +7,19 @@ namespace pegtl = TAO_PEGTL_NAMESPACE;
 namespace hello
 {
 
-// clang-format off
+using namespace TAO_PEGTL_NAMESPACE;
 
-   struct Prefix: pegtl::string<'H', 'e', 'l', 'l', 'o', ',', ' '> {};
-   struct Name: pegtl::plus<pegtl::alpha> {};
-   struct Grammar: pegtl::seq<Prefix, Name, pegtl::one<'!'>, pegtl::eof> {};
+struct Prefix: TAO_PEGTL_STRING("hello, ")
+{
+};
 
-// clang-format on
+struct Name: plus<alpha>
+{
+};
+
+struct Grammar: seq<Prefix, Name, one<'!'>, eof>
+{
+};
 
 template <typename Rule>
 struct Action
@@ -41,7 +47,7 @@ int main(int argc, char** argv)
     std::string name;
     pegtl::argv_input in(argv, 1);
     if (pegtl::parse<hello::Grammar, hello::Action>(in, name)) {
-        ILOG("Good bye, {}!", name);
+        ILOG("goodbye, {}!", name);
     } else {
         ELOG("failed to parse");
     }
