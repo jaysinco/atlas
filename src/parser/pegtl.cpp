@@ -22,7 +22,7 @@ struct Grammar: seq<Prefix, Name, one<'!'>, eof>
 };
 
 template <typename Rule>
-struct Action
+struct Action: pegtl::nothing<Rule>
 {
 };
 
