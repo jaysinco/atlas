@@ -67,8 +67,8 @@ static int resize = 0;
 static int newWidth = 0;
 static int newHeight = 0;
 static VkFormat format = VK_FORMAT_UNDEFINED;
-static uint32_t width = 600;
-static uint32_t height = 600;
+static uint32_t width = 300;
+static uint32_t height = 200;
 static uint32_t currentFrame = 0;
 static uint32_t imageIndex = 0;
 static uint32_t imageCount = 0;
@@ -613,7 +613,7 @@ int main(int argc, char** argv)
         CHECK_VK_RESULT(vkBeginCommandBuffer(element->commandBuffer, &beginInfo));
 
         {
-            VkClearValue clearValue = {{1.0f, 0.0f, 1.0f, 1.0f}};
+            VkClearValue clearValue = {{0.5f, 0.5f, 0.5f, 1.0f}};
 
             VkRenderPassBeginInfo beginInfo = {};
             beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

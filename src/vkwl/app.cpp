@@ -33,6 +33,8 @@ xdg_surface_listener Application::shell_surface_listener = {.configure =
 xdg_toplevel_listener Application::toplevel_listener = {.configure = handleToplevelConfigure,
                                                         .close = handleToplevelClose};
 
+VkInstance Application::instance = VK_NULL_HANDLE;
+
 bool Application::quit = false;
 bool Application::ready_to_resize = false;
 bool Application::resize = false;
@@ -44,12 +46,14 @@ uint32_t Application::height = 0;
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
     CHECK_ERR_RET(initWayland(win_title, win_width, win_height, app_id));
-    CHECK_ERR_RET(initVulkan());
+    CHECK_ERR_RET(initVulkan(app_id));
     CHECK_ERR_RET(mainLoop());
     CHECK_ERR_RET(cleanupVulkan());
     CHECK_ERR_RET(cleanupWayland());
     return MyErrCode::kOk;
 }
+
+MyErrCode Application::mainLoop() { return MyErrCode::kOk; }
 
 MyErrCode Application::initWayland(char const* win_title, int win_width, int win_height,
                                    char const* app_id)
@@ -79,19 +83,6 @@ MyErrCode Application::initWayland(char const* win_title, int win_width, int win
 
     return MyErrCode::kOk;
 }
-
-MyErrCode Application::initVulkan()
-{
-    uint32_t extension_count = 0;
-    CHECK_VK_ERR_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr));
-    ILOG("{} extensions supported", extension_count);
-
-    return MyErrCode::kOk;
-}
-
-MyErrCode Application::mainLoop() { return MyErrCode::kOk; }
-
-MyErrCode Application::cleanupVulkan() { return MyErrCode::kOk; }
 
 MyErrCode Application::cleanupWayland()
 {
@@ -143,3 +134,63 @@ void Application::handleToplevelConfigure(void* data, struct xdg_toplevel* tople
 }
 
 void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel) { quit = true; }
+
+MyErrCode Application::initVulkan(char const* app_name)
+{
+    CHECK_ERR_RET(createInstance(app_name));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::cleanupVulkan()
+{
+    vkDestroyInstance(instance, nullptr);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createInstance(char const* app_name)
+{
+    VkApplicationInfo app_info{};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = app_name;
+    app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
+    app_info.pEngineName = "No Engine";
+    app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
+    app_info.apiVersion = VK_API_VERSION_1_0;
+
+    VkInstanceCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pApplicationInfo = &app_info;
+    create_info.enabledExtensionCount = sizeof(kInstanceExtensionNames) / sizeof(char const*);
+    create_info.ppEnabledExtensionNames = kInstanceExtensionNames;
+    create_info.enabledLayerCount = sizeof(kValidationLayers) / sizeof(char const*);
+    create_info.ppEnabledLayerNames = kValidationLayers;
+
+    CHECK_ERR_RET(checkValidationLayerSupport());
+    CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::checkValidationLayerSupport()
+{
+    uint32_t layer_count;
+    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+
+    std::vector<VkLayerProperties> available_layers(layer_count);
+    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
+
+    for (size_t j = 0; j < sizeof(kValidationLayers) / sizeof(char const*); j++) {
+        bool found = false;
+        for (uint32_t i = 0; i < layer_count; i++) {
+            if (strcmp(available_layers[i].layerName, kValidationLayers[j]) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            ELOG("validation layer {} not supported", kValidationLayers[j]);
+            return MyErrCode::kFailed;
+        }
+    }
+
+    return MyErrCode::kOk;
+}

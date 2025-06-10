@@ -10,14 +10,12 @@ public:
     static MyErrCode run(char const* win_title, int win_width, int win_height, char const* app_id);
 
 private:
-    static MyErrCode initWayland(char const* win_title, int win_width, int win_height,
-                                 char const* app_id);
-    static MyErrCode initVulkan();
     static MyErrCode mainLoop();
-    static MyErrCode cleanupVulkan();
-    static MyErrCode cleanupWayland();
 
 private:
+    static MyErrCode initWayland(char const* win_title, int win_width, int win_height,
+                                 char const* app_id);
+    static MyErrCode cleanupWayland();
     static void handleRegistry(void* data, struct wl_registry* registry, uint32_t name,
                                char const* interface, uint32_t version);
     static void handleShellPing(void* data, struct xdg_wm_base* shell, uint32_t serial);
@@ -26,6 +24,12 @@ private:
     static void handleToplevelConfigure(void* data, struct xdg_toplevel* toplevel, int32_t width,
                                         int32_t height, struct wl_array* states);
     static void handleToplevelClose(void* data, struct xdg_toplevel* toplevel);
+
+private:
+    static MyErrCode initVulkan(char const* app_name);
+    static MyErrCode cleanupVulkan();
+    static MyErrCode createInstance(char const* app_name);
+    static MyErrCode checkValidationLayerSupport();
 
 private:
     static wl_display* display;
@@ -40,6 +44,11 @@ private:
     static xdg_wm_base_listener shell_listener;
     static xdg_surface_listener shell_surface_listener;
     static xdg_toplevel_listener toplevel_listener;
+
+    static VkInstance instance;
+    constexpr static char const* const kInstanceExtensionNames[] = {
+        "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
+    constexpr static char const* const kValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 
     static bool quit;
     static bool ready_to_resize;
