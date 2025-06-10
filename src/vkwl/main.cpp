@@ -6,6 +6,12 @@
 #include <wayland-client.h>
 #include "xdg-shell.h"
 #include <vector>
+#include "toolkit/args.h"
+#include "toolkit/logging.h"
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/vec4.hpp>
+#include <glm/mat4x4.hpp>
 
 #define CHECK_VK_RESULT(_expr)                              \
     result = _expr;                                         \
@@ -61,8 +67,8 @@ static int resize = 0;
 static int newWidth = 0;
 static int newHeight = 0;
 static VkFormat format = VK_FORMAT_UNDEFINED;
-static uint32_t width = 300;
-static uint32_t height = 200;
+static uint32_t width = 600;
+static uint32_t height = 600;
 static uint32_t currentFrame = 0;
 static uint32_t imageIndex = 0;
 static uint32_t imageCount = 0;
@@ -343,6 +349,9 @@ static void destroySwapchain()
 
 int main(int argc, char** argv)
 {
+    toolkit::Args args(argc, argv);
+    args.parse();
+
     CHECK_WL_RESULT(display = wl_display_connect(NULL));
 
     CHECK_WL_RESULT(registry = wl_display_get_registry(display));
@@ -363,6 +372,10 @@ int main(int argc, char** argv)
     wl_surface_commit(surface);
     wl_display_roundtrip(display);
     wl_surface_commit(surface);
+
+    uint32_t extensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    ILOG("{} extensions supported", extensionCount);
 
     VkResult result;
 
