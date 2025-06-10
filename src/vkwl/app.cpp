@@ -1,6 +1,8 @@
 #include "app.h"
 #include "toolkit/logging.h"
 
+#define GET_VK_EXTENSION_FUNCTION(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
+
 #define CHECK_VK_ERR_RET(err)                    \
     if (auto _err = (err); _err != VK_SUCCESS) { \
         ELOG("failed to call vulkan: {}", _err); \
@@ -34,6 +36,7 @@ xdg_toplevel_listener Application::toplevel_listener = {.configure = handleTople
                                                         .close = handleToplevelClose};
 
 VkInstance Application::instance = VK_NULL_HANDLE;
+VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
 
 bool Application::quit = false;
 bool Application::ready_to_resize = false;
@@ -138,11 +141,13 @@ void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel)
 MyErrCode Application::initVulkan(char const* app_name)
 {
     CHECK_ERR_RET(createInstance(app_name));
+    CHECK_ERR_RET(setupDebugMessenger());
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::cleanupVulkan()
 {
+    GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
 }
@@ -162,35 +167,65 @@ MyErrCode Application::createInstance(char const* app_name)
     create_info.pApplicationInfo = &app_info;
     create_info.enabledExtensionCount = sizeof(kInstanceExtensionNames) / sizeof(char const*);
     create_info.ppEnabledExtensionNames = kInstanceExtensionNames;
-    create_info.enabledLayerCount = sizeof(kValidationLayers) / sizeof(char const*);
-    create_info.ppEnabledLayerNames = kValidationLayers;
 
-    CHECK_ERR_RET(checkValidationLayerSupport());
+    uint32_t layer_count;
+    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+    std::vector<VkLayerProperties> available_layers(layer_count);
+    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
+    size_t found_layers = 0;
+    for (uint32_t i = 0; i < layer_count; i++) {
+        for (size_t j = 0; j < sizeof(kValidationLayers) / sizeof(char const*); j++) {
+            if (strcmp(available_layers[i].layerName, kValidationLayers[j]) == 0) {
+                found_layers++;
+            }
+        }
+    }
+    if (found_layers >= sizeof(kValidationLayers) / sizeof(char const*)) {
+        create_info.enabledLayerCount = sizeof(kValidationLayers) / sizeof(char const*);
+        create_info.ppEnabledLayerNames = kValidationLayers;
+    }
+
     CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::checkValidationLayerSupport()
+MyErrCode Application::setupDebugMessenger()
 {
-    uint32_t layer_count;
-    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
-
-    std::vector<VkLayerProperties> available_layers(layer_count);
-    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
-
-    for (size_t j = 0; j < sizeof(kValidationLayers) / sizeof(char const*); j++) {
-        bool found = false;
-        for (uint32_t i = 0; i < layer_count; i++) {
-            if (strcmp(available_layers[i].layerName, kValidationLayers[j]) == 0) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            ELOG("validation layer {} not supported", kValidationLayers[j]);
-            return MyErrCode::kFailed;
-        }
-    }
-
+    VkDebugUtilsMessengerCreateInfoEXT create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    create_info.pfnUserCallback = debugCallback;
+    create_info.pUserData = nullptr;
+    CHECK_VK_ERR_RET(GET_VK_EXTENSION_FUNCTION(vkCreateDebugUtilsMessengerEXT)(
+        instance, &create_info, nullptr, &debug_messenger));
     return MyErrCode::kOk;
+}
+
+VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                    VkDebugUtilsMessageTypeFlagsEXT type,
+                                    VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
+                                    void* user_data)
+{
+    switch (severity) {
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+            DLOG("{}", callback_data->pMessage);
+            break;
+        default:
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+            ILOG("{}", callback_data->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+            WLOG("{}", callback_data->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            ELOG("{}", callback_data->pMessage);
+            break;
+    }
+    return 0;
 }

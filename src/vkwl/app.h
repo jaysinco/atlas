@@ -3,6 +3,7 @@
 #include <wayland-client.h>
 #include "xdg-shell.h"
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_wayland.h>
 
 class Application
 {
@@ -29,7 +30,11 @@ private:
     static MyErrCode initVulkan(char const* app_name);
     static MyErrCode cleanupVulkan();
     static MyErrCode createInstance(char const* app_name);
-    static MyErrCode checkValidationLayerSupport();
+    static MyErrCode setupDebugMessenger();
+    static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                  VkDebugUtilsMessageTypeFlagsEXT type,
+                                  VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
+                                  void* user_data);
 
 private:
     static wl_display* display;
@@ -47,8 +52,10 @@ private:
 
     static VkInstance instance;
     constexpr static char const* const kInstanceExtensionNames[] = {
-        "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME};
     constexpr static char const* const kValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    static VkDebugUtilsMessengerEXT debug_messenger;
 
     static bool quit;
     static bool ready_to_resize;

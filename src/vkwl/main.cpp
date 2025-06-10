@@ -12,6 +12,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+#include "app.h"
 
 #define CHECK_VK_RESULT(_expr)                              \
     result = _expr;                                         \
@@ -351,6 +352,9 @@ int main(int argc, char** argv)
 {
     toolkit::Args args(argc, argv);
     args.parse();
+
+    Application::run("VkTest", 300, 200, "VkTest");
+    return 0;
 
     CHECK_WL_RESULT(display = wl_display_connect(NULL));
 
