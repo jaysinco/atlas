@@ -11,6 +11,7 @@ add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
 add_subdirectory(${TC_THIRDPARTY}/sentencepiece sentencepiece)
+add_subdirectory(${TC_THIRDPARTY}/glm glm)
 
 if(UNIX)
     add_subdirectory(imgui)
@@ -56,6 +57,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libsentencepiece.so
         ${TC_INSTALL_DIR}/lib/libsentencepiece_train.so
         ${TC_INSTALL_DIR}/lib/libtcmalloc_minimal.so.4
+        ${TC_INSTALL_DIR}/lib/libglm.so
     )
 
     if(TC_CROSS_COMPILE)

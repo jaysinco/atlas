@@ -9,9 +9,9 @@ function(wayland_gen_protocols outfiles)
     foreach(it ${xml_files})
         get_filename_component(outfilename ${it} NAME_WE)
         set(infile ${it})
-        set(serverheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-protocol.h)
-        set(clientheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-client-protocol.h)
-        set(privatecode ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-protocol.c)
+        set(serverheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}-server.h)
+        set(clientheader ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}.h)
+        set(privatecode ${CMAKE_CURRENT_BINARY_DIR}/${outfilename}.c)
 
         add_custom_command(
             OUTPUT ${serverheader}
