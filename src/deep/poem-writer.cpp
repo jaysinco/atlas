@@ -121,7 +121,7 @@ private:
     {
         toolkit::RowsValue rows;
         CHECK_ERR_RET(toolkit::SQLiteHelper::querySQL(
-            poem_db, {"select rhythmic, content from ci order by value;", {{}}}, rows))
+            poem_db, {"select rhythmic, content from ci order by value;", {{}}}, rows));
         for (auto& row: rows) {
             auto s = FSTR("《{}》 {}", row.at(0).asStr(), row.at(1).asStr());
             poem_str.push_back(s);

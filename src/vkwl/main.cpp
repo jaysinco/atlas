@@ -354,6 +354,7 @@ int main(int argc, char** argv)
     args.parse();
 
     Application::run("VkTest", 300, 200, "VkTest");
+    ILOG("end!");
     return 0;
 
     CHECK_WL_RESULT(display = wl_display_connect(NULL));

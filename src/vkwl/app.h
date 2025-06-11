@@ -35,6 +35,10 @@ private:
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
                                   void* user_data);
+    static MyErrCode createVkSurface();
+    static MyErrCode pickPhysicalDevice();
+    static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
+    static MyErrCode createLogicalDevice();
 
 private:
     static wl_display* display;
@@ -51,11 +55,16 @@ private:
     static xdg_toplevel_listener toplevel_listener;
 
     static VkInstance instance;
-    constexpr static char const* const kInstanceExtensionNames[] = {
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME};
-    constexpr static char const* const kValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    constexpr static char const* const kInstanceExtensions[] = {
+        "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
+    constexpr static char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
     static VkDebugUtilsMessengerEXT debug_messenger;
+    static VkSurfaceKHR vulkan_surface;
+    static VkPhysicalDevice physical_device;
+    static VkDevice device;
+    constexpr static char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
+    static uint32_t graphics_queue_family_index;
+    static VkQueue graphics_queue;
 
     static bool quit;
     static bool ready_to_resize;

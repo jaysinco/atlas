@@ -3,22 +3,24 @@
 
 #define GET_VK_EXTENSION_FUNCTION(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
 
-#define CHECK_VK_ERR_RET(err)                    \
-    if (auto _err = (err); _err != VK_SUCCESS) { \
-        ELOG("failed to call vulkan: {}", _err); \
-        return MyErrCode::kFailed;               \
-    }
+#define CHECK_VK_ERR_RET(err)                        \
+    do {                                             \
+        if (auto _err = (err); _err != VK_SUCCESS) { \
+            ELOG("failed to call vulkan: {}", _err); \
+            return MyErrCode::kFailed;               \
+        }                                            \
+    } while (0)
 
-#define CHECK_WL_ERR(expr)              \
-    if (!(expr)) {                      \
-        ELOG("failed to call wayland"); \
-    }
+#define CHECK_WL_ERR(expr) \
+    if (!(expr)) ELOG("failed to call wayland")
 
-#define CHECK_WL_ERR_RET(expr)          \
-    if (!(expr)) {                      \
-        ELOG("failed to call wayland"); \
-        return MyErrCode::kFailed;      \
-    }
+#define CHECK_WL_ERR_RET(expr)              \
+    do {                                    \
+        if (!(expr)) {                      \
+            ELOG("failed to call wayland"); \
+            return MyErrCode::kFailed;      \
+        }                                   \
+    } while (0)
 
 wl_display* Application::display = nullptr;
 wl_registry* Application::registry = nullptr;
@@ -37,6 +39,11 @@ xdg_toplevel_listener Application::toplevel_listener = {.configure = handleTople
 
 VkInstance Application::instance = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
+VkSurfaceKHR Application::vulkan_surface = VK_NULL_HANDLE;
+VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
+VkDevice Application::device = VK_NULL_HANDLE;
+uint32_t Application::graphics_queue_family_index = 0;
+VkQueue Application::graphics_queue = VK_NULL_HANDLE;
 
 bool Application::quit = false;
 bool Application::ready_to_resize = false;
@@ -142,11 +149,16 @@ MyErrCode Application::initVulkan(char const* app_name)
 {
     CHECK_ERR_RET(createInstance(app_name));
     CHECK_ERR_RET(setupDebugMessenger());
+    CHECK_ERR_RET(createVkSurface());
+    CHECK_ERR_RET(pickPhysicalDevice());
+    CHECK_ERR_RET(createLogicalDevice());
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::cleanupVulkan()
 {
+    vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
@@ -165,8 +177,8 @@ MyErrCode Application::createInstance(char const* app_name)
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
-    create_info.enabledExtensionCount = sizeof(kInstanceExtensionNames) / sizeof(char const*);
-    create_info.ppEnabledExtensionNames = kInstanceExtensionNames;
+    create_info.enabledExtensionCount = sizeof(kInstanceExtensions) / sizeof(char const*);
+    create_info.ppEnabledExtensionNames = kInstanceExtensions;
 
     uint32_t layer_count;
     CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
@@ -174,15 +186,15 @@ MyErrCode Application::createInstance(char const* app_name)
     CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
     size_t found_layers = 0;
     for (uint32_t i = 0; i < layer_count; i++) {
-        for (size_t j = 0; j < sizeof(kValidationLayers) / sizeof(char const*); j++) {
-            if (strcmp(available_layers[i].layerName, kValidationLayers[j]) == 0) {
+        for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
+            if (strcmp(available_layers[i].layerName, kInstanceLayers[j]) == 0) {
                 found_layers++;
             }
         }
     }
-    if (found_layers >= sizeof(kValidationLayers) / sizeof(char const*)) {
-        create_info.enabledLayerCount = sizeof(kValidationLayers) / sizeof(char const*);
-        create_info.ppEnabledLayerNames = kValidationLayers;
+    if (found_layers >= sizeof(kInstanceLayers) / sizeof(char const*)) {
+        create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
+        create_info.ppEnabledLayerNames = kInstanceLayers;
     }
 
     CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
@@ -214,9 +226,8 @@ VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sever
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            DLOG("{}", callback_data->pMessage);
+            // DLOG("{}", callback_data->pMessage);
             break;
-        default:
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
             ILOG("{}", callback_data->pMessage);
             break;
@@ -226,6 +237,134 @@ VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sever
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             ELOG("{}", callback_data->pMessage);
             break;
+        default:
+            break;
     }
-    return 0;
+    return VK_FALSE;
+}
+
+MyErrCode Application::createVkSurface()
+{
+    VkWaylandSurfaceCreateInfoKHR create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+    create_info.display = display;
+    create_info.surface = surface;
+    CHECK_VK_ERR_RET(vkCreateWaylandSurfaceKHR(instance, &create_info, nullptr, &vulkan_surface));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::pickPhysicalDevice()
+{
+    uint32_t device_count = 0;
+    CHECK_VK_ERR_RET(vkEnumeratePhysicalDevices(instance, &device_count, nullptr));
+    if (device_count == 0) {
+        ELOG("failed to find gpu with vulkan support");
+        return MyErrCode::kFailed;
+    }
+    std::vector<VkPhysicalDevice> devices(device_count);
+    CHECK_VK_ERR_RET(vkEnumeratePhysicalDevices(instance, &device_count, devices.data()));
+
+    int best_score = 0;
+    for (auto const& device: devices) {
+        int score;
+        CHECK_ERR_RET(rateDeviceSuitability(device, score));
+        if (score > best_score) {
+            physical_device = device;
+            best_score = score;
+        }
+    }
+    if (best_score <= 0) {
+        ELOG("failed to find a suitable gpu");
+        return MyErrCode::kFailed;
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::rateDeviceSuitability(VkPhysicalDevice device, int& score)
+{
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(device, &properties);
+    VkPhysicalDeviceFeatures features;
+    vkGetPhysicalDeviceFeatures(device, &features);
+
+    score = 0;
+    switch (properties.deviceType) {
+        case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+            score += 1;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            score += 4;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+            score += 5;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            score += 3;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:
+            score += 2;
+            break;
+        default:
+            break;
+    }
+
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createLogicalDevice()
+{
+    uint32_t queue_family_count;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count,
+                                             queue_families.data());
+
+    for (uint32_t i = 0; i < queue_family_count; i++) {
+        VkBool32 supported = 0;
+        CHECK_VK_ERR_RET(
+            vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, vulkan_surface, &supported));
+        if (supported && (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+            graphics_queue_family_index = i;
+            break;
+        }
+    }
+
+    VkDeviceQueueCreateInfo queue_create_info = {};
+    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info.queueFamilyIndex = graphics_queue_family_index;
+    queue_create_info.queueCount = 1;
+    float queue_priority = 1;
+    queue_create_info.pQueuePriorities = &queue_priority;
+
+    VkDeviceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_info.queueCreateInfoCount = 1;
+    create_info.pQueueCreateInfos = &queue_create_info;
+    VkPhysicalDeviceFeatures device_features;
+    vkGetPhysicalDeviceFeatures(physical_device, &device_features);
+    create_info.pEnabledFeatures = &device_features;
+    create_info.enabledExtensionCount = sizeof(kDeviceExtensions) / sizeof(char const*);
+    create_info.ppEnabledExtensionNames = kDeviceExtensions;
+
+    uint32_t layer_count;
+    CHECK_VK_ERR_RET(vkEnumerateDeviceLayerProperties(physical_device, &layer_count, nullptr));
+    std::vector<VkLayerProperties> available_layers(layer_count);
+    CHECK_VK_ERR_RET(
+        vkEnumerateDeviceLayerProperties(physical_device, &layer_count, available_layers.data()));
+    size_t found_layers = 0;
+    for (uint32_t i = 0; i < layer_count; i++) {
+        for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
+            if (strcmp(available_layers[i].layerName, kInstanceLayers[j]) == 0) {
+                found_layers++;
+            }
+        }
+    }
+    if (found_layers >= sizeof(kInstanceLayers) / sizeof(char const*)) {
+        create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
+        create_info.ppEnabledLayerNames = kInstanceLayers;
+    }
+
+    CHECK_VK_ERR_RET(vkCreateDevice(physical_device, &create_info, nullptr, &device));
+    vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
+    return MyErrCode::kOk;
 }
