@@ -44,14 +44,17 @@ VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
 VkDevice Application::device = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
+VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
+std::vector<Application::SwapchainElement> Application::swapchain_elements;
 
-bool Application::quit = false;
+bool Application::need_quit = false;
 bool Application::ready_to_resize = false;
-bool Application::resize = false;
+bool Application::need_resize = false;
 int Application::new_width = 0;
 int Application::new_height = 0;
-uint32_t Application::width = 0;
-uint32_t Application::height = 0;
+uint32_t Application::curr_width = 0;
+uint32_t Application::curr_height = 0;
+uint32_t Application::image_count = 0;
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -65,8 +68,7 @@ MyErrCode Application::run(char const* win_title, int win_width, int win_height,
 
 MyErrCode Application::mainLoop() { return MyErrCode::kOk; }
 
-MyErrCode Application::initWayland(char const* win_title, int win_width, int win_height,
-                                   char const* app_id)
+MyErrCode Application::initWayland(char const* title, int width, int height, char const* app_id)
 {
     CHECK_WL_ERR_RET(display = wl_display_connect(nullptr));
 
@@ -82,9 +84,9 @@ MyErrCode Application::initWayland(char const* win_title, int win_width, int win
     CHECK_WL_ERR_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
 
-    width = win_width;
-    height = win_height;
-    xdg_toplevel_set_title(toplevel, win_title);
+    curr_width = width;
+    curr_height = height;
+    xdg_toplevel_set_title(toplevel, title);
     xdg_toplevel_set_app_id(toplevel, app_id);
 
     wl_surface_commit(surface);
@@ -128,7 +130,7 @@ void Application::handleShellSurfaceConfigure(void* data, struct xdg_surface* sh
                                               uint32_t serial)
 {
     xdg_surface_ack_configure(shell_surface, serial);
-    if (resize) {
+    if (need_resize) {
         ready_to_resize = true;
     }
 }
@@ -137,13 +139,16 @@ void Application::handleToplevelConfigure(void* data, struct xdg_toplevel* tople
                                           int32_t height, struct wl_array* states)
 {
     if (width != 0 && height != 0) {
-        resize = true;
+        need_resize = true;
         new_width = width;
         new_height = height;
     }
 }
 
-void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel) { quit = true; }
+void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel)
+{
+    need_quit = true;
+}
 
 MyErrCode Application::initVulkan(char const* app_name)
 {
@@ -152,11 +157,13 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
+    CHECK_ERR_RET(createSwapchainElements());
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::cleanupVulkan()
 {
+    CHECK_ERR_RET(destroySwapchainElements());
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
@@ -226,10 +233,10 @@ VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sever
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            // DLOG("{}", callback_data->pMessage);
+            TLOG("{}", callback_data->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            ILOG("{}", callback_data->pMessage);
+            DLOG("{}", callback_data->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
             WLOG("{}", callback_data->pMessage);
@@ -366,5 +373,60 @@ MyErrCode Application::createLogicalDevice()
 
     CHECK_VK_ERR_RET(vkCreateDevice(physical_device, &create_info, nullptr, &device));
     vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createSwapchainElements()
+{
+    CHECK_ERR_RET(createSwapchain());
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::destroySwapchainElements()
+{
+    swapchain_elements.clear();
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createSwapchain()
+{
+    VkSurfaceCapabilitiesKHR capabilities;
+    CHECK_VK_ERR_RET(
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, vulkan_surface, &capabilities));
+
+    uint32_t format_count;
+    CHECK_VK_ERR_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
+                                                          &format_count, nullptr));
+    std::vector<VkSurfaceFormatKHR> available_formats(format_count);
+    CHECK_VK_ERR_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
+                                                          &format_count, available_formats.data()));
+
+    VkSurfaceFormatKHR chosen_format = available_formats[0];
+    for (auto const& available_format: available_formats) {
+        if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            chosen_format = available_format;
+        }
+    }
+
+    VkSwapchainCreateInfoKHR create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.surface = vulkan_surface;
+    create_info.minImageCount =
+        std::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
+    create_info.imageFormat = chosen_format.format;
+    create_info.imageColorSpace = chosen_format.colorSpace;
+    create_info.imageExtent.width = curr_width;
+    create_info.imageExtent.height = curr_height;
+    create_info.imageArrayLayers = 1;
+    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    create_info.preTransform = capabilities.currentTransform;
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    create_info.clipped = VK_TRUE;
+    CHECK_VK_ERR_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
+
     return MyErrCode::kOk;
 }

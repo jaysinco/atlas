@@ -4,6 +4,7 @@
 #include "xdg-shell.h"
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
+#include <vector>
 
 class Application
 {
@@ -14,8 +15,7 @@ private:
     static MyErrCode mainLoop();
 
 private:
-    static MyErrCode initWayland(char const* win_title, int win_width, int win_height,
-                                 char const* app_id);
+    static MyErrCode initWayland(char const* title, int width, int height, char const* app_id);
     static MyErrCode cleanupWayland();
     static void handleRegistry(void* data, struct wl_registry* registry, uint32_t name,
                                char const* interface, uint32_t version);
@@ -39,6 +39,15 @@ private:
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
+    static MyErrCode createSwapchainElements();
+    static MyErrCode destroySwapchainElements();
+    static MyErrCode createSwapchain();
+
+private:
+    struct SwapchainElement
+    {
+        VkImage image;
+    };
 
 private:
     static wl_display* display;
@@ -65,12 +74,15 @@ private:
     constexpr static char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
+    static VkSwapchainKHR swapchain;
+    static std::vector<SwapchainElement> swapchain_elements;
 
-    static bool quit;
+    static bool need_quit;
+    static bool need_resize;
     static bool ready_to_resize;
-    static bool resize;
     static int new_width;
     static int new_height;
-    static uint32_t width;
-    static uint32_t height;
+    static uint32_t curr_width;
+    static uint32_t curr_height;
+    static uint32_t image_count;
 };
