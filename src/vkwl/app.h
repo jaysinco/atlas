@@ -47,6 +47,7 @@ private:
     struct SwapchainElement
     {
         VkImage image;
+        VkImageView image_view;
     };
 
 private:
@@ -75,6 +76,7 @@ private:
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
     static VkSwapchainKHR swapchain;
+    static VkFormat image_format;
     static std::vector<SwapchainElement> swapchain_elements;
 
     static bool need_quit;

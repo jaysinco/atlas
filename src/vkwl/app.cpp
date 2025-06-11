@@ -45,6 +45,7 @@ VkDevice Application::device = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
+VkFormat Application::image_format = VK_FORMAT_UNDEFINED;
 std::vector<Application::SwapchainElement> Application::swapchain_elements;
 
 bool Application::need_quit = false;
@@ -379,11 +380,43 @@ MyErrCode Application::createLogicalDevice()
 MyErrCode Application::createSwapchainElements()
 {
     CHECK_ERR_RET(createSwapchain());
+
+    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr));
+    std::vector<VkImage> images(image_count);
+    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data()));
+
+    swapchain_elements.resize(image_count);
+    for (uint32_t i = 0; i < image_count; i++) {
+        swapchain_elements[i].image = images[i];
+        {
+            VkImageViewCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            create_info.image = images[i];
+            create_info.format = image_format;
+            create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            create_info.subresourceRange.baseMipLevel = 0;
+            create_info.subresourceRange.levelCount = 1;
+            create_info.subresourceRange.baseArrayLayer = 0;
+            create_info.subresourceRange.layerCount = 1;
+            CHECK_VK_ERR_RET(vkCreateImageView(device, &create_info, nullptr,
+                                               &swapchain_elements[i].image_view));
+        }
+    }
+
+    ILOG("create {} swapchain elements with format {}", image_count, image_format);
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::destroySwapchainElements()
 {
+    for (auto const& element: swapchain_elements) {
+        vkDestroyImageView(device, element.image_view, nullptr);
+    }
     swapchain_elements.clear();
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     return MyErrCode::kOk;
@@ -410,6 +443,8 @@ MyErrCode Application::createSwapchain()
         }
     }
 
+    image_format = chosen_format.format;
+
     VkSwapchainCreateInfoKHR create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.surface = vulkan_surface;
@@ -426,6 +461,7 @@ MyErrCode Application::createSwapchain()
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     create_info.clipped = VK_TRUE;
+
     CHECK_VK_ERR_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
 
     return MyErrCode::kOk;
