@@ -69,7 +69,111 @@ MyErrCode Application::run(char const* win_title, int win_width, int win_height,
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::mainLoop() { return MyErrCode::kOk; }
+MyErrCode Application::mainLoop()
+{
+    while (!need_quit) {
+        // if (need_resize && ready_to_resize) {
+        //     curr_width = new_width;
+        //     curr_height = new_height;
+        //     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+        //     CHECK_ERR_RET(destroySwapchainRelated());
+        //     CHECK_ERR_RET(createSwapchainRelated());
+        //     currentFrame = 0;
+        //     imageIndex = 0;
+        //     readyToResize = 0;
+        //     resize = 0;
+        //     wl_surface_commit(surface);
+        // }
+
+        // struct SwapchainElement* currentElement = &elements[currentFrame];
+
+        // CHECK_VK_RESULT(vkWaitForFences(device, 1, &currentElement->fence, 1, UINT64_MAX));
+        // result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+        //                                currentElement->startSemaphore, NULL, &imageIndex);
+
+        // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        //     CHECK_VK_RESULT(vkDeviceWaitIdle(device));
+        //     destroySwapchain();
+        //     createSwapchain();
+        //     continue;
+        // } else if (result < 0) {
+        //     CHECK_VK_RESULT(result);
+        // }
+
+        // struct SwapchainElement* element = &elements[imageIndex];
+
+        // if (element->lastFence) {
+        //     CHECK_VK_RESULT(vkWaitForFences(device, 1, &element->lastFence, 1, UINT64_MAX));
+        // }
+
+        // element->lastFence = currentElement->fence;
+
+        // CHECK_VK_RESULT(vkResetFences(device, 1, &currentElement->fence));
+
+        // VkCommandBufferBeginInfo beginInfo = {};
+        // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        // beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        // CHECK_VK_RESULT(vkBeginCommandBuffer(element->commandBuffer, &beginInfo));
+
+        // {
+        //     VkClearValue clearValue = {{0.5f, 0.5f, 0.5f, 1.0f}};
+
+        //     VkRenderPassBeginInfo beginInfo = {};
+        //     beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        //     beginInfo.renderPass = renderPass;
+        //     beginInfo.framebuffer = element->framebuffer;
+        //     beginInfo.renderArea.offset.x = 0;
+        //     beginInfo.renderArea.offset.y = 0;
+        //     beginInfo.renderArea.extent.width = width;
+        //     beginInfo.renderArea.extent.height = height;
+        //     beginInfo.clearValueCount = 1;
+        //     beginInfo.pClearValues = &clearValue;
+
+        //     vkCmdBeginRenderPass(element->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        //     vkCmdEndRenderPass(element->commandBuffer);
+        // }
+
+        // CHECK_VK_RESULT(vkEndCommandBuffer(element->commandBuffer));
+
+        // VkPipelineStageFlags const waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        // VkSubmitInfo submitInfo = {};
+        // submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        // submitInfo.waitSemaphoreCount = 1;
+        // submitInfo.pWaitSemaphores = &currentElement->startSemaphore;
+        // submitInfo.pWaitDstStageMask = &waitStage;
+        // submitInfo.commandBufferCount = 1;
+        // submitInfo.pCommandBuffers = &element->commandBuffer;
+        // submitInfo.signalSemaphoreCount = 1;
+        // submitInfo.pSignalSemaphores = &currentElement->endSemaphore;
+
+        // CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, currentElement->fence));
+
+        // VkPresentInfoKHR presentInfo = {};
+        // presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        // presentInfo.waitSemaphoreCount = 1;
+        // presentInfo.pWaitSemaphores = &currentElement->endSemaphore;
+        // presentInfo.swapchainCount = 1;
+        // presentInfo.pSwapchains = &swapchain;
+        // presentInfo.pImageIndices = &imageIndex;
+
+        // result = vkQueuePresentKHR(queue, &presentInfo);
+
+        // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        //     CHECK_VK_RESULT(vkDeviceWaitIdle(device));
+        //     destroySwapchain();
+        //     createSwapchain();
+        // } else if (result < 0) {
+        //     CHECK_VK_RESULT(result);
+        // }
+
+        // currentFrame = (currentFrame + 1) % imageCount;
+
+        wl_display_roundtrip(display);
+    }
+    return MyErrCode::kOk;
+}
 
 MyErrCode Application::initWayland(char const* title, int width, int height, char const* app_id)
 {
@@ -167,6 +271,7 @@ MyErrCode Application::initVulkan(char const* app_name)
 
 MyErrCode Application::cleanupVulkan()
 {
+    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(destroySwapchainRelated());
     vkDestroyCommandPool(device, command_pool, nullptr);
     vkDestroyDevice(device, nullptr);
@@ -546,5 +651,33 @@ MyErrCode Application::createRenderPass()
 
     CHECK_VK_ERR_RET(vkCreateRenderPass(device, &create_info, nullptr, &render_pass));
 
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::recordCommandBuffer(uint32_t img_idx)
+{
+    auto& element = swapchain_elements[img_idx];
+
+    VkCommandBufferBeginInfo cmd_begin_info = {};
+    cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CHECK_VK_ERR_RET(vkBeginCommandBuffer(element.command_buffer, &cmd_begin_info));
+
+    VkClearValue clear_value = {{0.5f, 0.5f, 0.5f, 1.0f}};
+    VkRenderPassBeginInfo render_begin_info = {};
+    render_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_begin_info.renderPass = render_pass;
+    render_begin_info.framebuffer = element.frame_buffer;
+    render_begin_info.renderArea.offset.x = 0;
+    render_begin_info.renderArea.offset.y = 0;
+    render_begin_info.renderArea.extent.width = curr_width;
+    render_begin_info.renderArea.extent.height = curr_height;
+    render_begin_info.clearValueCount = 1;
+    render_begin_info.pClearValues = &clear_value;
+    vkCmdBeginRenderPass(element.command_buffer, &render_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdEndRenderPass(element.command_buffer);
+
+    CHECK_VK_ERR_RET(vkEndCommandBuffer(element.command_buffer));
     return MyErrCode::kOk;
 }

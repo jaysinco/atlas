@@ -45,6 +45,7 @@ private:
     static MyErrCode createSwapchain();
     static MyErrCode createSwapchainElements();
     static MyErrCode createRenderPass();
+    static MyErrCode recordCommandBuffer(uint32_t img_idx);
 
 private:
     struct SwapchainElement
