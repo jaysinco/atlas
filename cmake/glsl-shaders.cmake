@@ -55,7 +55,7 @@ function(target_glsl_shaders TARGET_NAME)
     add_custom_command(
       OUTPUT ${GLSL_FILE}.spv
       COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv"
+              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       MAIN_DEPENDENCY ${GLSL_FILE})
 
@@ -66,7 +66,7 @@ function(target_glsl_shaders TARGET_NAME)
     add_custom_command(
       OUTPUT ${GLSL_FILE}.spv
       COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv"
+              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       MAIN_DEPENDENCY ${GLSL_FILE})
 
@@ -77,7 +77,7 @@ function(target_glsl_shaders TARGET_NAME)
     add_custom_command(
       OUTPUT ${GLSL_FILE}.spv
       COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv"
+              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       MAIN_DEPENDENCY ${GLSL_FILE})
 

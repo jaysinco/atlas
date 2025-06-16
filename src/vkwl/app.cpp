@@ -44,7 +44,9 @@ VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
 VkDevice Application::device = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
+VkCommandPool Application::command_pool = VK_NULL_HANDLE;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
+VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::image_format = VK_FORMAT_UNDEFINED;
 std::vector<Application::SwapchainElement> Application::swapchain_elements;
 
@@ -158,13 +160,15 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
-    CHECK_ERR_RET(createSwapchainElements());
+    CHECK_ERR_RET(createCommandPool());
+    CHECK_ERR_RET(createSwapchainRelated());
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::cleanupVulkan()
 {
-    CHECK_ERR_RET(destroySwapchainElements());
+    CHECK_ERR_RET(destroySwapchainRelated());
+    vkDestroyCommandPool(device, command_pool, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
@@ -353,34 +357,47 @@ MyErrCode Application::createLogicalDevice()
     create_info.pEnabledFeatures = &device_features;
     create_info.enabledExtensionCount = sizeof(kDeviceExtensions) / sizeof(char const*);
     create_info.ppEnabledExtensionNames = kDeviceExtensions;
-
-    uint32_t layer_count;
-    CHECK_VK_ERR_RET(vkEnumerateDeviceLayerProperties(physical_device, &layer_count, nullptr));
-    std::vector<VkLayerProperties> available_layers(layer_count);
-    CHECK_VK_ERR_RET(
-        vkEnumerateDeviceLayerProperties(physical_device, &layer_count, available_layers.data()));
-    size_t found_layers = 0;
-    for (uint32_t i = 0; i < layer_count; i++) {
-        for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
-            if (strcmp(available_layers[i].layerName, kInstanceLayers[j]) == 0) {
-                found_layers++;
-            }
-        }
-    }
-    if (found_layers >= sizeof(kInstanceLayers) / sizeof(char const*)) {
-        create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
-        create_info.ppEnabledLayerNames = kInstanceLayers;
-    }
-
     CHECK_VK_ERR_RET(vkCreateDevice(physical_device, &create_info, nullptr, &device));
     vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createSwapchainElements()
+MyErrCode Application::createCommandPool()
+{
+    VkCommandPoolCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    create_info.queueFamilyIndex = graphics_queue_family_index;
+    create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    CHECK_VK_ERR_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createSwapchainRelated()
 {
     CHECK_ERR_RET(createSwapchain());
+    CHECK_ERR_RET(createRenderPass());
+    CHECK_ERR_RET(createSwapchainElements());
+    return MyErrCode::kOk;
+}
 
+MyErrCode Application::destroySwapchainRelated()
+{
+    for (auto const& element: swapchain_elements) {
+        vkDestroyFence(device, element.fence, nullptr);
+        vkDestroySemaphore(device, element.end_semaphore, nullptr);
+        vkDestroySemaphore(device, element.start_semaphore, nullptr);
+        vkDestroyFramebuffer(device, element.frame_buffer, nullptr);
+        vkDestroyImageView(device, element.image_view, nullptr);
+        vkFreeCommandBuffers(device, command_pool, 1, &element.command_buffer);
+    }
+    swapchain_elements.clear();
+    vkDestroyRenderPass(device, render_pass, nullptr);
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createSwapchainElements()
+{
     CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr));
     std::vector<VkImage> images(image_count);
     CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data()));
@@ -388,6 +405,16 @@ MyErrCode Application::createSwapchainElements()
     swapchain_elements.resize(image_count);
     for (uint32_t i = 0; i < image_count; i++) {
         swapchain_elements[i].image = images[i];
+        swapchain_elements[i].last_fence = VK_NULL_HANDLE;
+        {
+            VkCommandBufferAllocateInfo alloc_info = {};
+            alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            alloc_info.commandPool = command_pool;
+            alloc_info.commandBufferCount = 1;
+            alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info,
+                                                      &swapchain_elements[i].command_buffer));
+        }
         {
             VkImageViewCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -406,19 +433,40 @@ MyErrCode Application::createSwapchainElements()
             CHECK_VK_ERR_RET(vkCreateImageView(device, &create_info, nullptr,
                                                &swapchain_elements[i].image_view));
         }
+        {
+            VkFramebufferCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            create_info.renderPass = render_pass;
+            create_info.attachmentCount = 1;
+            create_info.pAttachments = &swapchain_elements[i].image_view;
+            create_info.width = curr_width;
+            create_info.height = curr_height;
+            create_info.layers = 1;
+            CHECK_VK_ERR_RET(vkCreateFramebuffer(device, &create_info, nullptr,
+                                                 &swapchain_elements[i].frame_buffer));
+        }
+        {
+            VkSemaphoreCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            CHECK_VK_ERR_RET(vkCreateSemaphore(device, &create_info, nullptr,
+                                               &swapchain_elements[i].start_semaphore));
+        }
+        {
+            VkSemaphoreCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            CHECK_VK_ERR_RET(vkCreateSemaphore(device, &create_info, nullptr,
+                                               &swapchain_elements[i].end_semaphore));
+        }
+        {
+            VkFenceCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+            CHECK_VK_ERR_RET(
+                vkCreateFence(device, &create_info, nullptr, &swapchain_elements[i].fence));
+        }
     }
 
     ILOG("create {} swapchain elements with format {}", image_count, image_format);
-    return MyErrCode::kOk;
-}
-
-MyErrCode Application::destroySwapchainElements()
-{
-    for (auto const& element: swapchain_elements) {
-        vkDestroyImageView(device, element.image_view, nullptr);
-    }
-    swapchain_elements.clear();
-    vkDestroySwapchainKHR(device, swapchain, nullptr);
     return MyErrCode::kOk;
 }
 
@@ -463,6 +511,40 @@ MyErrCode Application::createSwapchain()
     create_info.clipped = VK_TRUE;
 
     CHECK_VK_ERR_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
+
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createRenderPass()
+{
+    VkAttachmentDescription attachment = {};
+    attachment.format = image_format;
+    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference color_attachment_ref = {};
+    color_attachment_ref.attachment = 0;
+    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment_ref;
+
+    VkRenderPassCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    create_info.flags = 0;
+    create_info.attachmentCount = 1;
+    create_info.pAttachments = &attachment;
+    create_info.subpassCount = 1;
+    create_info.pSubpasses = &subpass;
+
+    CHECK_VK_ERR_RET(vkCreateRenderPass(device, &create_info, nullptr, &render_pass));
 
     return MyErrCode::kOk;
 }

@@ -80,6 +80,7 @@ build_folder=$git_root/out/$tuple_name
 binary_folder=$git_root/bin/$tuple_name
 log_folder=$binary_folder/logs
 temp_folder=$binary_folder/temp
+data_folder=$binary_folder/data
 tc_toolchain_dir=$git_root/../cpptools/toolchain/$os/$arch/$do_arch
 ldd_src_folder=$source_folder/ldd
 flapp_src_folder=$source_folder/flapp
@@ -130,6 +131,7 @@ function cmake_build() {
         $build_folder \
         $log_folder \
         $temp_folder \
+        $data_folder \
     && \
     pushd $build_folder \
     && \

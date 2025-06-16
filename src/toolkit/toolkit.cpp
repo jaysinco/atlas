@@ -53,6 +53,20 @@ MyErrCode readFile(std::filesystem::path const& path, std::string& content)
     return MyErrCode::kOk;
 }
 
+MyErrCode readBinaryFile(std::filesystem::path const& path, std::vector<uint8_t>& content)
+{
+    std::ifstream in_file(path, std::ios::binary | std::ios::ate);
+    if (!in_file) {
+        ELOG("failed to open file: {}", path);
+        return MyErrCode::kFailed;
+    }
+    size_t file_size = in_file.tellg();
+    content.resize(file_size);
+    in_file.seekg(0, std::ios::beg);
+    in_file.read(reinterpret_cast<char*>(content.data()), file_size);
+    return MyErrCode::kOk;
+}
+
 MyErrCode setEnv(char const* varname, char const* value)
 {
 #ifdef __linux__

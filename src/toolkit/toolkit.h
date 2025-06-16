@@ -1,6 +1,7 @@
 #pragma once
 #include "error.h"
 #include <filesystem>
+#include <vector>
 
 #define CURR_FILE_DIR() (std::filesystem::path(__FILE__).parent_path())
 #define XXD_DECLARE_RES(res)    \
@@ -38,6 +39,7 @@ MyErrCode runAsRoot(int argc, char* argv[]);
 MyErrCode installCrashHook();
 MyErrCode setEnv(char const* varname, char const* value);
 MyErrCode readFile(std::filesystem::path const& path, std::string& content);
+MyErrCode readBinaryFile(std::filesystem::path const& path, std::vector<uint8_t>& content);
 MyErrCode execsh(std::string const& cmd, std::string& ret);
 
 }  // namespace toolkit

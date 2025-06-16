@@ -39,15 +39,24 @@ private:
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
-    static MyErrCode createSwapchainElements();
-    static MyErrCode destroySwapchainElements();
+    static MyErrCode createCommandPool();
+    static MyErrCode createSwapchainRelated();
+    static MyErrCode destroySwapchainRelated();
     static MyErrCode createSwapchain();
+    static MyErrCode createSwapchainElements();
+    static MyErrCode createRenderPass();
 
 private:
     struct SwapchainElement
     {
+        VkCommandBuffer command_buffer;
         VkImage image;
         VkImageView image_view;
+        VkFramebuffer frame_buffer;
+        VkSemaphore start_semaphore;
+        VkSemaphore end_semaphore;
+        VkFence fence;
+        VkFence last_fence;
     };
 
 private:
@@ -75,7 +84,9 @@ private:
     constexpr static char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
+    static VkCommandPool command_pool;
     static VkSwapchainKHR swapchain;
+    static VkRenderPass render_pass;
     static VkFormat image_format;
     static std::vector<SwapchainElement> swapchain_elements;
 
