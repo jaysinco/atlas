@@ -13,6 +13,14 @@ add_executable(${TARGET_NAME}
     main.cpp
 )
 
+target_glsl_shaders(${TARGET_NAME}
+    PRIVATE
+        data/test.vert
+        data/test.frag
+    COMPILE_OPTIONS
+        --target-env=vulkan1.0
+)
+
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${TARGET_NAME}

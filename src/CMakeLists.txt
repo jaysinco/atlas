@@ -3,6 +3,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 include(xxd-add-resources)
 if(UNIX)
     include(wayland-gen-protocols)
+    include(glsl-shaders)
 endif()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR})
