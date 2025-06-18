@@ -1,0 +1,10 @@
+{
+    "include": [
+        "models"
+    ],
+    "exclude": [
+        "**/__pycache__",
+    ],
+    "venvPath": ".",
+    "venv": ".pyenv"
+}
