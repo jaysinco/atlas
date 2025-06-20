@@ -18,5 +18,5 @@ ip neigh | grep <mac or ip>
 * 00:e0:4c:4f:c2:0a seven
 * 00:e0:4c:47:e1:2c shark
 * 00:e0:4c:46:e9:cd vic
-* 00:07:32:8a:dc:c4 chao
+* ec:d6:8a:d6:76:d5 chao
 * 00:e0:4c:47:ee:dc lsm
