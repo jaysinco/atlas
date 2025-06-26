@@ -63,6 +63,7 @@ int Application::new_width = 0;
 int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
+int Application::curr_frame = 0;
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -77,104 +78,62 @@ MyErrCode Application::run(char const* win_title, int win_width, int win_height,
 MyErrCode Application::mainLoop()
 {
     while (!need_quit) {
-        //     if (need_resize && ready_to_resize) {
-        //         curr_width = new_width;
-        //         curr_height = new_height;
-        //         CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
-        //         CHECK_ERR_RET(destroySwapchainRelated());
-        //         CHECK_ERR_RET(createSwapchainRelated());
-        //         currentFrame = 0;
-        //         imageIndex = 0;
-        //         ready_to_resize = false;
-        //         need_resize = false;
-        //         wl_surface_commit(surface);
-        //     }
+        if (need_resize && ready_to_resize) {
+            curr_width = new_width;
+            curr_height = new_height;
+            CHECK_ERR_RET(recreateSwapchain());
+            ready_to_resize = false;
+            need_resize = false;
+            wl_surface_commit(surface);
+        }
 
-        // struct SwapchainElement* currentElement = &elements[currentFrame];
+        CHECK_VK_ERR_RET(
+            vkWaitForFences(device, 1, &in_flight_fences[curr_frame], VK_TRUE, UINT64_MAX));
+        uint32_t image_index;
+        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+                                                image_available_semaphores[curr_frame],
+                                                VK_NULL_HANDLE, &image_index);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            CHECK_ERR_RET(recreateSwapchain());
+            continue;
+        } else {
+            CHECK_VK_ERR_RET(result);
+        }
+        CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
 
-        // CHECK_VK_RESULT(vkWaitForFences(device, 1, &currentElement->fence, 1, UINT64_MAX));
-        // result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-        //                                currentElement->startSemaphore, NULL, &imageIndex);
+        CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
+        CHECK_ERR_RET(recordCommandBuffer(command_buffers[curr_frame], image_index));
 
-        // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        //     CHECK_VK_RESULT(vkDeviceWaitIdle(device));
-        //     destroySwapchain();
-        //     createSwapchain();
-        //     continue;
-        // } else if (result < 0) {
-        //     CHECK_VK_RESULT(result);
-        // }
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &image_available_semaphores[curr_frame];
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        submit_info.pWaitDstStageMask = &wait_stage;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffers[curr_frame];
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &render_finished_semaphores[curr_frame];
+        CHECK_VK_ERR_RET(
+            vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
 
-        // struct SwapchainElement* element = &elements[imageIndex];
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &render_finished_semaphores[curr_frame];
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &swapchain;
+        present_info.pImageIndices = &image_index;
 
-        // if (element->lastFence) {
-        //     CHECK_VK_RESULT(vkWaitForFences(device, 1, &element->lastFence, 1, UINT64_MAX));
-        // }
+        result = vkQueuePresentKHR(graphics_queue, &present_info);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            CHECK_ERR_RET(recreateSwapchain());
+            continue;
+        } else {
+            CHECK_VK_ERR_RET(result);
+        }
 
-        // element->lastFence = currentElement->fence;
-
-        // CHECK_VK_RESULT(vkResetFences(device, 1, &currentElement->fence));
-
-        // VkCommandBufferBeginInfo beginInfo = {};
-        // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        // beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-        // CHECK_VK_RESULT(vkBeginCommandBuffer(element->commandBuffer, &beginInfo));
-
-        // {
-        //     VkClearValue clearValue = {{0.5f, 0.5f, 0.5f, 1.0f}};
-
-        //     VkRenderPassBeginInfo beginInfo = {};
-        //     beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        //     beginInfo.renderPass = renderPass;
-        //     beginInfo.framebuffer = element->framebuffer;
-        //     beginInfo.renderArea.offset.x = 0;
-        //     beginInfo.renderArea.offset.y = 0;
-        //     beginInfo.renderArea.extent.width = width;
-        //     beginInfo.renderArea.extent.height = height;
-        //     beginInfo.clearValueCount = 1;
-        //     beginInfo.pClearValues = &clearValue;
-
-        //     vkCmdBeginRenderPass(element->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-        //     vkCmdEndRenderPass(element->commandBuffer);
-        // }
-
-        // CHECK_VK_RESULT(vkEndCommandBuffer(element->commandBuffer));
-
-        // VkPipelineStageFlags const waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        // VkSubmitInfo submitInfo = {};
-        // submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        // submitInfo.waitSemaphoreCount = 1;
-        // submitInfo.pWaitSemaphores = &currentElement->startSemaphore;
-        // submitInfo.pWaitDstStageMask = &waitStage;
-        // submitInfo.commandBufferCount = 1;
-        // submitInfo.pCommandBuffers = &element->commandBuffer;
-        // submitInfo.signalSemaphoreCount = 1;
-        // submitInfo.pSignalSemaphores = &currentElement->endSemaphore;
-
-        // CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, currentElement->fence));
-
-        // VkPresentInfoKHR presentInfo = {};
-        // presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        // presentInfo.waitSemaphoreCount = 1;
-        // presentInfo.pWaitSemaphores = &currentElement->endSemaphore;
-        // presentInfo.swapchainCount = 1;
-        // presentInfo.pSwapchains = &swapchain;
-        // presentInfo.pImageIndices = &imageIndex;
-
-        // result = vkQueuePresentKHR(queue, &presentInfo);
-
-        // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        //     CHECK_VK_RESULT(vkDeviceWaitIdle(device));
-        //     destroySwapchain();
-        //     createSwapchain();
-        // } else if (result < 0) {
-        //     CHECK_VK_RESULT(result);
-        // }
-
-        // currentFrame = (currentFrame + 1) % imageCount;
-
+        curr_frame = (curr_frame + 1) % kMaxFramesInFight;
         wl_display_roundtrip(display);
     }
 

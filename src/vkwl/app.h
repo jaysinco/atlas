@@ -95,4 +95,5 @@ private:
     static int new_height;
     static uint32_t curr_width;
     static uint32_t curr_height;
+    static int curr_frame;
 };
