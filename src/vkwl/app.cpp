@@ -113,14 +113,14 @@ MyErrCode Application::mainLoop()
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &command_buffers[curr_frame];
         submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &render_finished_semaphores[curr_frame];
+        submit_info.pSignalSemaphores = &render_finished_semaphores[image_index];
         CHECK_VK_ERR_RET(
             vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
 
         VkPresentInfoKHR present_info = {};
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = &render_finished_semaphores[curr_frame];
+        present_info.pWaitSemaphores = &render_finished_semaphores[image_index];
         present_info.swapchainCount = 1;
         present_info.pSwapchains = &swapchain;
         present_info.pImageIndices = &image_index;
@@ -244,8 +244,10 @@ MyErrCode Application::cleanupVulkan()
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
     vkDestroyRenderPass(device, render_pass, nullptr);
-    for (size_t i = 0; i < kMaxFramesInFight; i++) {
+    for (int i = 0; i < swapchain_images.size(); ++i) {
         vkDestroySemaphore(device, render_finished_semaphores[i], nullptr);
+    }
+    for (int i = 0; i < kMaxFramesInFight; i++) {
         vkDestroySemaphore(device, image_available_semaphores[i], nullptr);
         vkDestroyFence(device, in_flight_fences[i], nullptr);
     }
@@ -490,23 +492,27 @@ MyErrCode Application::createCommandBuffers()
 
 MyErrCode Application::createSyncObjects()
 {
+    int image_cnt = swapchain_images.size();
     image_available_semaphores.resize(kMaxFramesInFight);
-    render_finished_semaphores.resize(kMaxFramesInFight);
+    render_finished_semaphores.resize(image_cnt);
     in_flight_fences.resize(kMaxFramesInFight);
 
-    for (uint32_t i = 0; i < kMaxFramesInFight; i++) {
-        {
-            VkSemaphoreCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            CHECK_VK_ERR_RET(
-                vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
-        }
+    for (int i = 0; i < image_cnt; ++i) {
         {
             VkSemaphoreCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
             CHECK_VK_ERR_RET(
                 vkCreateSemaphore(device, &create_info, nullptr, &render_finished_semaphores[i]));
         }
+    }
+    for (int i = 0; i < kMaxFramesInFight; i++) {
+        {
+            VkSemaphoreCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            CHECK_VK_ERR_RET(
+                vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
+        }
+
         {
             VkFenceCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -609,7 +615,8 @@ MyErrCode Application::createSwapchain()
     CHECK_VK_ERR_RET(
         vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, swapchain_images.data()));
 
-    ILOG("create {} swapchain elements with format {}", image_cnt, swapchain_image_format);
+    DLOG("create {} swapchain elements with size={}x{}, format={}", image_cnt, curr_width,
+         curr_height, swapchain_image_format);
     return MyErrCode::kOk;
 }
 
