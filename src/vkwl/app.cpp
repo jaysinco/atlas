@@ -47,8 +47,14 @@ VkQueue Application::graphics_queue = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
-VkFormat Application::image_format = VK_FORMAT_UNDEFINED;
-std::vector<Application::SwapchainElement> Application::swapchain_elements;
+VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
+std::vector<VkImage> Application::swapchain_images;
+std::vector<VkImageView> Application::swapchain_image_views;
+std::vector<VkFramebuffer> Application::swapchain_frame_buffers;
+std::vector<VkCommandBuffer> Application::command_buffers;
+std::vector<VkSemaphore> Application::image_available_semaphores;
+std::vector<VkSemaphore> Application::render_finished_semaphores;
+std::vector<VkFence> Application::in_flight_fences;
 
 bool Application::need_quit = false;
 bool Application::ready_to_resize = false;
@@ -57,7 +63,6 @@ int Application::new_width = 0;
 int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
-uint32_t Application::image_count = 0;
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -72,18 +77,18 @@ MyErrCode Application::run(char const* win_title, int win_width, int win_height,
 MyErrCode Application::mainLoop()
 {
     while (!need_quit) {
-        // if (need_resize && ready_to_resize) {
-        //     curr_width = new_width;
-        //     curr_height = new_height;
-        //     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
-        //     CHECK_ERR_RET(destroySwapchainRelated());
-        //     CHECK_ERR_RET(createSwapchainRelated());
-        //     currentFrame = 0;
-        //     imageIndex = 0;
-        //     readyToResize = 0;
-        //     resize = 0;
-        //     wl_surface_commit(surface);
-        // }
+        //     if (need_resize && ready_to_resize) {
+        //         curr_width = new_width;
+        //         curr_height = new_height;
+        //         CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+        //         CHECK_ERR_RET(destroySwapchainRelated());
+        //         CHECK_ERR_RET(createSwapchainRelated());
+        //         currentFrame = 0;
+        //         imageIndex = 0;
+        //         ready_to_resize = false;
+        //         need_resize = false;
+        //         wl_surface_commit(surface);
+        //     }
 
         // struct SwapchainElement* currentElement = &elements[currentFrame];
 
@@ -172,6 +177,7 @@ MyErrCode Application::mainLoop()
 
         wl_display_roundtrip(display);
     }
+
     return MyErrCode::kOk;
 }
 
@@ -264,20 +270,54 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
+    CHECK_ERR_RET(createSwapchain());
+    CHECK_ERR_RET(createImageViews());
+    CHECK_ERR_RET(createRenderPass());
+    CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
-    CHECK_ERR_RET(createSwapchainRelated());
+    CHECK_ERR_RET(createCommandBuffers());
+    CHECK_ERR_RET(createSyncObjects());
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::cleanupVulkan()
 {
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
-    CHECK_ERR_RET(destroySwapchainRelated());
+    CHECK_ERR_RET(cleanupSwapchain());
+    vkDestroyRenderPass(device, render_pass, nullptr);
+    for (size_t i = 0; i < kMaxFramesInFight; i++) {
+        vkDestroySemaphore(device, render_finished_semaphores[i], nullptr);
+        vkDestroySemaphore(device, image_available_semaphores[i], nullptr);
+        vkDestroyFence(device, in_flight_fences[i], nullptr);
+    }
+    vkFreeCommandBuffers(device, command_pool, command_buffers.size(), command_buffers.data());
     vkDestroyCommandPool(device, command_pool, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::recreateSwapchain()
+{
+    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+    CHECK_ERR_RET(cleanupSwapchain());
+    CHECK_ERR_RET(createSwapchain());
+    CHECK_ERR_RET(createImageViews());
+    CHECK_ERR_RET(createFramebuffers());
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::cleanupSwapchain()
+{
+    for (auto frame_buffer: swapchain_frame_buffers) {
+        vkDestroyFramebuffer(device, frame_buffer, nullptr);
+    }
+    for (auto image_view: swapchain_image_views) {
+        vkDestroyImageView(device, image_view, nullptr);
+    }
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
     return MyErrCode::kOk;
 }
 
@@ -477,101 +517,86 @@ MyErrCode Application::createCommandPool()
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createSwapchainRelated()
+MyErrCode Application::createCommandBuffers()
 {
-    CHECK_ERR_RET(createSwapchain());
-    CHECK_ERR_RET(createRenderPass());
-    CHECK_ERR_RET(createSwapchainElements());
+    command_buffers.resize(kMaxFramesInFight);
+    VkCommandBufferAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = command_pool;
+    alloc_info.commandBufferCount = command_buffers.size();
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, command_buffers.data()));
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::destroySwapchainRelated()
+MyErrCode Application::createSyncObjects()
 {
-    for (auto const& element: swapchain_elements) {
-        vkDestroyFence(device, element.fence, nullptr);
-        vkDestroySemaphore(device, element.end_semaphore, nullptr);
-        vkDestroySemaphore(device, element.start_semaphore, nullptr);
-        vkDestroyFramebuffer(device, element.frame_buffer, nullptr);
-        vkDestroyImageView(device, element.image_view, nullptr);
-        vkFreeCommandBuffers(device, command_pool, 1, &element.command_buffer);
-    }
-    swapchain_elements.clear();
-    vkDestroyRenderPass(device, render_pass, nullptr);
-    vkDestroySwapchainKHR(device, swapchain, nullptr);
-    return MyErrCode::kOk;
-}
+    image_available_semaphores.resize(kMaxFramesInFight);
+    render_finished_semaphores.resize(kMaxFramesInFight);
+    in_flight_fences.resize(kMaxFramesInFight);
 
-MyErrCode Application::createSwapchainElements()
-{
-    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr));
-    std::vector<VkImage> images(image_count);
-    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data()));
-
-    swapchain_elements.resize(image_count);
-    for (uint32_t i = 0; i < image_count; i++) {
-        swapchain_elements[i].image = images[i];
-        swapchain_elements[i].last_fence = VK_NULL_HANDLE;
+    for (uint32_t i = 0; i < kMaxFramesInFight; i++) {
         {
-            VkCommandBufferAllocateInfo alloc_info = {};
-            alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            alloc_info.commandPool = command_pool;
-            alloc_info.commandBufferCount = 1;
-            alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info,
-                                                      &swapchain_elements[i].command_buffer));
-        }
-        {
-            VkImageViewCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            create_info.image = images[i];
-            create_info.format = image_format;
-            create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            create_info.subresourceRange.baseMipLevel = 0;
-            create_info.subresourceRange.levelCount = 1;
-            create_info.subresourceRange.baseArrayLayer = 0;
-            create_info.subresourceRange.layerCount = 1;
-            CHECK_VK_ERR_RET(vkCreateImageView(device, &create_info, nullptr,
-                                               &swapchain_elements[i].image_view));
-        }
-        {
-            VkFramebufferCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            create_info.renderPass = render_pass;
-            create_info.attachmentCount = 1;
-            create_info.pAttachments = &swapchain_elements[i].image_view;
-            create_info.width = curr_width;
-            create_info.height = curr_height;
-            create_info.layers = 1;
-            CHECK_VK_ERR_RET(vkCreateFramebuffer(device, &create_info, nullptr,
-                                                 &swapchain_elements[i].frame_buffer));
+            VkSemaphoreCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            CHECK_VK_ERR_RET(
+                vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
         }
         {
             VkSemaphoreCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            CHECK_VK_ERR_RET(vkCreateSemaphore(device, &create_info, nullptr,
-                                               &swapchain_elements[i].start_semaphore));
-        }
-        {
-            VkSemaphoreCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            CHECK_VK_ERR_RET(vkCreateSemaphore(device, &create_info, nullptr,
-                                               &swapchain_elements[i].end_semaphore));
+            CHECK_VK_ERR_RET(
+                vkCreateSemaphore(device, &create_info, nullptr, &render_finished_semaphores[i]));
         }
         {
             VkFenceCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
             create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-            CHECK_VK_ERR_RET(
-                vkCreateFence(device, &create_info, nullptr, &swapchain_elements[i].fence));
+            CHECK_VK_ERR_RET(vkCreateFence(device, &create_info, nullptr, &in_flight_fences[i]));
         }
     }
+    return MyErrCode::kOk;
+}
 
-    ILOG("create {} swapchain elements with format {}", image_count, image_format);
+MyErrCode Application::createImageViews()
+{
+    swapchain_image_views.resize(swapchain_images.size());
+    for (size_t i = 0; i < swapchain_images.size(); i++) {
+        VkImageViewCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        create_info.image = swapchain_images[i];
+        create_info.format = swapchain_image_format;
+        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        create_info.subresourceRange.baseMipLevel = 0;
+        create_info.subresourceRange.levelCount = 1;
+        create_info.subresourceRange.baseArrayLayer = 0;
+        create_info.subresourceRange.layerCount = 1;
+        CHECK_VK_ERR_RET(
+            vkCreateImageView(device, &create_info, nullptr, &swapchain_image_views[i]));
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createFramebuffers()
+{
+    swapchain_frame_buffers.resize(swapchain_image_views.size());
+    for (size_t i = 0; i < swapchain_image_views.size(); i++) {
+        VkFramebufferCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        create_info.renderPass = render_pass;
+        create_info.attachmentCount = 1;
+        create_info.pAttachments = &swapchain_image_views[i];
+        create_info.width = curr_width;
+        create_info.height = curr_height;
+        create_info.layers = 1;
+        CHECK_VK_ERR_RET(
+            vkCreateFramebuffer(device, &create_info, nullptr, &swapchain_frame_buffers[i]));
+    }
     return MyErrCode::kOk;
 }
 
@@ -588,15 +613,18 @@ MyErrCode Application::createSwapchain()
     CHECK_VK_ERR_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
                                                           &format_count, available_formats.data()));
 
-    VkSurfaceFormatKHR chosen_format = available_formats[0];
+    VkSurfaceFormatKHR chosen_format = {};
     for (auto const& available_format: available_formats) {
         if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB &&
             available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             chosen_format = available_format;
         }
     }
-
-    image_format = chosen_format.format;
+    if (chosen_format.format == VK_FORMAT_UNDEFINED) {
+        ELOG("failed to choose swapchain format");
+        return MyErrCode::kFailed;
+    }
+    swapchain_image_format = chosen_format.format;
 
     VkSwapchainCreateInfoKHR create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -614,16 +642,22 @@ MyErrCode Application::createSwapchain()
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     create_info.clipped = VK_TRUE;
-
     CHECK_VK_ERR_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
 
+    uint32_t image_cnt;
+    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, nullptr));
+    swapchain_images.resize(image_cnt);
+    CHECK_VK_ERR_RET(
+        vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, swapchain_images.data()));
+
+    ILOG("create {} swapchain elements with format {}", image_cnt, swapchain_image_format);
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::createRenderPass()
 {
     VkAttachmentDescription attachment = {};
-    attachment.format = image_format;
+    attachment.format = swapchain_image_format;
     attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -654,30 +688,28 @@ MyErrCode Application::createRenderPass()
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::recordCommandBuffer(uint32_t img_idx)
+MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index)
 {
-    auto& element = swapchain_elements[img_idx];
-
     VkCommandBufferBeginInfo cmd_begin_info = {};
     cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    CHECK_VK_ERR_RET(vkBeginCommandBuffer(element.command_buffer, &cmd_begin_info));
+    CHECK_VK_ERR_RET(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
 
     VkClearValue clear_value = {{0.5f, 0.5f, 0.5f, 1.0f}};
     VkRenderPassBeginInfo render_begin_info = {};
     render_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_begin_info.renderPass = render_pass;
-    render_begin_info.framebuffer = element.frame_buffer;
+    render_begin_info.framebuffer = swapchain_frame_buffers[image_index];
     render_begin_info.renderArea.offset.x = 0;
     render_begin_info.renderArea.offset.y = 0;
     render_begin_info.renderArea.extent.width = curr_width;
     render_begin_info.renderArea.extent.height = curr_height;
     render_begin_info.clearValueCount = 1;
     render_begin_info.pClearValues = &clear_value;
-    vkCmdBeginRenderPass(element.command_buffer, &render_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(command_buffer, &render_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdEndRenderPass(element.command_buffer);
+    vkCmdEndRenderPass(command_buffer);
 
-    CHECK_VK_ERR_RET(vkEndCommandBuffer(element.command_buffer));
+    CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));
     return MyErrCode::kOk;
 }

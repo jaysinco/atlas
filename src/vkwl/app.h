@@ -39,26 +39,16 @@ private:
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
-    static MyErrCode createCommandPool();
-    static MyErrCode createSwapchainRelated();
-    static MyErrCode destroySwapchainRelated();
-    static MyErrCode createSwapchain();
-    static MyErrCode createSwapchainElements();
+    static MyErrCode recreateSwapchain();
+    static MyErrCode cleanupSwapchain();
     static MyErrCode createRenderPass();
-    static MyErrCode recordCommandBuffer(uint32_t img_idx);
-
-private:
-    struct SwapchainElement
-    {
-        VkCommandBuffer command_buffer;
-        VkImage image;
-        VkImageView image_view;
-        VkFramebuffer frame_buffer;
-        VkSemaphore start_semaphore;
-        VkSemaphore end_semaphore;
-        VkFence fence;
-        VkFence last_fence;
-    };
+    static MyErrCode createSwapchain();
+    static MyErrCode createImageViews();
+    static MyErrCode createFramebuffers();
+    static MyErrCode createCommandPool();
+    static MyErrCode createCommandBuffers();
+    static MyErrCode createSyncObjects();
+    static MyErrCode recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
 
 private:
     static wl_display* display;
@@ -75,21 +65,28 @@ private:
     static xdg_toplevel_listener toplevel_listener;
 
     static VkInstance instance;
-    constexpr static char const* const kInstanceExtensions[] = {
+    static constexpr char const* const kInstanceExtensions[] = {
         "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
-    constexpr static char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    static constexpr char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
     static VkDebugUtilsMessengerEXT debug_messenger;
     static VkSurfaceKHR vulkan_surface;
     static VkPhysicalDevice physical_device;
     static VkDevice device;
-    constexpr static char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
+    static constexpr char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
     static VkCommandPool command_pool;
-    static VkSwapchainKHR swapchain;
     static VkRenderPass render_pass;
-    static VkFormat image_format;
-    static std::vector<SwapchainElement> swapchain_elements;
+    static VkSwapchainKHR swapchain;
+    static VkFormat swapchain_image_format;
+    static std::vector<VkImage> swapchain_images;
+    static std::vector<VkImageView> swapchain_image_views;
+    static std::vector<VkFramebuffer> swapchain_frame_buffers;
+    static constexpr int kMaxFramesInFight = 2;
+    static std::vector<VkCommandBuffer> command_buffers;
+    static std::vector<VkSemaphore> image_available_semaphores;
+    static std::vector<VkSemaphore> render_finished_semaphores;
+    static std::vector<VkFence> in_flight_fences;
 
     static bool need_quit;
     static bool need_resize;
@@ -98,5 +95,4 @@ private:
     static int new_height;
     static uint32_t curr_width;
     static uint32_t curr_height;
-    static uint32_t image_count;
 };
