@@ -515,10 +515,8 @@ MyErrCode Application::createCommandBuffers()
 MyErrCode Application::createSyncObjects()
 {
     int image_cnt = swapchain_images.size();
-    image_available_semaphores.resize(kMaxFramesInFight);
-    render_finished_semaphores.resize(image_cnt);
-    in_flight_fences.resize(kMaxFramesInFight);
 
+    render_finished_semaphores.resize(image_cnt);
     for (int i = 0; i < image_cnt; ++i) {
         {
             VkSemaphoreCreateInfo create_info = {};
@@ -527,20 +525,21 @@ MyErrCode Application::createSyncObjects()
                 vkCreateSemaphore(device, &create_info, nullptr, &render_finished_semaphores[i]));
         }
     }
-    for (int i = 0; i < kMaxFramesInFight; i++) {
-        {
-            VkSemaphoreCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            CHECK_VK_ERR_RET(
-                vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
-        }
 
-        {
-            VkFenceCreateInfo create_info = {};
-            create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-            CHECK_VK_ERR_RET(vkCreateFence(device, &create_info, nullptr, &in_flight_fences[i]));
-        }
+    image_available_semaphores.resize(kMaxFramesInFight);
+    for (int i = 0; i < kMaxFramesInFight; i++) {
+        VkSemaphoreCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        CHECK_VK_ERR_RET(
+            vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
+    }
+
+    in_flight_fences.resize(kMaxFramesInFight);
+    for (int i = 0; i < kMaxFramesInFight; i++) {
+        VkFenceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        CHECK_VK_ERR_RET(vkCreateFence(device, &create_info, nullptr, &in_flight_fences[i]));
     }
     return MyErrCode::kOk;
 }
