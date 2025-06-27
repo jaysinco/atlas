@@ -295,25 +295,47 @@ MyErrCode Application::createInstance(char const* app_name)
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
+
+    // check extensions
+    uint32_t extension_count = 0;
+    CHECK_VK_ERR_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr));
+    std::vector<VkExtensionProperties> available_extensions(extension_count);
+    CHECK_VK_ERR_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count,
+                                                            available_extensions.data()));
+    for (size_t j = 0; j < sizeof(kInstanceExtensions) / sizeof(char const*); j++) {
+        bool found = false;
+        for (uint32_t i = 0; i < extension_count; i++) {
+            if (strcmp(available_extensions[i].extensionName, kInstanceExtensions[j]) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            ELOG("extension not found: {}", kInstanceExtensions[j]);
+        }
+    }
     create_info.enabledExtensionCount = sizeof(kInstanceExtensions) / sizeof(char const*);
     create_info.ppEnabledExtensionNames = kInstanceExtensions;
 
+    // check layers
     uint32_t layer_count;
     CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
     std::vector<VkLayerProperties> available_layers(layer_count);
     CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
-    size_t found_layers = 0;
-    for (uint32_t i = 0; i < layer_count; i++) {
-        for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
+    for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
+        bool found = false;
+        for (uint32_t i = 0; i < layer_count; i++) {
             if (strcmp(available_layers[i].layerName, kInstanceLayers[j]) == 0) {
-                found_layers++;
+                found = true;
+                break;
             }
         }
+        if (!found) {
+            ELOG("layer not found: {}", kInstanceLayers[j]);
+        }
     }
-    if (found_layers >= sizeof(kInstanceLayers) / sizeof(char const*)) {
-        create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
-        create_info.ppEnabledLayerNames = kInstanceLayers;
-    }
+    create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
+    create_info.ppEnabledLayerNames = kInstanceLayers;
 
     CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
     return MyErrCode::kOk;

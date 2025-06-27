@@ -51,36 +51,16 @@ function(target_glsl_shaders TARGET_NAME)
     target_glsl_shaders "${OPTIONS}" "${SINGLE_VALUE_KEYWORDS}"
     "${MULTI_VALUE_KEYWORDS}" ${ARGN})
 
-  foreach(GLSL_FILE IN LISTS target_glsl_shaders_INTERFACE)
-    add_custom_command(
-      OUTPUT ${GLSL_FILE}.spv
-      COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      MAIN_DEPENDENCY ${GLSL_FILE})
-
-    target_sources(${TARGET_NAME} INTERFACE ${GLSL_FILE}.spv)
-  endforeach()
-
-  foreach(GLSL_FILE IN LISTS target_glsl_shaders_PUBLIC)
-    add_custom_command(
-      OUTPUT ${GLSL_FILE}.spv
-      COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      MAIN_DEPENDENCY ${GLSL_FILE})
-
-    target_sources(${TARGET_NAME} PUBLIC ${GLSL_FILE}.spv)
-  endforeach()
-
   foreach(GLSL_FILE IN LISTS target_glsl_shaders_PRIVATE)
+    get_filename_component(GLSL_FILE_ABS "${GLSL_FILE}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    set(OUTPUT_SPV "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv")
     add_custom_command(
-      OUTPUT ${GLSL_FILE}.spv
+      OUTPUT ${OUTPUT_SPV}
       COMMAND ${GLSLANGVALIDATOR_EXE} ${target_glsl_shaders_COMPILE_OPTIONS}
-              "${GLSL_FILE}" -o "${MY_RUNTIME_DIR}/${GLSL_FILE}.spv"
+              "${GLSL_FILE}" -o "${OUTPUT_SPV}"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      MAIN_DEPENDENCY ${GLSL_FILE})
-
-    target_sources(${TARGET_NAME} PRIVATE ${GLSL_FILE}.spv)
+      MAIN_DEPENDENCY ${GLSL_FILE_ABS}
+    )
+    target_sources(${TARGET_NAME} PRIVATE ${OUTPUT_SPV})
   endforeach()
 endfunction()
