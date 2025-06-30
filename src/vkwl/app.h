@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
 #include <vector>
+#include <filesystem>
 
 class Application
 {
@@ -41,13 +42,16 @@ private:
     static MyErrCode createLogicalDevice();
     static MyErrCode recreateSwapchain();
     static MyErrCode cleanupSwapchain();
-    static MyErrCode createRenderPass();
     static MyErrCode createSwapchain();
     static MyErrCode createImageViews();
+    static MyErrCode createRenderPass();
+    static MyErrCode createPipelineLayout();
+    static MyErrCode createGraphicsPipeline();
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
+    static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
 
 private:
@@ -58,7 +62,6 @@ private:
     static xdg_wm_base* shell;
     static xdg_surface* shell_surface;
     static xdg_toplevel* toplevel;
-
     static wl_registry_listener registry_listener;
     static xdg_wm_base_listener shell_listener;
     static xdg_surface_listener shell_surface_listener;
@@ -75,6 +78,8 @@ private:
     static constexpr char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
+    static VkPipeline graphics_pipeline;
+    static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
     static VkRenderPass render_pass;
     static VkSwapchainKHR swapchain;
