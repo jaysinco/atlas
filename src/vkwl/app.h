@@ -32,6 +32,7 @@ private:
     static MyErrCode cleanupVulkan();
     static MyErrCode createInstance(char const* app_name);
     static MyErrCode setupDebugMessenger();
+    static MyErrCode populateDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,

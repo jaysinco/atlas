@@ -299,9 +299,13 @@ MyErrCode Application::createInstance(char const* app_name)
     app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
     app_info.apiVersion = VK_API_VERSION_1_0;
 
+    VkDebugUtilsMessengerCreateInfoEXT debug_info{};
+    CHECK_ERR_RET(populateDebugMessengerInfo(debug_info));
+
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
+    create_info.pNext = &debug_info;
 
     // check extensions
     uint32_t extension_count = 0;
@@ -348,9 +352,8 @@ MyErrCode Application::createInstance(char const* app_name)
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::setupDebugMessenger()
+MyErrCode Application::populateDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info)
 {
-    VkDebugUtilsMessengerCreateInfoEXT create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                                   VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
@@ -361,6 +364,13 @@ MyErrCode Application::setupDebugMessenger()
                               VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     create_info.pfnUserCallback = debugCallback;
     create_info.pUserData = nullptr;
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::setupDebugMessenger()
+{
+    VkDebugUtilsMessengerCreateInfoEXT create_info{};
+    CHECK_ERR_RET(populateDebugMessengerInfo(create_info));
     CHECK_VK_ERR_RET(GET_VK_EXTENSION_FUNCTION(vkCreateDebugUtilsMessengerEXT)(
         instance, &create_info, nullptr, &debug_messenger));
     return MyErrCode::kOk;
