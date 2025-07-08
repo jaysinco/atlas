@@ -691,6 +691,14 @@ MyErrCode Application::createRenderPass()
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_ref;
 
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPassCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     create_info.flags = 0;
@@ -698,6 +706,8 @@ MyErrCode Application::createRenderPass()
     create_info.pAttachments = &attachment;
     create_info.subpassCount = 1;
     create_info.pSubpasses = &subpass;
+    create_info.dependencyCount = 1;
+    create_info.pDependencies = &dependency;
 
     CHECK_VK_ERR_RET(vkCreateRenderPass(device, &create_info, nullptr, &render_pass));
 
