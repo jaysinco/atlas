@@ -6,6 +6,17 @@
 #include <vulkan/vulkan_wayland.h>
 #include <vector>
 #include <filesystem>
+#include <glm/glm.hpp>
+#include <vk_mem_alloc.h>
+
+struct VertexData
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    static VkVertexInputBindingDescription getBindingDescription();
+    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
+};
 
 class Application
 {
@@ -41,6 +52,7 @@ private:
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
+    static MyErrCode createAllocator();
     static MyErrCode recreateSwapchain();
     static MyErrCode cleanupSwapchain();
     static MyErrCode createSwapchain();
@@ -50,6 +62,7 @@ private:
     static MyErrCode createGraphicsPipeline();
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
+    static MyErrCode createVertexBuffer();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
@@ -77,11 +90,14 @@ private:
     static VkPhysicalDevice physical_device;
     static VkDevice device;
     static constexpr char const* const kDeviceExtensions[] = {"VK_KHR_swapchain"};
+    static VmaAllocator vma_allocator;
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
     static VkPipeline graphics_pipeline;
     static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
+    static VkBuffer vertex_buffer;
+    static VmaAllocation vertex_buffer_alloc;
     static VkRenderPass render_pass;
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;

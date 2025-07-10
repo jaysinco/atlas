@@ -43,11 +43,14 @@ VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
 VkSurfaceKHR Application::vulkan_surface = VK_NULL_HANDLE;
 VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
 VkDevice Application::device = VK_NULL_HANDLE;
+VmaAllocator Application::vma_allocator = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
 VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
+VkBuffer Application::vertex_buffer = VK_NULL_HANDLE;
+VmaAllocation Application::vertex_buffer_alloc = VK_NULL_HANDLE;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
@@ -67,6 +70,30 @@ int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
 int Application::curr_frame = 0;
+
+VkVertexInputBindingDescription VertexData::getBindingDescription()
+{
+    VkVertexInputBindingDescription desc{};
+    desc.binding = 0;
+    desc.stride = sizeof(VertexData);
+    desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    return desc;
+}
+
+std::vector<VkVertexInputAttributeDescription> VertexData::getAttributeDescriptions()
+{
+    std::vector<VkVertexInputAttributeDescription> descs{2};
+    descs[0].binding = 0;
+    descs[0].location = 0;
+    descs[0].format = VK_FORMAT_R32G32_SFLOAT;
+    descs[0].offset = offsetof(VertexData, pos);
+
+    descs[1].binding = 0;
+    descs[1].location = 1;
+    descs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    descs[1].offset = offsetof(VertexData, color);
+    return descs;
+}
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -232,6 +259,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
+    CHECK_ERR_RET(createAllocator());
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createImageViews());
     CHECK_ERR_RET(createRenderPass());
@@ -239,6 +267,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createGraphicsPipeline());
     CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
+    CHECK_ERR_RET(createVertexBuffer());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
     return MyErrCode::kOk;
@@ -259,7 +288,9 @@ MyErrCode Application::cleanupVulkan()
         vkDestroyFence(device, in_flight_fences[i], nullptr);
     }
     vkFreeCommandBuffers(device, command_pool, command_buffers.size(), command_buffers.data());
+    vmaDestroyBuffer(vma_allocator, vertex_buffer, vertex_buffer_alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
+    vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
@@ -507,6 +538,17 @@ MyErrCode Application::createLogicalDevice()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createAllocator()
+{
+    VmaAllocatorCreateInfo create_info = {};
+    create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    create_info.physicalDevice = physical_device;
+    create_info.device = device;
+    create_info.instance = instance;
+    CHECK_VK_ERR_RET(vmaCreateAllocator(&create_info, &vma_allocator));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createCommandPool()
 {
     VkCommandPoolCreateInfo create_info = {};
@@ -514,6 +556,29 @@ MyErrCode Application::createCommandPool()
     create_info.queueFamilyIndex = graphics_queue_family_index;
     create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     CHECK_VK_ERR_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createVertexBuffer()
+{
+    std::vector<VertexData> const vertices = {
+        {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    };
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = sizeof(VertexData) * vertices.size();
+    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    CHECK_VK_ERR_RET(vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &vertex_buffer,
+                                     &vertex_buffer_alloc, nullptr));
+
     return MyErrCode::kOk;
 }
 
@@ -760,10 +825,12 @@ MyErrCode Application::createGraphicsPipeline()
     // vertex input
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_input_info.vertexBindingDescriptionCount = 0;
-    vert_input_info.pVertexBindingDescriptions = nullptr;
-    vert_input_info.vertexAttributeDescriptionCount = 0;
-    vert_input_info.pVertexAttributeDescriptions = nullptr;
+    auto vert_bind_desc = VertexData::getBindingDescription();
+    vert_input_info.vertexBindingDescriptionCount = 1;
+    vert_input_info.pVertexBindingDescriptions = &vert_bind_desc;
+    auto vert_attr_descs = VertexData::getAttributeDescriptions();
+    vert_input_info.vertexAttributeDescriptionCount = vert_attr_descs.size();
+    vert_input_info.pVertexAttributeDescriptions = vert_attr_descs.data();
 
     // input assembly
     VkPipelineInputAssemblyStateCreateInfo input_assembly_info{};
