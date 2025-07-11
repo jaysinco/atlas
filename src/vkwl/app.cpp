@@ -566,19 +566,26 @@ MyErrCode Application::createVertexBuffer()
         {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
         {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     };
+    VkDeviceSize buffer_size = sizeof(VertexData) * vertices.size();
 
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = sizeof(VertexData) * vertices.size();
-    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VkBuffer staging_buffer;
+    VmaAllocation staging_buffer_alloc;
+    CHECK_ERR_RET(
+        createVkBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       staging_buffer, staging_buffer_alloc));
 
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    void* staging_data;
+    CHECK_VK_ERR_RET(vmaMapMemory(vma_allocator, staging_buffer_alloc, &staging_data));
+    memcpy(staging_data, vertices.data(), buffer_size);
+    vmaUnmapMemory(vma_allocator, staging_buffer_alloc);
 
-    CHECK_VK_ERR_RET(vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &vertex_buffer,
-                                     &vertex_buffer_alloc, nullptr));
+    CHECK_ERR_RET(createVkBuffer(
+        buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer, vertex_buffer_alloc));
 
+    CHECK_ERR_RET(copyVkBuffer(staging_buffer, vertex_buffer, buffer_size));
+    vmaDestroyBuffer(vma_allocator, staging_buffer, staging_buffer_alloc);
     return MyErrCode::kOk;
 }
 
@@ -941,6 +948,10 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 
+    VkBuffer vertex_buffers[] = {vertex_buffer};
+    VkDeviceSize vertex_buffer_offsets[] = {0};
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_buffer_offsets);
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -960,5 +971,57 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
 
     vkCmdEndRenderPass(command_buffer);
     CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                                      VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                                      VmaAllocation& buffer_alloc)
+{
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.requiredFlags = properties;
+
+    CHECK_VK_ERR_RET(
+        vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &buffer, &buffer_alloc, nullptr));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = command_pool;
+    alloc_info.commandBufferCount = 1;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    VkCommandBuffer copy_command_buffer;
+    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, &copy_command_buffer));
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CHECK_VK_ERR_RET(vkBeginCommandBuffer(copy_command_buffer, &begin_info));
+
+    VkBufferCopy copy_region{};
+    copy_region.srcOffset = 0;
+    copy_region.dstOffset = 0;
+    copy_region.size = size;
+    vkCmdCopyBuffer(copy_command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+
+    CHECK_VK_ERR_RET(vkEndCommandBuffer(copy_command_buffer));
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &copy_command_buffer;
+
+    CHECK_VK_ERR_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+    CHECK_VK_ERR_RET(vkQueueWaitIdle(graphics_queue));
+    vkFreeCommandBuffers(device, command_pool, 1, &copy_command_buffer);
+
     return MyErrCode::kOk;
 }

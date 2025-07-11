@@ -67,6 +67,10 @@ private:
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
+    static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                                    VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                                    VmaAllocation& buffer_alloc);
+    static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
 
 private:
     static wl_display* display;
