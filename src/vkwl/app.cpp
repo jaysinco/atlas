@@ -40,6 +40,7 @@ xdg_toplevel_listener Application::toplevel_listener = {.configure = handleTople
 
 VkInstance Application::instance = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
+std::shared_ptr<Scene> Application::scene = nullptr;
 VkSurfaceKHR Application::vulkan_surface = VK_NULL_HANDLE;
 VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
 VkDevice Application::device = VK_NULL_HANDLE;
@@ -51,6 +52,8 @@ VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
 VkBuffer Application::vertex_buffer = VK_NULL_HANDLE;
 VmaAllocation Application::vertex_buffer_alloc = VK_NULL_HANDLE;
+VkBuffer Application::index_buffer = VK_NULL_HANDLE;
+VmaAllocation Application::index_buffer_alloc = VK_NULL_HANDLE;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
@@ -70,30 +73,6 @@ int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
 int Application::curr_frame = 0;
-
-VkVertexInputBindingDescription VertexData::getBindingDescription()
-{
-    VkVertexInputBindingDescription desc{};
-    desc.binding = 0;
-    desc.stride = sizeof(VertexData);
-    desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    return desc;
-}
-
-std::vector<VkVertexInputAttributeDescription> VertexData::getAttributeDescriptions()
-{
-    std::vector<VkVertexInputAttributeDescription> descs{2};
-    descs[0].binding = 0;
-    descs[0].location = 0;
-    descs[0].format = VK_FORMAT_R32G32_SFLOAT;
-    descs[0].offset = offsetof(VertexData, pos);
-
-    descs[1].binding = 0;
-    descs[1].location = 1;
-    descs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    descs[1].offset = offsetof(VertexData, color);
-    return descs;
-}
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -256,10 +235,11 @@ MyErrCode Application::initVulkan(char const* app_name)
 {
     CHECK_ERR_RET(createInstance(app_name));
     CHECK_ERR_RET(setupDebugMessenger());
+    CHECK_ERR_RET(loadScene());
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
-    CHECK_ERR_RET(createAllocator());
+    CHECK_ERR_RET(createVkAllocator());
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createImageViews());
     CHECK_ERR_RET(createRenderPass());
@@ -268,6 +248,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
     CHECK_ERR_RET(createVertexBuffer());
+    CHECK_ERR_RET(createIndexBuffer());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
     return MyErrCode::kOk;
@@ -288,11 +269,13 @@ MyErrCode Application::cleanupVulkan()
         vkDestroyFence(device, in_flight_fences[i], nullptr);
     }
     vkFreeCommandBuffers(device, command_pool, command_buffers.size(), command_buffers.data());
+    vmaDestroyBuffer(vma_allocator, index_buffer, index_buffer_alloc);
     vmaDestroyBuffer(vma_allocator, vertex_buffer, vertex_buffer_alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
+    CHECK_ERR_RET(scene->unload());
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
@@ -431,6 +414,13 @@ VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sever
     return VK_FALSE;
 }
 
+MyErrCode Application::loadScene()
+{
+    scene = std::make_shared<MockScene>();
+    CHECK_ERR_RET(scene->load());
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createVkSurface()
 {
     VkWaylandSurfaceCreateInfoKHR create_info = {};
@@ -538,7 +528,7 @@ MyErrCode Application::createLogicalDevice()
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createAllocator()
+MyErrCode Application::createVkAllocator()
 {
     VmaAllocatorCreateInfo create_info = {};
     create_info.vulkanApiVersion = VK_API_VERSION_1_0;
@@ -561,12 +551,7 @@ MyErrCode Application::createCommandPool()
 
 MyErrCode Application::createVertexBuffer()
 {
-    std::vector<VertexData> const vertices = {
-        {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    };
-    VkDeviceSize buffer_size = sizeof(VertexData) * vertices.size();
+    VkDeviceSize buffer_size = scene->getVerticeDataSize();
 
     VkBuffer staging_buffer;
     VmaAllocation staging_buffer_alloc;
@@ -577,7 +562,7 @@ MyErrCode Application::createVertexBuffer()
 
     void* staging_data;
     CHECK_VK_ERR_RET(vmaMapMemory(vma_allocator, staging_buffer_alloc, &staging_data));
-    memcpy(staging_data, vertices.data(), buffer_size);
+    memcpy(staging_data, scene->getVerticeData(), buffer_size);
     vmaUnmapMemory(vma_allocator, staging_buffer_alloc);
 
     CHECK_ERR_RET(createVkBuffer(
@@ -585,6 +570,31 @@ MyErrCode Application::createVertexBuffer()
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer, vertex_buffer_alloc));
 
     CHECK_ERR_RET(copyVkBuffer(staging_buffer, vertex_buffer, buffer_size));
+    vmaDestroyBuffer(vma_allocator, staging_buffer, staging_buffer_alloc);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createIndexBuffer()
+{
+    VkDeviceSize buffer_size = scene->getIndexDataSize();
+
+    VkBuffer staging_buffer;
+    VmaAllocation staging_buffer_alloc;
+    CHECK_ERR_RET(
+        createVkBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       staging_buffer, staging_buffer_alloc));
+
+    void* staging_data;
+    CHECK_VK_ERR_RET(vmaMapMemory(vma_allocator, staging_buffer_alloc, &staging_data));
+    memcpy(staging_data, scene->getIndexData(), buffer_size);
+    vmaUnmapMemory(vma_allocator, staging_buffer_alloc);
+
+    CHECK_ERR_RET(createVkBuffer(
+        buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer, index_buffer_alloc));
+
+    CHECK_ERR_RET(copyVkBuffer(staging_buffer, index_buffer, buffer_size));
     vmaDestroyBuffer(vma_allocator, staging_buffer, staging_buffer_alloc);
     return MyErrCode::kOk;
 }
@@ -832,10 +842,10 @@ MyErrCode Application::createGraphicsPipeline()
     // vertex input
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    auto vert_bind_desc = VertexData::getBindingDescription();
+    auto vert_bind_desc = scene->getVertexBindingDesc();
     vert_input_info.vertexBindingDescriptionCount = 1;
     vert_input_info.pVertexBindingDescriptions = &vert_bind_desc;
-    auto vert_attr_descs = VertexData::getAttributeDescriptions();
+    auto vert_attr_descs = scene->getVertexAttrDescs();
     vert_input_info.vertexAttributeDescriptionCount = vert_attr_descs.size();
     vert_input_info.pVertexAttributeDescriptions = vert_attr_descs.data();
 
@@ -951,6 +961,7 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
     VkBuffer vertex_buffers[] = {vertex_buffer};
     VkDeviceSize vertex_buffer_offsets[] = {0};
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_buffer_offsets);
+    vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -967,7 +978,7 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
     scissor.extent.height = curr_height;
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    vkCmdDraw(command_buffer, 3, 1, 0, 0);
+    vkCmdDrawIndexed(command_buffer, scene->getIndexSize(), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(command_buffer);
     CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));

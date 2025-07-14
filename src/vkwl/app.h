@@ -1,22 +1,11 @@
 #pragma once
-#include "toolkit/error.h"
+#include "scene.h"
 #include <wayland-client.h>
-#include "xdg-shell.h"
+#include <xdg-shell.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
-#include <vector>
-#include <filesystem>
-#include <glm/glm.hpp>
 #include <vk_mem_alloc.h>
-
-struct VertexData
-{
-    glm::vec2 pos;
-    glm::vec3 color;
-
-    static VkVertexInputBindingDescription getBindingDescription();
-    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
-};
+#include <filesystem>
 
 class Application
 {
@@ -48,11 +37,12 @@ private:
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
                                   void* user_data);
+    static MyErrCode loadScene();
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
-    static MyErrCode createAllocator();
+    static MyErrCode createVkAllocator();
     static MyErrCode recreateSwapchain();
     static MyErrCode cleanupSwapchain();
     static MyErrCode createSwapchain();
@@ -63,6 +53,7 @@ private:
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
     static MyErrCode createVertexBuffer();
+    static MyErrCode createIndexBuffer();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
@@ -90,6 +81,7 @@ private:
         "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
     static constexpr char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
     static VkDebugUtilsMessengerEXT debug_messenger;
+    static std::shared_ptr<Scene> scene;
     static VkSurfaceKHR vulkan_surface;
     static VkPhysicalDevice physical_device;
     static VkDevice device;
@@ -102,6 +94,8 @@ private:
     static VkCommandPool command_pool;
     static VkBuffer vertex_buffer;
     static VmaAllocation vertex_buffer_alloc;
+    static VkBuffer index_buffer;
+    static VmaAllocation index_buffer_alloc;
     static VkRenderPass render_pass;
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;

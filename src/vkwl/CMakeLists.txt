@@ -10,6 +10,7 @@ wayland_gen_protocols(WAYLAND_PROTO_SRC
 add_executable(${TARGET_NAME}
     ${WAYLAND_PROTO_SRC}
     vk-mem-alloc.cpp
+    scene.cpp
     app.cpp
     main.cpp
 )
