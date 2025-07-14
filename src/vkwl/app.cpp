@@ -38,9 +38,9 @@ xdg_surface_listener Application::shell_surface_listener = {.configure =
 xdg_toplevel_listener Application::toplevel_listener = {.configure = handleToplevelConfigure,
                                                         .close = handleToplevelClose};
 
+std::shared_ptr<Scene> Application::scene = nullptr;
 VkInstance Application::instance = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
-std::shared_ptr<Scene> Application::scene = nullptr;
 VkSurfaceKHR Application::vulkan_surface = VK_NULL_HANDLE;
 VkPhysicalDevice Application::physical_device = VK_NULL_HANDLE;
 VkDevice Application::device = VK_NULL_HANDLE;
@@ -233,9 +233,10 @@ void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel)
 
 MyErrCode Application::initVulkan(char const* app_name)
 {
+    scene = std::make_shared<Scene>();
+    CHECK_ERR_RET(scene->load());
     CHECK_ERR_RET(createInstance(app_name));
     CHECK_ERR_RET(setupDebugMessenger());
-    CHECK_ERR_RET(loadScene());
     CHECK_ERR_RET(createVkSurface());
     CHECK_ERR_RET(pickPhysicalDevice());
     CHECK_ERR_RET(createLogicalDevice());
@@ -251,6 +252,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createIndexBuffer());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
+    CHECK_ERR_RET(scene->unload());
     return MyErrCode::kOk;
 }
 
@@ -275,7 +277,6 @@ MyErrCode Application::cleanupVulkan()
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
-    CHECK_ERR_RET(scene->unload());
     GET_VK_EXTENSION_FUNCTION(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
@@ -412,13 +413,6 @@ VkBool32 Application::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sever
             break;
     }
     return VK_FALSE;
-}
-
-MyErrCode Application::loadScene()
-{
-    scene = std::make_shared<MockScene>();
-    CHECK_ERR_RET(scene->load());
-    return MyErrCode::kOk;
 }
 
 MyErrCode Application::createVkSurface()

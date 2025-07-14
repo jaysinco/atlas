@@ -37,7 +37,6 @@ private:
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
                                   void* user_data);
-    static MyErrCode loadScene();
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
@@ -76,12 +75,12 @@ private:
     static xdg_surface_listener shell_surface_listener;
     static xdg_toplevel_listener toplevel_listener;
 
+    static std::shared_ptr<Scene> scene;
     static VkInstance instance;
     static constexpr char const* const kInstanceExtensions[] = {
         "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
     static constexpr char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
     static VkDebugUtilsMessengerEXT debug_messenger;
-    static std::shared_ptr<Scene> scene;
     static VkSurfaceKHR vulkan_surface;
     static VkPhysicalDevice physical_device;
     static VkDevice device;

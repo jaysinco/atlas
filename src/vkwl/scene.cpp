@@ -1,37 +1,44 @@
 #include "scene.h"
 
-MockScene::MockScene()
+Scene::Scene() = default;
+
+Scene::~Scene() = default;
+
+MyErrCode Scene::load()
 {
     vertices_ = {
-        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+        {{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
+        {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}},
     };
 
     indices_ = {0, 1, 2, 2, 3, 0};
+    index_size_ = indices_.size();
+
+    return MyErrCode::kOk;
 }
 
-MockScene::~MockScene() {}
-
-MyErrCode MockScene::load() { return MyErrCode::kOk; }
-
-MyErrCode MockScene::unload() { return MyErrCode::kOk; }
-
-VkDeviceSize MockScene::getVerticeDataSize() const
+MyErrCode Scene::unload()
 {
-    return sizeof(vertices_[0]) * vertices_.size();
+    vertices_.clear();
+    vertices_.shrink_to_fit();
+    indices_.clear();
+    indices_.shrink_to_fit();
+    return MyErrCode::kOk;
 }
 
-void const* MockScene::getVerticeData() const { return vertices_.data(); }
+VkDeviceSize Scene::getVerticeDataSize() const { return sizeof(vertices_[0]) * vertices_.size(); }
 
-uint32_t MockScene::getIndexSize() const { return indices_.size(); }
+void const* Scene::getVerticeData() const { return vertices_.data(); }
 
-VkDeviceSize MockScene::getIndexDataSize() const { return sizeof(indices_[0]) * indices_.size(); }
+uint32_t Scene::getIndexSize() const { return index_size_; }
 
-void const* MockScene::getIndexData() const { return indices_.data(); }
+VkDeviceSize Scene::getIndexDataSize() const { return sizeof(indices_[0]) * indices_.size(); }
 
-VkVertexInputBindingDescription MockScene::getVertexBindingDesc() const
+void const* Scene::getIndexData() const { return indices_.data(); }
+
+VkVertexInputBindingDescription Scene::getVertexBindingDesc()
 {
     VkVertexInputBindingDescription desc{};
     desc.binding = 0;
@@ -40,7 +47,7 @@ VkVertexInputBindingDescription MockScene::getVertexBindingDesc() const
     return desc;
 }
 
-std::vector<VkVertexInputAttributeDescription> MockScene::getVertexAttrDescs() const
+std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs()
 {
     std::vector<VkVertexInputAttributeDescription> descs{2};
     descs[0].binding = 0;
