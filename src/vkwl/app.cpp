@@ -47,13 +47,13 @@ VkDevice Application::device = VK_NULL_HANDLE;
 VmaAllocator Application::vma_allocator = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
+VkDescriptorSetLayout Application::descriptor_set_layout = VK_NULL_HANDLE;
+VkDescriptorPool Application::descriptor_pool = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
 VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
-VkBuffer Application::vertex_buffer = VK_NULL_HANDLE;
-VmaAllocation Application::vertex_buffer_alloc = VK_NULL_HANDLE;
-VkBuffer Application::index_buffer = VK_NULL_HANDLE;
-VmaAllocation Application::index_buffer_alloc = VK_NULL_HANDLE;
+MyVkBuffer Application::vertex_buffer;
+MyVkBuffer Application::index_buffer;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
@@ -64,6 +64,7 @@ std::vector<VkCommandBuffer> Application::command_buffers;
 std::vector<VkSemaphore> Application::image_available_semaphores;
 std::vector<VkSemaphore> Application::render_finished_semaphores;
 std::vector<VkFence> Application::in_flight_fences;
+std::vector<MyVkBuffer> Application::uniform_buffers;
 
 bool Application::need_quit = false;
 bool Application::ready_to_resize = false;
@@ -109,6 +110,10 @@ MyErrCode Application::mainLoop()
             CHECK_VK_ERR_RET(result);
         }
         CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
+
+        CHECK_ERR_RET(scene->updateUniformData(curr_width, curr_height));
+        memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
+               scene->getUniformDataSize());
 
         CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
         CHECK_ERR_RET(recordCommandBuffer(command_buffers[curr_frame], image_index));
@@ -244,12 +249,15 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createImageViews());
     CHECK_ERR_RET(createRenderPass());
+    CHECK_ERR_RET(createDescriptorSetLayout());
     CHECK_ERR_RET(createPipelineLayout());
     CHECK_ERR_RET(createGraphicsPipeline());
     CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
     CHECK_ERR_RET(createVertexBuffer());
     CHECK_ERR_RET(createIndexBuffer());
+    CHECK_ERR_RET(createUniformBuffers());
+    CHECK_ERR_RET(createDescriptorPool());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
     CHECK_ERR_RET(scene->unload());
@@ -260,6 +268,7 @@ MyErrCode Application::cleanupVulkan()
 {
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
     vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
     vkDestroyRenderPass(device, render_pass, nullptr);
@@ -269,10 +278,11 @@ MyErrCode Application::cleanupVulkan()
     for (int i = 0; i < kMaxFramesInFight; i++) {
         vkDestroySemaphore(device, image_available_semaphores[i], nullptr);
         vkDestroyFence(device, in_flight_fences[i], nullptr);
+        // vmaDestroyBuffer(vma_allocator, uniform_buffers[i].buf, uniform_buffers[i].alloc);
     }
     vkFreeCommandBuffers(device, command_pool, command_buffers.size(), command_buffers.data());
-    vmaDestroyBuffer(vma_allocator, index_buffer, index_buffer_alloc);
-    vmaDestroyBuffer(vma_allocator, vertex_buffer, vertex_buffer_alloc);
+    vmaDestroyBuffer(vma_allocator, index_buffer.buf, index_buffer.alloc);
+    vmaDestroyBuffer(vma_allocator, vertex_buffer.buf, vertex_buffer.alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
@@ -547,24 +557,20 @@ MyErrCode Application::createVertexBuffer()
 {
     VkDeviceSize buffer_size = scene->getVerticeDataSize();
 
-    VkBuffer staging_buffer;
-    VmaAllocation staging_buffer_alloc;
+    MyVkBuffer staging_buffer;
     CHECK_ERR_RET(
         createVkBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       staging_buffer, staging_buffer_alloc));
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT, staging_buffer));
 
-    void* staging_data;
-    CHECK_VK_ERR_RET(vmaMapMemory(vma_allocator, staging_buffer_alloc, &staging_data));
-    memcpy(staging_data, scene->getVerticeData(), buffer_size);
-    vmaUnmapMemory(vma_allocator, staging_buffer_alloc);
+    memcpy(staging_buffer.alloc_info.pMappedData, scene->getVerticeData(), buffer_size);
 
     CHECK_ERR_RET(createVkBuffer(
         buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer, vertex_buffer_alloc));
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, vertex_buffer));
 
-    CHECK_ERR_RET(copyVkBuffer(staging_buffer, vertex_buffer, buffer_size));
-    vmaDestroyBuffer(vma_allocator, staging_buffer, staging_buffer_alloc);
+    CHECK_ERR_RET(copyVkBuffer(staging_buffer.buf, vertex_buffer.buf, buffer_size));
+    vmaDestroyBuffer(vma_allocator, staging_buffer.buf, staging_buffer.alloc);
     return MyErrCode::kOk;
 }
 
@@ -572,24 +578,49 @@ MyErrCode Application::createIndexBuffer()
 {
     VkDeviceSize buffer_size = scene->getIndexDataSize();
 
-    VkBuffer staging_buffer;
-    VmaAllocation staging_buffer_alloc;
+    MyVkBuffer staging_buffer;
     CHECK_ERR_RET(
         createVkBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       staging_buffer, staging_buffer_alloc));
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT, staging_buffer));
 
-    void* staging_data;
-    CHECK_VK_ERR_RET(vmaMapMemory(vma_allocator, staging_buffer_alloc, &staging_data));
-    memcpy(staging_data, scene->getIndexData(), buffer_size);
-    vmaUnmapMemory(vma_allocator, staging_buffer_alloc);
+    memcpy(staging_buffer.alloc_info.pMappedData, scene->getIndexData(), buffer_size);
 
     CHECK_ERR_RET(createVkBuffer(
         buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer, index_buffer_alloc));
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, index_buffer));
 
-    CHECK_ERR_RET(copyVkBuffer(staging_buffer, index_buffer, buffer_size));
-    vmaDestroyBuffer(vma_allocator, staging_buffer, staging_buffer_alloc);
+    CHECK_ERR_RET(copyVkBuffer(staging_buffer.buf, index_buffer.buf, buffer_size));
+    vmaDestroyBuffer(vma_allocator, staging_buffer.buf, staging_buffer.alloc);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createUniformBuffers()
+{
+    VkDeviceSize buffer_size = scene->getUniformDataSize();
+    uniform_buffers.resize(kMaxFramesInFight);
+    for (int i = 0; i < kMaxFramesInFight; i++) {
+        CHECK_ERR_RET(createVkBuffer(
+            buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            VMA_ALLOCATION_CREATE_MAPPED_BIT, uniform_buffers[i]));
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createDescriptorPool()
+{
+    VkDescriptorPoolSize pool_size{};
+    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_size.descriptorCount = static_cast<uint32_t>(kMaxFramesInFight);
+
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.poolSizeCount = 1;
+    pool_info.pPoolSizes = &pool_size;
+    pool_info.maxSets = kMaxFramesInFight;
+
+    CHECK_VK_ERR_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool));
     return MyErrCode::kOk;
 }
 
@@ -790,12 +821,30 @@ MyErrCode Application::createRenderPass()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutBinding ubo_layout_binding{};
+    ubo_layout_binding.binding = 0;
+    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_layout_binding.descriptorCount = 1;
+    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layout_info{};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = 1;
+    layout_info.pBindings = &ubo_layout_binding;
+    CHECK_VK_ERR_RET(
+        vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &descriptor_set_layout));
+
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createPipelineLayout()
 {
     VkPipelineLayoutCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 0;
-    create_info.pSetLayouts = nullptr;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &descriptor_set_layout;
     create_info.pushConstantRangeCount = 0;
     create_info.pPushConstantRanges = nullptr;
     CHECK_VK_ERR_RET(vkCreatePipelineLayout(device, &create_info, nullptr, &pipeline_layout));
@@ -836,10 +885,10 @@ MyErrCode Application::createGraphicsPipeline()
     // vertex input
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    auto vert_bind_desc = scene->getVertexBindingDesc();
+    auto vert_bind_desc = Scene::getVertexBindingDesc();
     vert_input_info.vertexBindingDescriptionCount = 1;
     vert_input_info.pVertexBindingDescriptions = &vert_bind_desc;
-    auto vert_attr_descs = scene->getVertexAttrDescs();
+    auto vert_attr_descs = Scene::getVertexAttrDescs();
     vert_input_info.vertexAttributeDescriptionCount = vert_attr_descs.size();
     vert_input_info.pVertexAttributeDescriptions = vert_attr_descs.data();
 
@@ -952,10 +1001,10 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 
-    VkBuffer vertex_buffers[] = {vertex_buffer};
+    VkBuffer vertex_buffers[] = {vertex_buffer.buf};
     VkDeviceSize vertex_buffer_offsets[] = {0};
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_buffer_offsets);
-    vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(command_buffer, index_buffer.buf, 0, VK_INDEX_TYPE_UINT32);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -980,8 +1029,8 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
 }
 
 MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                                      VkMemoryPropertyFlags properties, VkBuffer& buffer,
-                                      VmaAllocation& buffer_alloc)
+                                      VkMemoryPropertyFlags properties,
+                                      VmaAllocationCreateFlags flags, MyVkBuffer& buffer)
 {
     VkBufferCreateInfo buffer_info{};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -990,10 +1039,11 @@ MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.flags = flags;
     alloc_info.requiredFlags = properties;
 
-    CHECK_VK_ERR_RET(
-        vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &buffer, &buffer_alloc, nullptr));
+    CHECK_VK_ERR_RET(vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &buffer.buf,
+                                     &buffer.alloc, &buffer.alloc_info));
     return MyErrCode::kOk;
 }
 

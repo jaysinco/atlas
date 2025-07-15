@@ -7,6 +7,13 @@
 #include <vk_mem_alloc.h>
 #include <filesystem>
 
+struct MyVkBuffer
+{
+    VkBuffer buf;
+    VmaAllocation alloc;
+    VmaAllocationInfo alloc_info;
+};
+
 class Application
 {
 public:
@@ -47,19 +54,22 @@ private:
     static MyErrCode createSwapchain();
     static MyErrCode createImageViews();
     static MyErrCode createRenderPass();
+    static MyErrCode createDescriptorSetLayout();
     static MyErrCode createPipelineLayout();
     static MyErrCode createGraphicsPipeline();
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
     static MyErrCode createVertexBuffer();
     static MyErrCode createIndexBuffer();
+    static MyErrCode createUniformBuffers();
+    static MyErrCode createDescriptorPool();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
     static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                                    VkMemoryPropertyFlags properties, VkBuffer& buffer,
-                                    VmaAllocation& buffer_alloc);
+                                    VkMemoryPropertyFlags properties,
+                                    VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
     static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
 
 private:
@@ -88,13 +98,13 @@ private:
     static VmaAllocator vma_allocator;
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
+    static VkDescriptorSetLayout descriptor_set_layout;
+    static VkDescriptorPool descriptor_pool;
     static VkPipeline graphics_pipeline;
     static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
-    static VkBuffer vertex_buffer;
-    static VmaAllocation vertex_buffer_alloc;
-    static VkBuffer index_buffer;
-    static VmaAllocation index_buffer_alloc;
+    static MyVkBuffer vertex_buffer;
+    static MyVkBuffer index_buffer;
     static VkRenderPass render_pass;
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;
@@ -106,6 +116,7 @@ private:
     static std::vector<VkSemaphore> image_available_semaphores;
     static std::vector<VkSemaphore> render_finished_semaphores;
     static std::vector<VkFence> in_flight_fences;
+    static std::vector<MyVkBuffer> uniform_buffers;
 
     static bool need_quit;
     static bool need_resize;
