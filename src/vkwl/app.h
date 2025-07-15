@@ -44,6 +44,10 @@ private:
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
                                   void* user_data);
+    static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                                    VkMemoryPropertyFlags properties,
+                                    VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
+    static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
@@ -68,10 +72,6 @@ private:
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode recordCommandBuffer(int curr_frame, int image_index);
-    static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                                    VkMemoryPropertyFlags properties,
-                                    VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
-    static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
 
 private:
     static wl_display* display;
@@ -112,10 +112,10 @@ private:
     static std::vector<VkImage> swapchain_images;
     static std::vector<VkImageView> swapchain_image_views;
     static std::vector<VkFramebuffer> swapchain_frame_buffers;
+    static std::vector<VkSemaphore> render_finished_semaphores;
     static constexpr int kMaxFramesInFight = 2;
     static std::vector<VkCommandBuffer> command_buffers;
     static std::vector<VkSemaphore> image_available_semaphores;
-    static std::vector<VkSemaphore> render_finished_semaphores;
     static std::vector<VkFence> in_flight_fences;
     static std::vector<MyVkBuffer> uniform_buffers;
     static std::vector<VkDescriptorSet> descriptor_sets;
