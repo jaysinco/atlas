@@ -63,10 +63,11 @@ private:
     static MyErrCode createIndexBuffer();
     static MyErrCode createUniformBuffers();
     static MyErrCode createDescriptorPool();
+    static MyErrCode createDescriptorSets();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
     static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
-    static MyErrCode recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
+    static MyErrCode recordCommandBuffer(int curr_frame, int image_index);
     static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                                     VkMemoryPropertyFlags properties,
                                     VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
@@ -117,6 +118,7 @@ private:
     static std::vector<VkSemaphore> render_finished_semaphores;
     static std::vector<VkFence> in_flight_fences;
     static std::vector<MyVkBuffer> uniform_buffers;
+    static std::vector<VkDescriptorSet> descriptor_sets;
 
     static bool need_quit;
     static bool need_resize;
@@ -125,5 +127,4 @@ private:
     static int new_height;
     static uint32_t curr_width;
     static uint32_t curr_height;
-    static int curr_frame;
 };

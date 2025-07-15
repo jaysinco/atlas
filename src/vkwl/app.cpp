@@ -65,6 +65,7 @@ std::vector<VkSemaphore> Application::image_available_semaphores;
 std::vector<VkSemaphore> Application::render_finished_semaphores;
 std::vector<VkFence> Application::in_flight_fences;
 std::vector<MyVkBuffer> Application::uniform_buffers;
+std::vector<VkDescriptorSet> Application::descriptor_sets;
 
 bool Application::need_quit = false;
 bool Application::ready_to_resize = false;
@@ -73,7 +74,6 @@ int Application::new_width = 0;
 int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
-int Application::curr_frame = 0;
 
 MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
 {
@@ -87,6 +87,7 @@ MyErrCode Application::run(char const* win_title, int win_width, int win_height,
 
 MyErrCode Application::mainLoop()
 {
+    int curr_frame = 0;
     while (!need_quit) {
         if (need_resize && ready_to_resize) {
             curr_width = new_width;
@@ -116,7 +117,7 @@ MyErrCode Application::mainLoop()
                scene->getUniformDataSize());
 
         CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
-        CHECK_ERR_RET(recordCommandBuffer(command_buffers[curr_frame], image_index));
+        CHECK_ERR_RET(recordCommandBuffer(curr_frame, image_index));
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -258,6 +259,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createIndexBuffer());
     CHECK_ERR_RET(createUniformBuffers());
     CHECK_ERR_RET(createDescriptorPool());
+    CHECK_ERR_RET(createDescriptorSets());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
     CHECK_ERR_RET(scene->unload());
@@ -268,6 +270,7 @@ MyErrCode Application::cleanupVulkan()
 {
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
+    vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
     vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
@@ -278,9 +281,8 @@ MyErrCode Application::cleanupVulkan()
     for (int i = 0; i < kMaxFramesInFight; i++) {
         vkDestroySemaphore(device, image_available_semaphores[i], nullptr);
         vkDestroyFence(device, in_flight_fences[i], nullptr);
-        // vmaDestroyBuffer(vma_allocator, uniform_buffers[i].buf, uniform_buffers[i].alloc);
+        vmaDestroyBuffer(vma_allocator, uniform_buffers[i].buf, uniform_buffers[i].alloc);
     }
-    vkFreeCommandBuffers(device, command_pool, command_buffers.size(), command_buffers.data());
     vmaDestroyBuffer(vma_allocator, index_buffer.buf, index_buffer.alloc);
     vmaDestroyBuffer(vma_allocator, vertex_buffer.buf, vertex_buffer.alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
@@ -624,6 +626,39 @@ MyErrCode Application::createDescriptorPool()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createDescriptorSets()
+{
+    descriptor_sets.resize(kMaxFramesInFight);
+    std::vector<VkDescriptorSetLayout> layouts(kMaxFramesInFight, descriptor_set_layout);
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = descriptor_pool;
+    alloc_info.descriptorSetCount = kMaxFramesInFight;
+    alloc_info.pSetLayouts = layouts.data();
+    CHECK_VK_ERR_RET(vkAllocateDescriptorSets(device, &alloc_info, descriptor_sets.data()));
+
+    for (int i = 0; i < kMaxFramesInFight; i++) {
+        VkDescriptorBufferInfo buffer_info{};
+        buffer_info.buffer = uniform_buffers[i].buf;
+        buffer_info.offset = 0;
+        buffer_info.range = scene->getUniformDataSize();
+
+        VkWriteDescriptorSet descriptor_write{};
+        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_write.dstSet = descriptor_sets[i];
+        descriptor_write.dstBinding = 0;
+        descriptor_write.dstArrayElement = 0;
+        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_write.descriptorCount = 1;
+        descriptor_write.pBufferInfo = &buffer_info;
+        descriptor_write.pImageInfo = nullptr;
+        descriptor_write.pTexelBufferView = nullptr;
+
+        vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, nullptr);
+    }
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createCommandBuffers()
 {
     command_buffers.resize(kMaxFramesInFight);
@@ -912,7 +947,7 @@ MyErrCode Application::createGraphicsPipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
@@ -979,8 +1014,10 @@ MyErrCode Application::createGraphicsPipeline()
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index)
+MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
 {
+    VkCommandBuffer command_buffer = command_buffers[curr_frame];
+
     VkCommandBufferBeginInfo cmd_begin_info = {};
     cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -1020,6 +1057,9 @@ MyErrCode Application::recordCommandBuffer(VkCommandBuffer command_buffer, uint3
     scissor.extent.width = curr_width;
     scissor.extent.height = curr_height;
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
+                            &descriptor_sets[curr_frame], 0, nullptr);
 
     vkCmdDrawIndexed(command_buffer, scene->getIndexSize(), 1, 0, 0, 0);
 
