@@ -35,8 +35,8 @@ int main(int argc, char* argv[])
     args.optional("attack,a", po::value<std::string>()->default_value(""), "arp attack mac");
     args.optional("listener,l", po::value<std::string>()->default_value("d8:bb:c1:df:b9:d0"),
                   "listener mac");
-    args.optional("per,p", po::value<int>()->default_value(500), "send period (ms)");
-    args.optional("ratio,r", po::value<float>()->default_value(100), "attack ratio (%)");
+    args.optional("per,p", po::value<int>()->default_value(10000), "send period (ms)");
+    args.optional("ratio,r", po::value<float>()->default_value(5), "attack ratio (%)");
     CHECK_ERR_RTI(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
