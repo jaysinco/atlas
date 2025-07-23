@@ -22,8 +22,10 @@ execute_process(COMMAND git rev-parse --abbrev-ref HEAD
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-target_compile_definitions(${TARGET_NAME} PRIVATE -D_GIT_HASH="${GIT_HASH}")
-target_compile_definitions(${TARGET_NAME} PRIVATE -D_GIT_BRANCH="${GIT_BRANCH}")
+set_source_files_properties(logging.cpp 
+    PROPERTIES COMPILE_DEFINITIONS 
+    "_GIT_HASH=\"${GIT_HASH}\";_GIT_BRANCH=\"${GIT_BRANCH}\""
+)
 
 target_link_libraries(${TARGET_NAME} PUBLIC
     $<IF:$<BOOL:${UNIX}>,pthread,>

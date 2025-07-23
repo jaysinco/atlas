@@ -41,6 +41,11 @@ std::filesystem::path Scene::getFragSpvPath() const
     return toolkit::getDataDir() / "test.frag.spv";
 }
 
+std::filesystem::path Scene::getTextureImagePath() const
+{
+    return toolkit::getDataDir() / "statue-1275469.jpg";
+}
+
 VkDeviceSize Scene::getVerticeDataSize() const { return sizeof(vertices_[0]) * vertices_.size(); }
 
 void const* Scene::getVerticeData() const { return vertices_.data(); }

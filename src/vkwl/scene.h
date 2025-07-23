@@ -18,6 +18,7 @@ public:
 
     std::filesystem::path getVertSpvPath() const;
     std::filesystem::path getFragSpvPath() const;
+    std::filesystem::path getTextureImagePath() const;
 
     VkDeviceSize getVerticeDataSize() const;
     void const* getVerticeData() const;
@@ -42,9 +43,9 @@ private:
 
     struct UniformBufferObject
     {
-        glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 proj;
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 proj;
     };
 
     std::vector<Vertex> vertices_;

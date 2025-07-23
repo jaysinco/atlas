@@ -1,6 +1,8 @@
 #include "app.h"
 #include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 #define GET_VK_EXTENSION_FUNCTION(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
 
@@ -52,6 +54,7 @@ VkDescriptorPool Application::descriptor_pool = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
 VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
+MyVkImage Application::texture_image;
 MyVkBuffer Application::vertex_buffer;
 MyVkBuffer Application::index_buffer;
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
@@ -255,6 +258,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createGraphicsPipeline());
     CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
+    CHECK_ERR_RET(createTextureImage());
     CHECK_ERR_RET(createVertexBuffer());
     CHECK_ERR_RET(createIndexBuffer());
     CHECK_ERR_RET(createUniformBuffers());
@@ -285,6 +289,7 @@ MyErrCode Application::cleanupVulkan()
     }
     vmaDestroyBuffer(vma_allocator, index_buffer.buf, index_buffer.alloc);
     vmaDestroyBuffer(vma_allocator, vertex_buffer.buf, vertex_buffer.alloc);
+    vmaDestroyImage(vma_allocator, texture_image.img, texture_image.alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
@@ -446,37 +451,146 @@ MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+MyErrCode Application::createVkImage(uint32_t width, uint32_t height, VkFormat format,
+                                     VkImageTiling tiling, VkImageUsageFlags usage,
+                                     VkMemoryPropertyFlags properties,
+                                     VmaAllocationCreateFlags flags, MyVkImage& image)
+{
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.extent.width = width;
+    image_info.extent.height = height;
+    image_info.extent.depth = 1;
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.format = format;
+    image_info.tiling = tiling;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_info.usage = usage;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.flags = flags;
+    alloc_info.requiredFlags = properties;
+
+    CHECK_VK_ERR_RET(vmaCreateImage(vma_allocator, &image_info, &alloc_info, &image.img,
+                                    &image.alloc, &image.alloc_info));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::beginSingleTimeCommands(VkCommandBuffer& cmd_buf)
 {
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandPool = command_pool;
     alloc_info.commandBufferCount = 1;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    VkCommandBuffer copy_command_buffer;
-    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, &copy_command_buffer));
+    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, &cmd_buf));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    CHECK_VK_ERR_RET(vkBeginCommandBuffer(copy_command_buffer, &begin_info));
+    CHECK_VK_ERR_RET(vkBeginCommandBuffer(cmd_buf, &begin_info));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::endSingleTimeCommands(VkCommandBuffer cmd_buf)
+{
+    CHECK_VK_ERR_RET(vkEndCommandBuffer(cmd_buf));
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd_buf;
+    CHECK_VK_ERR_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+    CHECK_VK_ERR_RET(vkQueueWaitIdle(graphics_queue));
+
+    vkFreeCommandBuffers(device, command_pool, 1, &cmd_buf);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+{
+    VkCommandBuffer cmd_buf;
+    CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
 
     VkBufferCopy copy_region{};
     copy_region.srcOffset = 0;
     copy_region.dstOffset = 0;
     copy_region.size = size;
-    vkCmdCopyBuffer(copy_command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+    vkCmdCopyBuffer(cmd_buf, src_buffer, dst_buffer, 1, &copy_region);
 
-    CHECK_VK_ERR_RET(vkEndCommandBuffer(copy_command_buffer));
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &copy_command_buffer;
+    CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
+    return MyErrCode::kOk;
+}
 
-    CHECK_VK_ERR_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-    CHECK_VK_ERR_RET(vkQueueWaitIdle(graphics_queue));
-    vkFreeCommandBuffers(device, command_pool, 1, &copy_command_buffer);
+MyErrCode Application::copyVkBufferToImage(VkBuffer buffer, VkImage image, uint32_t width,
+                                           uint32_t height)
+{
+    VkCommandBuffer cmd_buf;
+    CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
 
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+    vkCmdCopyBufferToImage(cmd_buf, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                           &region);
+
+    CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::transitionImageLayout(VkImage image, VkImageLayout old_layout,
+                                             VkImageLayout new_layout)
+{
+    VkCommandBuffer cmd_buf;
+    CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags src_stage;
+    VkPipelineStageFlags dest_stage;
+
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dest_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dest_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
+        ELOG("unsupported layout transition: {} -> {}", old_layout, new_layout);
+        return MyErrCode::kFailed;
+    }
+
+    vkCmdPipelineBarrier(cmd_buf, src_stage, dest_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
     return MyErrCode::kOk;
 }
 
@@ -605,6 +719,46 @@ MyErrCode Application::createCommandPool()
     create_info.queueFamilyIndex = graphics_queue_family_index;
     create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     CHECK_VK_ERR_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createTextureImage()
+{
+    auto fpath = scene->getTextureImagePath().string();
+    cv::Mat img_file = cv::imread(fpath, cv::IMREAD_COLOR);
+    if (img_file.data == nullptr) {
+        ELOG("failed to load image file: {}", fpath);
+        return MyErrCode::kFailed;
+    }
+    cv::Mat img;
+    cv::cvtColor(img_file, img, cv::COLOR_BGR2BGRA);
+    int image_width = img.cols;
+    int image_height = img.rows;
+    VkDeviceSize image_size = img.total() * img.elemSize();
+
+    MyVkBuffer staging_buffer;
+    CHECK_ERR_RET(
+        createVkBuffer(image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT, staging_buffer));
+
+    memcpy(staging_buffer.alloc_info.pMappedData, img.data, image_size);
+
+    CHECK_ERR_RET(createVkImage(image_width, image_height, VK_FORMAT_B8G8R8A8_SRGB,
+                                VK_IMAGE_TILING_OPTIMAL,
+                                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, texture_image));
+
+    CHECK_ERR_RET(transitionImageLayout(texture_image.img, VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
+
+    CHECK_ERR_RET(
+        copyVkBufferToImage(staging_buffer.buf, texture_image.img, image_width, image_height));
+
+    CHECK_ERR_RET(transitionImageLayout(texture_image.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+    vmaDestroyBuffer(vma_allocator, staging_buffer.buf, staging_buffer.alloc);
     return MyErrCode::kOk;
 }
 

@@ -12,6 +12,13 @@ struct MyVkBuffer
     VmaAllocationInfo alloc_info;
 };
 
+struct MyVkImage
+{
+    VkImage img;
+    VmaAllocation alloc;
+    VmaAllocationInfo alloc_info;
+};
+
 class Application
 {
 public:
@@ -45,7 +52,17 @@ private:
     static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                                     VkMemoryPropertyFlags properties,
                                     VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
+    static MyErrCode createVkImage(uint32_t width, uint32_t height, VkFormat format,
+                                   VkImageTiling tiling, VkImageUsageFlags usage,
+                                   VkMemoryPropertyFlags properties, VmaAllocationCreateFlags flags,
+                                   MyVkImage& image);
+    static MyErrCode beginSingleTimeCommands(VkCommandBuffer& cmd_buf);
+    static MyErrCode endSingleTimeCommands(VkCommandBuffer cmd_buf);
     static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
+    static MyErrCode copyVkBufferToImage(VkBuffer buffer, VkImage image, uint32_t width,
+                                         uint32_t height);
+    static MyErrCode transitionImageLayout(VkImage image, VkImageLayout old_layout,
+                                           VkImageLayout new_layout);
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
@@ -61,6 +78,7 @@ private:
     static MyErrCode createGraphicsPipeline();
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
+    static MyErrCode createTextureImage();
     static MyErrCode createVertexBuffer();
     static MyErrCode createIndexBuffer();
     static MyErrCode createUniformBuffers();
@@ -102,6 +120,7 @@ private:
     static VkPipeline graphics_pipeline;
     static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
+    static MyVkImage texture_image;
     static MyVkBuffer vertex_buffer;
     static MyVkBuffer index_buffer;
     static VkRenderPass render_pass;

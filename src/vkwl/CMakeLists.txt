@@ -29,4 +29,10 @@ target_link_libraries(${TARGET_NAME}
     toolkit
     wayland-client
     vulkan
+    opencv
+)
+
+file(COPY
+    .temp/statue-1275469.jpg
+    DESTINATION ${MY_RUNTIME_DIR}/data
 )
