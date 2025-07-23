@@ -5,6 +5,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <vector>
+#include <filesystem>
 
 class Scene
 {
@@ -15,15 +16,18 @@ public:
     MyErrCode load();
     MyErrCode unload();
 
+    std::filesystem::path getVertSpvPath() const;
+    std::filesystem::path getFragSpvPath() const;
+
     VkDeviceSize getVerticeDataSize() const;
     void const* getVerticeData() const;
+
+    VkVertexInputBindingDescription getVertexBindingDesc();
+    std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs();
 
     uint32_t getIndexSize() const;
     VkDeviceSize getIndexDataSize() const;
     void const* getIndexData() const;
-
-    static VkVertexInputBindingDescription getVertexBindingDesc();
-    static std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs();
 
     VkDeviceSize getUniformDataSize() const;
     void const* getUniformData() const;

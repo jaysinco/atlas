@@ -943,9 +943,9 @@ MyErrCode Application::createGraphicsPipeline()
 {
     // shader modules
     VkShaderModule vert_mod;
-    CHECK_ERR_RET(createShaderModule(toolkit::getDataDir() / "test.vert.spv", vert_mod));
+    CHECK_ERR_RET(createShaderModule(scene->getVertSpvPath(), vert_mod));
     VkShaderModule frag_mod;
-    CHECK_ERR_RET(createShaderModule(toolkit::getDataDir() / "test.frag.spv", frag_mod));
+    CHECK_ERR_RET(createShaderModule(scene->getFragSpvPath(), frag_mod));
 
     // shader stage
     VkPipelineShaderStageCreateInfo vert_stage_info{};
@@ -973,10 +973,10 @@ MyErrCode Application::createGraphicsPipeline()
     // vertex input
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    auto vert_bind_desc = Scene::getVertexBindingDesc();
+    auto vert_bind_desc = scene->getVertexBindingDesc();
     vert_input_info.vertexBindingDescriptionCount = 1;
     vert_input_info.pVertexBindingDescriptions = &vert_bind_desc;
-    auto vert_attr_descs = Scene::getVertexAttrDescs();
+    auto vert_attr_descs = scene->getVertexAttrDescs();
     vert_input_info.vertexAttributeDescriptionCount = vert_attr_descs.size();
     vert_input_info.pVertexAttributeDescriptions = vert_attr_descs.data();
 

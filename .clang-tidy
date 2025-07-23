@@ -35,7 +35,7 @@ Checks: >
   readability-non-const-parameter,
   readability-braces-around-statements,
   readability-redundant-member-init,
-  readability-convert-member-functions-to-static,
+  # readability-convert-member-functions-to-static,
   readability-duplicate-include,
   readability-inconsistent-declaration-parameter-name,
   readability-identifier-naming,

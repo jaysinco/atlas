@@ -2,10 +2,8 @@
 #include "scene.h"
 #include <wayland-client.h>
 #include <xdg-shell.h>
-#include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
 #include <vk_mem_alloc.h>
-#include <filesystem>
 
 struct MyVkBuffer
 {

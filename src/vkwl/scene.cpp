@@ -1,4 +1,5 @@
 #include "scene.h"
+#include "toolkit/toolkit.h"
 #include <chrono>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -28,6 +29,16 @@ MyErrCode Scene::unload()
     indices_.clear();
     indices_.shrink_to_fit();
     return MyErrCode::kOk;
+}
+
+std::filesystem::path Scene::getVertSpvPath() const
+{
+    return toolkit::getDataDir() / "test.vert.spv";
+}
+
+std::filesystem::path Scene::getFragSpvPath() const
+{
+    return toolkit::getDataDir() / "test.frag.spv";
 }
 
 VkDeviceSize Scene::getVerticeDataSize() const { return sizeof(vertices_[0]) * vertices_.size(); }
