@@ -80,10 +80,13 @@ int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
 
-MyErrCode Application::run(char const* win_title, int win_width, int win_height, char const* app_id)
+MyErrCode Application::run(char const* win_title, char const* app_id)
 {
-    CHECK_ERR_RET(initWayland(win_title, win_width, win_height, app_id));
+    scene = std::make_shared<Scene>();
+    CHECK_ERR_RET(scene->load());
+    CHECK_ERR_RET(initWayland(win_title, app_id));
     CHECK_ERR_RET(initVulkan(app_id));
+    CHECK_ERR_RET(scene->unload());
     CHECK_ERR_RET(mainLoop());
     CHECK_ERR_RET(cleanupVulkan());
     CHECK_ERR_RET(cleanupWayland());
@@ -117,7 +120,6 @@ MyErrCode Application::mainLoop()
         }
         CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
 
-        CHECK_ERR_RET(scene->updateUniformData(curr_width, curr_height));
         memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
                scene->getUniformDataSize());
 
@@ -160,7 +162,7 @@ MyErrCode Application::mainLoop()
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::initWayland(char const* title, int width, int height, char const* app_id)
+MyErrCode Application::initWayland(char const* win_title, char const* app_id)
 {
     CHECK_WL_ERR_RET(display = wl_display_connect(nullptr));
 
@@ -176,9 +178,10 @@ MyErrCode Application::initWayland(char const* title, int width, int height, cha
     CHECK_WL_ERR_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
 
+    auto [width, height] = scene->getInitSize();
     curr_width = width;
     curr_height = height;
-    xdg_toplevel_set_title(toplevel, title);
+    xdg_toplevel_set_title(toplevel, win_title);
     xdg_toplevel_set_app_id(toplevel, app_id);
 
     wl_surface_commit(surface);
@@ -234,6 +237,7 @@ void Application::handleToplevelConfigure(void* data, struct xdg_toplevel* tople
         need_resize = true;
         new_width = width;
         new_height = height;
+        scene->onResize(new_width, new_height);
     }
 }
 
@@ -244,8 +248,6 @@ void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel)
 
 MyErrCode Application::initVulkan(char const* app_name)
 {
-    scene = std::make_shared<Scene>();
-    CHECK_ERR_RET(scene->load());
     CHECK_ERR_RET(createInstance(app_name));
     CHECK_ERR_RET(setupDebugMessenger());
     CHECK_ERR_RET(createVkSurface());
@@ -270,7 +272,6 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createDescriptorSets());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
-    CHECK_ERR_RET(scene->unload());
     return MyErrCode::kOk;
 }
 
@@ -1199,7 +1200,7 @@ MyErrCode Application::createGraphicsPipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.frontFace = scene->getFrontFace();
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;

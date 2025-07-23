@@ -19,6 +19,12 @@ MyErrCode Scene::load()
     indices_ = {0, 1, 2, 2, 3, 0};
     index_size_ = indices_.size();
 
+    ubo_.model = glm::mat4(1.0f);
+    ubo_.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                            glm::vec3(0.0f, 1.0f, 0.0f));
+    auto [width, height] = getInitSize();
+    CHECK_ERR_RET(onResize(width, height));
+
     return MyErrCode::kOk;
 }
 
@@ -56,7 +62,7 @@ VkDeviceSize Scene::getIndexDataSize() const { return sizeof(indices_[0]) * indi
 
 void const* Scene::getIndexData() const { return indices_.data(); }
 
-VkVertexInputBindingDescription Scene::getVertexBindingDesc()
+VkVertexInputBindingDescription Scene::getVertexBindingDesc() const
 {
     VkVertexInputBindingDescription desc{};
     desc.binding = 0;
@@ -65,7 +71,9 @@ VkVertexInputBindingDescription Scene::getVertexBindingDesc()
     return desc;
 }
 
-std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs()
+VkFrontFace Scene::getFrontFace() const { return VK_FRONT_FACE_COUNTER_CLOCKWISE; }
+
+std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs() const
 {
     std::vector<VkVertexInputAttributeDescription> descs{2};
     descs[0].binding = 0;
@@ -84,19 +92,12 @@ VkDeviceSize Scene::getUniformDataSize() const { return sizeof(ubo_); }
 
 void const* Scene::getUniformData() const { return &ubo_; }
 
-MyErrCode Scene::updateUniformData(int win_width, int win_height)
-{
-    static auto start_time = std::chrono::high_resolution_clock::now();
-    auto curr_time = std::chrono::high_resolution_clock::now();
-    float time =
-        std::chrono::duration<float, std::chrono::seconds::period>(curr_time - start_time).count();
-    ubo_.model =
-        glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo_.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                            glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo_.proj = glm::perspective(glm::radians(45.0f), win_width / static_cast<float>(win_height),
-                                 0.1f, 10.0f);
-    ubo_.proj[1][1] *= -1;
+std::pair<int, int> Scene::getInitSize() const { return {300, 200}; }
 
+MyErrCode Scene::onResize(int width, int height)
+{
+    ubo_.proj =
+        glm::perspective(glm::radians(45.0f), width / static_cast<float>(height), 0.1f, 10.0f);
+    ubo_.proj[1][1] *= -1;
     return MyErrCode::kOk;
 }

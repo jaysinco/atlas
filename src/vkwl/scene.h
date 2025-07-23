@@ -23,16 +23,19 @@ public:
     VkDeviceSize getVerticeDataSize() const;
     void const* getVerticeData() const;
 
-    VkVertexInputBindingDescription getVertexBindingDesc();
-    std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs();
-
     uint32_t getIndexSize() const;
     VkDeviceSize getIndexDataSize() const;
     void const* getIndexData() const;
 
     VkDeviceSize getUniformDataSize() const;
     void const* getUniformData() const;
-    MyErrCode updateUniformData(int win_width, int win_height);
+
+    VkFrontFace getFrontFace() const;
+    VkVertexInputBindingDescription getVertexBindingDesc() const;
+    std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs() const;
+
+    std::pair<int, int> getInitSize() const;
+    MyErrCode onResize(int width, int height);
 
 private:
     struct Vertex
@@ -49,7 +52,7 @@ private:
     };
 
     std::vector<Vertex> vertices_;
-    uint32_t index_size_;
     std::vector<uint32_t> indices_;
+    uint32_t index_size_;
     UniformBufferObject ubo_;
 };
