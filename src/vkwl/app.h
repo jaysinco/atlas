@@ -63,6 +63,7 @@ private:
                                          uint32_t height);
     static MyErrCode transitionImageLayout(VkImage image, VkImageLayout old_layout,
                                            VkImageLayout new_layout);
+    static MyErrCode createImageView(VkImage image, VkFormat format, VkImageView& image_view);
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
@@ -71,7 +72,7 @@ private:
     static MyErrCode recreateSwapchain();
     static MyErrCode cleanupSwapchain();
     static MyErrCode createSwapchain();
-    static MyErrCode createImageViews();
+    static MyErrCode createSwapchainImageViews();
     static MyErrCode createRenderPass();
     static MyErrCode createDescriptorSetLayout();
     static MyErrCode createPipelineLayout();
@@ -79,6 +80,8 @@ private:
     static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
     static MyErrCode createTextureImage();
+    static MyErrCode createTextureImageView();
+    static MyErrCode createTextureSampler();
     static MyErrCode createVertexBuffer();
     static MyErrCode createIndexBuffer();
     static MyErrCode createUniformBuffers();
@@ -121,6 +124,8 @@ private:
     static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
     static MyVkImage texture_image;
+    static VkImageView texture_image_view;
+    static VkSampler texture_sampler;
     static MyVkBuffer vertex_buffer;
     static MyVkBuffer index_buffer;
     static VkRenderPass render_pass;

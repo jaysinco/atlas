@@ -54,9 +54,11 @@ VkDescriptorPool Application::descriptor_pool = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
 VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
-MyVkImage Application::texture_image;
-MyVkBuffer Application::vertex_buffer;
-MyVkBuffer Application::index_buffer;
+MyVkImage Application::texture_image = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+VkImageView Application::texture_image_view = VK_NULL_HANDLE;
+VkSampler Application::texture_sampler = VK_NULL_HANDLE;
+MyVkBuffer Application::vertex_buffer = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+MyVkBuffer Application::index_buffer = {VK_NULL_HANDLE, VK_NULL_HANDLE};
 VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
@@ -251,7 +253,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createLogicalDevice());
     CHECK_ERR_RET(createVkAllocator());
     CHECK_ERR_RET(createSwapchain());
-    CHECK_ERR_RET(createImageViews());
+    CHECK_ERR_RET(createSwapchainImageViews());
     CHECK_ERR_RET(createRenderPass());
     CHECK_ERR_RET(createDescriptorSetLayout());
     CHECK_ERR_RET(createPipelineLayout());
@@ -259,6 +261,8 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
     CHECK_ERR_RET(createTextureImage());
+    CHECK_ERR_RET(createTextureImageView());
+    CHECK_ERR_RET(createTextureSampler());
     CHECK_ERR_RET(createVertexBuffer());
     CHECK_ERR_RET(createIndexBuffer());
     CHECK_ERR_RET(createUniformBuffers());
@@ -289,6 +293,8 @@ MyErrCode Application::cleanupVulkan()
     }
     vmaDestroyBuffer(vma_allocator, index_buffer.buf, index_buffer.alloc);
     vmaDestroyBuffer(vma_allocator, vertex_buffer.buf, vertex_buffer.alloc);
+    vkDestroySampler(device, texture_sampler, nullptr);
+    vkDestroyImageView(device, texture_image_view, nullptr);
     vmaDestroyImage(vma_allocator, texture_image.img, texture_image.alloc);
     vkDestroyCommandPool(device, command_pool, nullptr);
     vmaDestroyAllocator(vma_allocator);
@@ -304,7 +310,7 @@ MyErrCode Application::recreateSwapchain()
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
     CHECK_ERR_RET(createSwapchain());
-    CHECK_ERR_RET(createImageViews());
+    CHECK_ERR_RET(createSwapchainImageViews());
     CHECK_ERR_RET(createFramebuffers());
     return MyErrCode::kOk;
 }
@@ -594,6 +600,26 @@ MyErrCode Application::transitionImageLayout(VkImage image, VkImageLayout old_la
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createImageView(VkImage image, VkFormat format, VkImageView& image_view)
+{
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = image;
+    view_info.format = format;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount = 1;
+    CHECK_VK_ERR_RET(vkCreateImageView(device, &view_info, nullptr, &image_view));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createVkSurface()
 {
     VkWaylandSurfaceCreateInfoKHR create_info = {};
@@ -762,6 +788,39 @@ MyErrCode Application::createTextureImage()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createTextureImageView()
+{
+    CHECK_ERR_RET(createImageView(texture_image.img, VK_FORMAT_B8G8R8A8_SRGB, texture_image_view));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::createTextureSampler()
+{
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(physical_device, &properties);
+
+    VkSamplerCreateInfo sampler_info{};
+    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.anisotropyEnable = VK_TRUE;
+    sampler_info.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    sampler_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = 0.0f;
+    CHECK_VK_ERR_RET(vkCreateSampler(device, &sampler_info, nullptr, &texture_sampler));
+
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createVertexBuffer()
 {
     VkDeviceSize buffer_size = scene->getVerticeDataSize();
@@ -922,26 +981,12 @@ MyErrCode Application::createShaderModule(std::filesystem::path const& fp, VkSha
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createImageViews()
+MyErrCode Application::createSwapchainImageViews()
 {
     swapchain_image_views.resize(swapchain_images.size());
     for (size_t i = 0; i < swapchain_images.size(); i++) {
-        VkImageViewCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        create_info.image = swapchain_images[i];
-        create_info.format = swapchain_image_format;
-        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        create_info.subresourceRange.baseMipLevel = 0;
-        create_info.subresourceRange.levelCount = 1;
-        create_info.subresourceRange.baseArrayLayer = 0;
-        create_info.subresourceRange.layerCount = 1;
-        CHECK_VK_ERR_RET(
-            vkCreateImageView(device, &create_info, nullptr, &swapchain_image_views[i]));
+        CHECK_ERR_RET(
+            createImageView(swapchain_images[i], swapchain_image_format, swapchain_image_views[i]));
     }
     return MyErrCode::kOk;
 }
