@@ -40,8 +40,9 @@ public:
 private:
     struct Vertex
     {
-        glm::vec2 pos;
+        glm::vec3 pos;
         glm::vec3 color;
+        glm::vec2 tex_coord;
     };
 
     struct UniformBufferObject

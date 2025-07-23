@@ -10,10 +10,10 @@ Scene::~Scene() = default;
 MyErrCode Scene::load()
 {
     vertices_ = {
-        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
-        {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        {{-1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}},
+        {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+        {{1.0f, -1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+        {{1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+        {{-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
     };
 
     indices_ = {0, 1, 2, 2, 3, 0};
@@ -75,16 +75,21 @@ VkFrontFace Scene::getFrontFace() const { return VK_FRONT_FACE_COUNTER_CLOCKWISE
 
 std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs() const
 {
-    std::vector<VkVertexInputAttributeDescription> descs{2};
+    std::vector<VkVertexInputAttributeDescription> descs{3};
     descs[0].binding = 0;
     descs[0].location = 0;
-    descs[0].format = VK_FORMAT_R32G32_SFLOAT;
+    descs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     descs[0].offset = offsetof(Vertex, pos);
 
     descs[1].binding = 0;
     descs[1].location = 1;
     descs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     descs[1].offset = offsetof(Vertex, color);
+
+    descs[2].binding = 0;
+    descs[2].location = 2;
+    descs[2].format = VK_FORMAT_R32G32_SFLOAT;
+    descs[2].offset = offsetof(Vertex, tex_coord);
     return descs;
 }
 
