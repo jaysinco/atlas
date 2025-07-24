@@ -40,15 +40,7 @@ private:
     static void handleToplevelClose(void* data, struct xdg_toplevel* toplevel);
 
 private:
-    static MyErrCode initVulkan(char const* app_name);
-    static MyErrCode cleanupVulkan();
-    static MyErrCode createInstance(char const* app_name);
-    static MyErrCode setupDebugMessenger();
-    static MyErrCode populateDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
-    static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                  VkDebugUtilsMessageTypeFlagsEXT type,
-                                  VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
-                                  void* user_data);
+    static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                                     VkMemoryPropertyFlags properties,
                                     VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
@@ -65,21 +57,30 @@ private:
                                          uint32_t height);
     static MyErrCode transitionImageLayout(VkImage image, VkImageLayout old_layout,
                                            VkImageLayout new_layout);
+    static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                  VkDebugUtilsMessageTypeFlagsEXT type,
+                                  VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
+                                  void* user_data);
+    static MyErrCode initVulkan(char const* app_name);
+    static MyErrCode cleanupVulkan();
+    static MyErrCode createInstance(char const* app_name);
+    static MyErrCode setupDebugMessenger();
+    static MyErrCode populateDebugMessengerInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
     static MyErrCode createLogicalDevice();
     static MyErrCode createVkAllocator();
-    static MyErrCode recreateSwapchain();
     static MyErrCode cleanupSwapchain();
     static MyErrCode createSwapchain();
+    static MyErrCode recreateSwapchain();
     static MyErrCode createSwapchainImageViews();
     static MyErrCode createDepthImagesAndViews();
     static MyErrCode createRenderPass();
+    static MyErrCode createFramebuffers();
     static MyErrCode createDescriptorSetLayout();
     static MyErrCode createPipelineLayout();
     static MyErrCode createGraphicsPipeline();
-    static MyErrCode createFramebuffers();
     static MyErrCode createCommandPool();
     static MyErrCode createTextureImage();
     static MyErrCode createTextureImageView();
@@ -91,12 +92,9 @@ private:
     static MyErrCode createDescriptorSets();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
-    static MyErrCode createShaderModule(std::filesystem::path const& fp, VkShaderModule& mod);
     static MyErrCode recordCommandBuffer(int curr_frame, int image_index);
 
 private:
-    static std::shared_ptr<Scene> scene;
-
     static wl_display* display;
     static wl_registry* registry;
     static wl_compositor* compositor;
@@ -148,6 +146,7 @@ private:
     static std::vector<MyVkBuffer> uniform_buffers;
     static std::vector<VkDescriptorSet> descriptor_sets;
 
+    static std::shared_ptr<Scene> scene;
     static bool need_quit;
     static bool need_resize;
     static bool ready_to_resize;

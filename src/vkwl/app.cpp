@@ -261,10 +261,10 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createSwapchainImageViews());
     CHECK_ERR_RET(createDepthImagesAndViews());
     CHECK_ERR_RET(createRenderPass());
+    CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createDescriptorSetLayout());
     CHECK_ERR_RET(createPipelineLayout());
     CHECK_ERR_RET(createGraphicsPipeline());
-    CHECK_ERR_RET(createFramebuffers());
     CHECK_ERR_RET(createCommandPool());
     CHECK_ERR_RET(createTextureImage());
     CHECK_ERR_RET(createTextureImageView());
@@ -1024,8 +1024,7 @@ MyErrCode Application::createDepthImagesAndViews()
                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, depth_images[i]));
         CHECK_ERR_RET(createVkImageView(depth_images[i].img, depth_image_format,
-                                        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                                        depth_image_views[i]));
+                                        VK_IMAGE_ASPECT_DEPTH_BIT, depth_image_views[i]));
     }
     return MyErrCode::kOk;
 }
@@ -1034,11 +1033,12 @@ MyErrCode Application::createFramebuffers()
 {
     swapchain_frame_buffers.resize(swapchain_images.size());
     for (size_t i = 0; i < swapchain_frame_buffers.size(); i++) {
+        std::array<VkImageView, 2> attachments = {swapchain_image_views[i], depth_image_views[i]};
         VkFramebufferCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         create_info.renderPass = render_pass;
-        create_info.attachmentCount = 1;
-        create_info.pAttachments = &swapchain_image_views[i];
+        create_info.attachmentCount = attachments.size();
+        create_info.pAttachments = attachments.data();
         create_info.width = curr_width;
         create_info.height = curr_height;
         create_info.layers = 1;
@@ -1130,8 +1130,8 @@ MyErrCode Application::createRenderPass()
     color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference depth_attachment_ref = {};
-    color_attachment_ref.attachment = 1;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth_attachment_ref.attachment = 1;
+    depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass = {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -1305,6 +1305,19 @@ MyErrCode Application::createGraphicsPipeline()
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
+    // depth and stencil
+    VkPipelineDepthStencilStateCreateInfo depth_stencil{};
+    depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil.depthTestEnable = VK_TRUE;
+    depth_stencil.depthWriteEnable = VK_TRUE;
+    depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_stencil.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil.minDepthBounds = 0.0f;
+    depth_stencil.maxDepthBounds = 1.0f;
+    depth_stencil.stencilTestEnable = VK_FALSE;
+    depth_stencil.front = {};
+    depth_stencil.back = {};
+
     // pipeline
     VkGraphicsPipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1317,6 +1330,7 @@ MyErrCode Application::createGraphicsPipeline()
     pipeline_info.pMultisampleState = &multisampling;
     pipeline_info.pDepthStencilState = nullptr;
     pipeline_info.pColorBlendState = &color_blending;
+    pipeline_info.pDepthStencilState = &depth_stencil;
     pipeline_info.pDynamicState = &dynamic_state_info;
     pipeline_info.layout = pipeline_layout;
     pipeline_info.renderPass = render_pass;
@@ -1342,7 +1356,9 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
     cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     CHECK_VK_ERR_RET(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
 
-    VkClearValue clear_value = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    std::array<VkClearValue, 2> clear_values{};
+    clear_values[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clear_values[1].depthStencil = {1.0f, 0};
     VkRenderPassBeginInfo render_begin_info = {};
     render_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_begin_info.renderPass = render_pass;
@@ -1351,8 +1367,8 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
     render_begin_info.renderArea.offset.y = 0;
     render_begin_info.renderArea.extent.width = curr_width;
     render_begin_info.renderArea.extent.height = curr_height;
-    render_begin_info.clearValueCount = 1;
-    render_begin_info.pClearValues = &clear_value;
+    render_begin_info.clearValueCount = clear_values.size();
+    render_begin_info.pClearValues = clear_values.data();
     vkCmdBeginRenderPass(command_buffer, &render_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
