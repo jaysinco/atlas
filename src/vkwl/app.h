@@ -56,6 +56,8 @@ private:
                                    VkImageTiling tiling, VkImageUsageFlags usage,
                                    VkMemoryPropertyFlags properties, VmaAllocationCreateFlags flags,
                                    MyVkImage& image);
+    static MyErrCode createVkImageView(VkImage image, VkFormat format,
+                                       VkImageAspectFlags aspect_flags, VkImageView& image_view);
     static MyErrCode beginSingleTimeCommands(VkCommandBuffer& cmd_buf);
     static MyErrCode endSingleTimeCommands(VkCommandBuffer cmd_buf);
     static MyErrCode copyVkBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
@@ -63,7 +65,6 @@ private:
                                          uint32_t height);
     static MyErrCode transitionImageLayout(VkImage image, VkImageLayout old_layout,
                                            VkImageLayout new_layout);
-    static MyErrCode createImageView(VkImage image, VkFormat format, VkImageView& image_view);
     static MyErrCode createVkSurface();
     static MyErrCode pickPhysicalDevice();
     static MyErrCode rateDeviceSuitability(VkPhysicalDevice device, int& score);
@@ -73,6 +74,7 @@ private:
     static MyErrCode cleanupSwapchain();
     static MyErrCode createSwapchain();
     static MyErrCode createSwapchainImageViews();
+    static MyErrCode createDepthImagesAndViews();
     static MyErrCode createRenderPass();
     static MyErrCode createDescriptorSetLayout();
     static MyErrCode createPipelineLayout();
@@ -132,8 +134,11 @@ private:
     static VkRenderPass render_pass;
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;
+    static VkFormat depth_image_format;
     static std::vector<VkImage> swapchain_images;
     static std::vector<VkImageView> swapchain_image_views;
+    static std::vector<MyVkImage> depth_images;
+    static std::vector<VkImageView> depth_image_views;
     static std::vector<VkFramebuffer> swapchain_frame_buffers;
     static std::vector<VkSemaphore> render_finished_semaphores;
     static constexpr int kMaxFramesInFight = 2;

@@ -14,14 +14,18 @@ MyErrCode Scene::load()
         {{1.0f, -1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
         {{1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
         {{-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+        {{-1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+        {{1.0f, -1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+        {{1.0f, 1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+        {{-1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
     };
 
-    indices_ = {0, 1, 2, 2, 3, 0};
+    indices_ = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
     index_size_ = indices_.size();
 
     ubo_.model = glm::mat4(1.0f);
-    ubo_.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                            glm::vec3(0.0f, 1.0f, 0.0f));
+    ubo_.view = glm::lookAt(glm::vec3(-3.0f, -3.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                            glm::vec3(0.0f, 0.0f, 1.0f));
     auto [width, height] = getInitSize();
     CHECK_ERR_RET(onResize(width, height));
 
