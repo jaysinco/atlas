@@ -30,6 +30,7 @@ target_link_libraries(${TARGET_NAME}
     wayland-client
     vulkan
     opencv
+    assimp
 )
 
 file(COPY

@@ -7,6 +7,10 @@
 #include <vector>
 #include <filesystem>
 
+class aiScene;
+class aiNode;
+class aiMesh;
+
 class Scene
 {
 public:
@@ -38,10 +42,16 @@ public:
     MyErrCode onResize(int width, int height);
 
 private:
+    MyErrCode visitNode(aiScene const* scene, aiNode const* node);
+    MyErrCode visitMesh(aiMesh const* mesh);
+    MyErrCode loadModel();
+    MyErrCode unloadModel();
+
+private:
     struct Vertex
     {
         glm::vec3 pos;
-        glm::vec3 color;
+        glm::vec3 normal;
         glm::vec2 tex_coord;
     };
 
@@ -52,8 +62,15 @@ private:
         alignas(16) glm::mat4 proj;
     };
 
+    struct BoundingBox
+    {
+        glm::vec3 lower;
+        glm::vec3 high;
+    };
+
     std::vector<Vertex> vertices_;
     std::vector<uint32_t> indices_;
     uint32_t index_size_;
+    BoundingBox bbox_;
     UniformBufferObject ubo_;
 };

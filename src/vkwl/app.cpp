@@ -757,10 +757,10 @@ MyErrCode Application::createCommandPool()
 
 MyErrCode Application::createTextureImage()
 {
-    auto fpath = scene->getTextureImagePath().string();
-    cv::Mat img_file = cv::imread(fpath, cv::IMREAD_COLOR);
+    auto img_path = scene->getTextureImagePath().string();
+    cv::Mat img_file = cv::imread(img_path, cv::IMREAD_COLOR);
     if (img_file.data == nullptr) {
-        ELOG("failed to load image file: {}", fpath);
+        ELOG("failed to load image file: {}", img_path);
         return MyErrCode::kFailed;
     }
     cv::Mat img;
@@ -1359,6 +1359,7 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
     std::array<VkClearValue, 2> clear_values{};
     clear_values[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
     clear_values[1].depthStencil = {1.0f, 0};
+
     VkRenderPassBeginInfo render_begin_info = {};
     render_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_begin_info.renderPass = render_pass;
