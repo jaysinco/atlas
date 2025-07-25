@@ -21,7 +21,7 @@ Camera::Camera(float aspect, glm::vec3 init_pos, float near, float far, float fo
 void Camera::reset()
 {
     this->pos_ = this->init_pos_;
-    this->yaw_ = -90.0f;
+    this->yaw_ = 90.0f;
     this->pitch_ = 0.0f;
 }
 
@@ -68,10 +68,10 @@ Camera::Axis Camera::getAxis() const
 {
     Axis axis;
     float x = cos(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
-    float y = sin(glm::radians(this->pitch_));
-    float z = sin(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
+    float y = sin(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
+    float z = sin(glm::radians(this->pitch_));
     axis.front = glm::normalize(glm::vec3(x, y, z));
-    axis.right = glm::normalize(glm::cross(axis.front, glm::vec3(0.0f, 1.0f, 0.0f)));
+    axis.right = glm::normalize(glm::cross(axis.front, glm::vec3(0.0f, 0.0f, 1.0f)));
     axis.up = glm::normalize(glm::cross(axis.right, axis.front));
     return axis;
 }
@@ -79,21 +79,24 @@ Camera::Axis Camera::getAxis() const
 glm::mat4 Camera::getViewMatrix() const
 {
     Axis axis = this->getAxis();
-    return glm::lookAt(this->pos_, this->pos_ + axis.front, axis.up);
+    auto center = this->pos_ + axis.front;
+    return glm::lookAt(this->pos_, center, axis.up);
 }
 
 glm::mat4 Camera::getProjectionMatrix() const
 {
-    return glm::perspective(glm::radians(this->fov_), this->aspect_, this->near_, this->far_);
+    auto proj = glm::perspective(glm::radians(this->fov_), this->aspect_, this->near_, this->far_);
+    proj[1][1] *= -1;
+    return proj;
 }
 
 MyErrCode Model::visitMesh(aiMesh const* mesh)
 {
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
         Vertex v = {};
-        v.pos = glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
+        v.pos = glm::vec3(mesh->mVertices[i].x, -mesh->mVertices[i].z, mesh->mVertices[i].y);
         if (mesh->HasNormals()) {
-            v.normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+            v.normal = glm::vec3(mesh->mNormals[i].x, -mesh->mNormals[i].z, mesh->mNormals[i].y);
         }
         if (mesh->mTextureCoords[0]) {
             v.tex_coord = glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
@@ -104,12 +107,12 @@ MyErrCode Model::visitMesh(aiMesh const* mesh)
         aiFace const& face = mesh->mFaces[i];
         for (unsigned j = 0; j < face.mNumIndices; ++j) {
             indices_.push_back(face.mIndices[j]);
-            bbox_.lower.x = std::min(bbox_.lower.x, mesh->mVertices[face.mIndices[j]].x);
-            bbox_.lower.y = std::min(bbox_.lower.y, mesh->mVertices[face.mIndices[j]].y);
-            bbox_.lower.z = std::min(bbox_.lower.z, mesh->mVertices[face.mIndices[j]].z);
-            bbox_.high.x = std::max(bbox_.high.x, mesh->mVertices[face.mIndices[j]].x);
-            bbox_.high.y = std::max(bbox_.high.y, mesh->mVertices[face.mIndices[j]].y);
-            bbox_.high.z = std::max(bbox_.high.z, mesh->mVertices[face.mIndices[j]].z);
+            bbox_.lower.x = std::min(bbox_.lower.x, vertices_[face.mIndices[j]].pos.x);
+            bbox_.lower.y = std::min(bbox_.lower.y, vertices_[face.mIndices[j]].pos.y);
+            bbox_.lower.z = std::min(bbox_.lower.z, vertices_[face.mIndices[j]].pos.z);
+            bbox_.high.x = std::max(bbox_.high.x, vertices_[face.mIndices[j]].pos.x);
+            bbox_.high.y = std::max(bbox_.high.y, vertices_[face.mIndices[j]].pos.y);
+            bbox_.high.z = std::max(bbox_.high.z, vertices_[face.mIndices[j]].pos.z);
         }
     }
     ILOG("-- {}, faces={}, box=[{}, {}]", mesh->mName.C_Str(), mesh->mNumFaces, bbox_.lower,
