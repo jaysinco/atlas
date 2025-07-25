@@ -48,8 +48,8 @@ public:
         kDown,
     };
 
-    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(0.0f, -3.0f, 0.0f),
-           float near = 0.1f, float far = 10.0f, float fov = 45.0f);
+    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(3.0f, 0.0f, 0.0f), float near = 0.1f,
+           float far = 10.0f, float fov = 45.0f);
     void reset();
     void onScreenResize(int width, int height);
     void move(Face face, float distance);

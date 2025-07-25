@@ -21,7 +21,7 @@ Camera::Camera(float aspect, glm::vec3 init_pos, float near, float far, float fo
 void Camera::reset()
 {
     this->pos_ = this->init_pos_;
-    this->yaw_ = 90.0f;
+    this->yaw_ = 180.0f;
     this->pitch_ = 0.0f;
 }
 
@@ -198,14 +198,11 @@ glm::mat4 Model::getModelMatrix() const
 
 std::pair<int, int> Scene::getScreenInitSize() const { return {300, 200}; }
 
-std::filesystem::path Scene::getModelPath() const
-{
-    return toolkit::getDataDir() / "watermill.obj";
-}
+std::filesystem::path Scene::getModelPath() const { return toolkit::getDataDir() / "teapot.obj"; }
 
 std::filesystem::path Scene::getTextureImagePath() const
 {
-    return toolkit::getDataDir() / "watermill-diffuse.png";
+    return toolkit::getDataDir() / "teapot-diffuse.jpg";
 }
 
 std::filesystem::path Scene::getVertSpvPath() const
