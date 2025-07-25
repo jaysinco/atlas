@@ -1,7 +1,6 @@
 #pragma once
 #include "toolkit/error.h"
 #include <vulkan/vulkan.h>
-#define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <vector>
@@ -11,66 +10,123 @@ class aiScene;
 class aiNode;
 class aiMesh;
 
+namespace glm
+{
+std::string toString(vec3 const& v);
+}  // namespace glm
+
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 tex_coord;
+};
+
+struct UniformBufferObject
+{
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
+struct BoundingBox
+{
+    glm::vec3 lower;
+    glm::vec3 high;
+};
+
+class Camera
+{
+public:
+    enum Face
+    {
+        kForward,
+        kBackward,
+        kLeft,
+        kRight,
+        kUp,
+        kDown,
+    };
+
+    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(0.0f, 0.0f, 3.0f), float near = 0.1f,
+           float far = 10.0f, float fov = 45.0f);
+    void reset();
+    void onScreenResize(int width, int height);
+    void move(Face face, float distance);
+    void move(float dx, float dy, float dz);
+    void shake(float ddegree);
+    void nod(float ddegree);
+    glm::mat4 getViewMatrix() const;
+    glm::mat4 getProjectionMatrix() const;
+
+private:
+    struct Axis
+    {
+        glm::vec3 front, right, up;
+    };
+
+    Axis getAxis() const;
+    glm::vec3 const init_pos_;
+    float const near_, far_, fov_;
+    float aspect_;
+    glm::vec3 pos_;
+    float yaw_, pitch_;
+};
+
+class Model
+{
+public:
+    MyErrCode load(std::string const& model_path);
+    MyErrCode unload();
+    void reset();
+    void move(float dx, float dy, float dz);
+    void spin(float ddegree, float axis_x, float axis_y, float axis_z);
+    void zoom(float dx, float dy, float dz);
+    glm::mat4 getModelMatrix() const;
+
+private:
+    MyErrCode visitNode(aiScene const* scene, aiNode const* node);
+    MyErrCode visitMesh(aiMesh const* mesh);
+
+    friend class Scene;
+    uint32_t index_size_;
+    std::vector<Vertex> vertices_;
+    std::vector<uint32_t> indices_;
+    BoundingBox bbox_;
+    glm::mat4 translate_, rotate_, scale_, init_;
+};
+
 class Scene
 {
 public:
-    Scene();
-    ~Scene();
+    std::pair<int, int> getScreenInitSize() const;
+    std::filesystem::path getModelPath() const;
+    std::filesystem::path getTextureImagePath() const;
+    std::filesystem::path getVertSpvPath() const;
+    std::filesystem::path getFragSpvPath() const;
 
     MyErrCode load();
     MyErrCode unload();
 
-    std::filesystem::path getVertSpvPath() const;
-    std::filesystem::path getFragSpvPath() const;
-    std::filesystem::path getTextureImagePath() const;
+    VkDeviceSize getUniformDataSize() const;
+    void const* getUniformData() const;
 
     VkDeviceSize getVerticeDataSize() const;
     void const* getVerticeData() const;
-
     uint32_t getIndexSize() const;
+
     VkDeviceSize getIndexDataSize() const;
     void const* getIndexData() const;
-
-    VkDeviceSize getUniformDataSize() const;
-    void const* getUniformData() const;
 
     VkFrontFace getFrontFace() const;
     VkVertexInputBindingDescription getVertexBindingDesc() const;
     std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs() const;
 
-    std::pair<int, int> getInitSize() const;
-    MyErrCode onResize(int width, int height);
+    MyErrCode onFrameDraw();
+    MyErrCode onScreenResize(int width, int height);
 
 private:
-    MyErrCode visitNode(aiScene const* scene, aiNode const* node);
-    MyErrCode visitMesh(aiMesh const* mesh);
-    MyErrCode loadModel();
-    MyErrCode unloadModel();
-
-private:
-    struct Vertex
-    {
-        glm::vec3 pos;
-        glm::vec3 normal;
-        glm::vec2 tex_coord;
-    };
-
-    struct UniformBufferObject
-    {
-        alignas(16) glm::mat4 model;
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 proj;
-    };
-
-    struct BoundingBox
-    {
-        glm::vec3 lower;
-        glm::vec3 high;
-    };
-
-    std::vector<Vertex> vertices_;
-    std::vector<uint32_t> indices_;
-    uint32_t index_size_;
-    BoundingBox bbox_;
+    Camera camera_;
+    Model model_;
     UniformBufferObject ubo_;
 };

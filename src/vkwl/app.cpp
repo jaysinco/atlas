@@ -123,6 +123,7 @@ MyErrCode Application::mainLoop()
         }
         CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
 
+        CHECK_ERR_RET(scene->onFrameDraw());
         memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
                scene->getUniformDataSize());
 
@@ -181,7 +182,7 @@ MyErrCode Application::initWayland(char const* win_title, char const* app_id)
     CHECK_WL_ERR_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
 
-    auto [width, height] = scene->getInitSize();
+    auto [width, height] = scene->getScreenInitSize();
     curr_width = width;
     curr_height = height;
     xdg_toplevel_set_title(toplevel, win_title);
@@ -240,7 +241,7 @@ void Application::handleToplevelConfigure(void* data, struct xdg_toplevel* tople
         need_resize = true;
         new_width = width;
         new_height = height;
-        scene->onResize(new_width, new_height);
+        scene->onScreenResize(new_width, new_height);
     }
 }
 
