@@ -34,7 +34,7 @@ target_link_libraries(${TARGET_NAME}
 )
 
 file(COPY
-    .temp/teapot.obj
-    .temp/teapot-diffuse.jpg
+    .temp/terracotta.obj
+    .temp/terracotta-diffuse.jpg
     DESTINATION ${MY_RUNTIME_DIR}/data
 )

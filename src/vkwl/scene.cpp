@@ -198,11 +198,14 @@ glm::mat4 Model::getModelMatrix() const
 
 std::pair<int, int> Scene::getScreenInitSize() const { return {300, 200}; }
 
-std::filesystem::path Scene::getModelPath() const { return toolkit::getDataDir() / "teapot.obj"; }
+std::filesystem::path Scene::getModelPath() const
+{
+    return toolkit::getDataDir() / "terracotta.obj";
+}
 
 std::filesystem::path Scene::getTextureImagePath() const
 {
-    return toolkit::getDataDir() / "teapot-diffuse.jpg";
+    return toolkit::getDataDir() / "terracotta-diffuse.jpg";
 }
 
 std::filesystem::path Scene::getVertSpvPath() const
