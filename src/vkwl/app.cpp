@@ -54,6 +54,7 @@ VkDescriptorPool Application::descriptor_pool = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
 VkPipelineLayout Application::pipeline_layout = VK_NULL_HANDLE;
 VkCommandPool Application::command_pool = VK_NULL_HANDLE;
+uint32_t Application::texture_mip_levels;
 MyVkImage Application::texture_image = {VK_NULL_HANDLE, VK_NULL_HANDLE};
 VkImageView Application::texture_image_view = VK_NULL_HANDLE;
 VkSampler Application::texture_sampler = VK_NULL_HANDLE;
@@ -464,8 +465,8 @@ MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createVkImage(uint32_t width, uint32_t height, VkFormat format,
-                                     VkImageTiling tiling, VkImageUsageFlags usage,
+MyErrCode Application::createVkImage(uint32_t width, uint32_t height, uint32_t mip_levels,
+                                     VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
                                      VkMemoryPropertyFlags properties,
                                      VmaAllocationCreateFlags flags, MyVkImage& image)
 {
@@ -475,7 +476,7 @@ MyErrCode Application::createVkImage(uint32_t width, uint32_t height, VkFormat f
     image_info.extent.width = width;
     image_info.extent.height = height;
     image_info.extent.depth = 1;
-    image_info.mipLevels = 1;
+    image_info.mipLevels = mip_levels;
     image_info.arrayLayers = 1;
     image_info.format = format;
     image_info.tiling = tiling;
@@ -493,7 +494,7 @@ MyErrCode Application::createVkImage(uint32_t width, uint32_t height, VkFormat f
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::createVkImageView(VkImage image, VkFormat format,
+MyErrCode Application::createVkImageView(VkImage image, VkFormat format, uint32_t mip_levels,
                                          VkImageAspectFlags aspect_flags, VkImageView& image_view)
 {
     VkImageViewCreateInfo view_info{};
@@ -507,7 +508,7 @@ MyErrCode Application::createVkImageView(VkImage image, VkFormat format,
     view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
     view_info.subresourceRange.aspectMask = aspect_flags;
     view_info.subresourceRange.baseMipLevel = 0;
-    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.levelCount = mip_levels;
     view_info.subresourceRange.baseArrayLayer = 0;
     view_info.subresourceRange.layerCount = 1;
     CHECK_VK_ERR_RET(vkCreateImageView(device, &view_info, nullptr, &image_view));
@@ -584,7 +585,7 @@ MyErrCode Application::copyVkBufferToImage(VkBuffer buffer, VkImage image, uint3
 }
 
 MyErrCode Application::transitionImageLayout(VkImage image, VkImageLayout old_layout,
-                                             VkImageLayout new_layout)
+                                             VkImageLayout new_layout, uint32_t mip_levels)
 {
     VkCommandBuffer cmd_buf;
     CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
@@ -598,7 +599,7 @@ MyErrCode Application::transitionImageLayout(VkImage image, VkImageLayout old_la
     barrier.image = image;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.levelCount = mip_levels;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount = 1;
 
@@ -623,6 +624,76 @@ MyErrCode Application::transitionImageLayout(VkImage image, VkImageLayout old_la
     }
 
     vkCmdPipelineBarrier(cmd_buf, src_stage, dest_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::generateMipmaps(VkImage image, int32_t width, int32_t height,
+                                       uint32_t mip_levels)
+{
+    VkCommandBuffer cmd_buf;
+    CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = image;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    int32_t mip_width = width;
+    int32_t mip_height = height;
+    for (uint32_t i = 1; i < mip_levels; i++) {
+        barrier.subresourceRange.baseMipLevel = i - 1;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &barrier);
+
+        VkImageBlit blit{};
+        blit.srcOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = {mip_width, mip_height, 1};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = i - 1;
+        blit.srcSubresource.baseArrayLayer = 0;
+        blit.srcSubresource.layerCount = 1;
+        blit.dstOffsets[0] = {0, 0, 0};
+        blit.dstOffsets[1] = {mip_width > 1 ? mip_width / 2 : 1,
+                              mip_height > 1 ? mip_height / 2 : 1, 1};
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = i;
+        blit.dstSubresource.baseArrayLayer = 0;
+        blit.dstSubresource.layerCount = 1;
+        vkCmdBlitImage(cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                             &barrier);
+
+        mip_width = mip_width > 1 ? mip_width / 2 : mip_width;
+        mip_height = mip_height > 1 ? mip_height / 2 : mip_height;
+    }
+
+    barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
+                         &barrier);
 
     CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
     return MyErrCode::kOk;
@@ -769,6 +840,7 @@ MyErrCode Application::createTextureImage()
     int image_width = img.cols;
     int image_height = img.rows;
     VkDeviceSize image_size = img.total() * img.elemSize();
+    texture_mip_levels = std::floor(std::log2(std::max(image_width, image_height))) + 1;
 
     MyVkBuffer staging_buffer;
     CHECK_ERR_RET(
@@ -778,19 +850,19 @@ MyErrCode Application::createTextureImage()
 
     memcpy(staging_buffer.alloc_info.pMappedData, img.data, image_size);
 
-    CHECK_ERR_RET(createVkImage(image_width, image_height, VK_FORMAT_B8G8R8A8_SRGB,
-                                VK_IMAGE_TILING_OPTIMAL,
-                                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    CHECK_ERR_RET(createVkImage(image_width, image_height, texture_mip_levels,
+                                VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                    VK_IMAGE_USAGE_SAMPLED_BIT,
                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, texture_image));
 
     CHECK_ERR_RET(transitionImageLayout(texture_image.img, VK_IMAGE_LAYOUT_UNDEFINED,
-                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture_mip_levels));
 
     CHECK_ERR_RET(
         copyVkBufferToImage(staging_buffer.buf, texture_image.img, image_width, image_height));
-
-    CHECK_ERR_RET(transitionImageLayout(texture_image.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+    CHECK_ERR_RET(
+        generateMipmaps(texture_image.img, image_width, image_height, texture_mip_levels));
 
     vmaDestroyBuffer(vma_allocator, staging_buffer.buf, staging_buffer.alloc);
     return MyErrCode::kOk;
@@ -798,7 +870,7 @@ MyErrCode Application::createTextureImage()
 
 MyErrCode Application::createTextureImageView()
 {
-    CHECK_ERR_RET(createVkImageView(texture_image.img, VK_FORMAT_B8G8R8A8_SRGB,
+    CHECK_ERR_RET(createVkImageView(texture_image.img, VK_FORMAT_B8G8R8A8_SRGB, texture_mip_levels,
                                     VK_IMAGE_ASPECT_COLOR_BIT, texture_image_view));
     return MyErrCode::kOk;
 }
@@ -822,9 +894,9 @@ MyErrCode Application::createTextureSampler()
     sampler_info.compareEnable = VK_FALSE;
     sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
     sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler_info.mipLodBias = 0.0f;
     sampler_info.minLod = 0.0f;
-    sampler_info.maxLod = 0.0f;
+    sampler_info.maxLod = texture_mip_levels;
+    sampler_info.mipLodBias = 0.0f;
     CHECK_VK_ERR_RET(vkCreateSampler(device, &sampler_info, nullptr, &texture_sampler));
 
     return MyErrCode::kOk;
@@ -1008,7 +1080,7 @@ MyErrCode Application::createSwapchainImageViews()
 {
     swapchain_image_views.resize(swapchain_images.size());
     for (size_t i = 0; i < swapchain_image_views.size(); i++) {
-        CHECK_ERR_RET(createVkImageView(swapchain_images[i], swapchain_image_format,
+        CHECK_ERR_RET(createVkImageView(swapchain_images[i], swapchain_image_format, 1,
                                         VK_IMAGE_ASPECT_COLOR_BIT, swapchain_image_views[i]));
     }
     return MyErrCode::kOk;
@@ -1020,11 +1092,11 @@ MyErrCode Application::createDepthImagesAndViews()
     depth_image_views.resize(swapchain_images.size());
     depth_image_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
     for (size_t i = 0; i < depth_images.size(); i++) {
-        CHECK_ERR_RET(createVkImage(curr_width, curr_height, depth_image_format,
+        CHECK_ERR_RET(createVkImage(curr_width, curr_height, 1, depth_image_format,
                                     VK_IMAGE_TILING_OPTIMAL,
                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, depth_images[i]));
-        CHECK_ERR_RET(createVkImageView(depth_images[i].img, depth_image_format,
+        CHECK_ERR_RET(createVkImageView(depth_images[i].img, depth_image_format, 1,
                                         VK_IMAGE_ASPECT_DEPTH_BIT, depth_image_views[i]));
     }
     return MyErrCode::kOk;

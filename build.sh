@@ -145,7 +145,7 @@ function cmake_build() {
     && \
     cp $build_folder/compile_commands.json $build_folder/.. \
     && \
-    cmake --build . --parallel=`nproc`
+    cmake --build . --parallel=$(( $(nproc) > 4 ? 4 : $(nproc) ))
 }
 
 function linux_driver_build() {

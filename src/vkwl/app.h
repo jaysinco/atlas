@@ -44,11 +44,11 @@ private:
     static MyErrCode createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                                     VkMemoryPropertyFlags properties,
                                     VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
-    static MyErrCode createVkImage(uint32_t width, uint32_t height, VkFormat format,
-                                   VkImageTiling tiling, VkImageUsageFlags usage,
+    static MyErrCode createVkImage(uint32_t width, uint32_t height, uint32_t mip_levels,
+                                   VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
                                    VkMemoryPropertyFlags properties, VmaAllocationCreateFlags flags,
                                    MyVkImage& image);
-    static MyErrCode createVkImageView(VkImage image, VkFormat format,
+    static MyErrCode createVkImageView(VkImage image, VkFormat format, uint32_t mip_levels,
                                        VkImageAspectFlags aspect_flags, VkImageView& image_view);
     static MyErrCode beginSingleTimeCommands(VkCommandBuffer& cmd_buf);
     static MyErrCode endSingleTimeCommands(VkCommandBuffer cmd_buf);
@@ -56,7 +56,9 @@ private:
     static MyErrCode copyVkBufferToImage(VkBuffer buffer, VkImage image, uint32_t width,
                                          uint32_t height);
     static MyErrCode transitionImageLayout(VkImage image, VkImageLayout old_layout,
-                                           VkImageLayout new_layout);
+                                           VkImageLayout new_layout, uint32_t mip_levels);
+    static MyErrCode generateMipmaps(VkImage image, int32_t width, int32_t height,
+                                     uint32_t mip_levels);
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
@@ -124,6 +126,7 @@ private:
     static VkPipeline graphics_pipeline;
     static VkPipelineLayout pipeline_layout;
     static VkCommandPool command_pool;
+    static uint32_t texture_mip_levels;
     static MyVkImage texture_image;
     static VkImageView texture_image_view;
     static VkSampler texture_sampler;
