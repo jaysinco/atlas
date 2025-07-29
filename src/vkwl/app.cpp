@@ -358,7 +358,11 @@ void Application::handleKeyboardLeave(void* data, struct wl_keyboard* keyboard, 
 void Application::handleKeyboardKey(void* data, struct wl_keyboard* keyboard, uint32_t serial,
                                     uint32_t time, uint32_t key, uint32_t state)
 {
-    scene->onKeyboardPress(key, state == 1);
+    bool down = state == 1;
+    if (key == KEY_Q && down) {
+        need_quit = true;
+    }
+    scene->onKeyboardPress(key, down);
 }
 
 void Application::handleKeyboardModifiers(void* data, struct wl_keyboard* keyboard, uint32_t serial,

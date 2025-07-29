@@ -6,6 +6,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <linux/input.h>
 
 namespace glm
 {
@@ -64,7 +65,7 @@ void Camera::nod(float ddegree)
     this->pitch_ = std::max(std::min(this->pitch_ + ddegree, 89.0f), -89.0f);
 }
 
-Camera::Axis Camera::getAxis() const
+Axis Camera::getAxis() const
 {
     Axis axis;
     float x = cos(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
@@ -220,6 +221,7 @@ std::filesystem::path Scene::getFragSpvPath() const
 
 MyErrCode Scene::load()
 {
+    trackball_ = {};
     CHECK_ERR_RET(model_.load(getModelPath().string()));
     auto [width, height] = getScreenInitSize();
     CHECK_ERR_RET(onScreenResize(width, height));
@@ -297,10 +299,52 @@ MyErrCode Scene::onScreenResize(int width, int height)
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onMouseMove(double xpos, double ypos) { return MyErrCode::kOk; }
+MyErrCode Scene::onMouseMove(double xpos, double ypos)
+{
+    float dx = xpos - trackball_.last_mouse_x;
+    float dy = ypos - trackball_.last_mouse_y;
+    if (trackball_.middle_mouse_pressed) {
+        camera_.move(Camera::kRight, -0.01 * dx);
+        camera_.move(Camera::kUp, 0.01 * dy);
+    } else if (trackball_.left_mouse_pressed) {
+        camera_.shake(-0.15 * dx);
+        camera_.nod(-0.15 * dy);
+    } else if (trackball_.right_mouse_pressed) {
+        Axis camera_axis = camera_.getAxis();
+        glm::vec3 camera_dir = dx * camera_axis.right - dy * camera_axis.up;
+        glm::vec3 spin_dir = glm::cross(camera_dir, camera_axis.front);
+        float distance = std::sqrt(dx * dx + dy * dy);
+        model_.spin(distance, spin_dir.x, spin_dir.y, spin_dir.z);
+    }
+    trackball_.last_mouse_x = xpos;
+    trackball_.last_mouse_y = ypos;
+    return MyErrCode::kOk;
+}
 
-MyErrCode Scene::onMousePress(int button, bool down) { return MyErrCode::kOk; }
+MyErrCode Scene::onMousePress(int button, bool down)
+{
+    if (button == 0) {
+        trackball_.left_mouse_pressed = down;
+    } else if (button == 1) {
+        trackball_.right_mouse_pressed = down;
+    } else if (button == 2) {
+        trackball_.middle_mouse_pressed = down;
+    }
+    return MyErrCode::kOk;
+}
 
-MyErrCode Scene::onMouseScroll(double xoffset, double yoffset) { return MyErrCode::kOk; }
+MyErrCode Scene::onMouseScroll(double xoffset, double yoffset)
+{
+    double sensitivity = -0.03;
+    camera_.move(Camera::kForward, yoffset * sensitivity);
+    return MyErrCode::kOk;
+}
 
-MyErrCode Scene::onKeyboardPress(int key, bool down) { return MyErrCode::kOk; }
+MyErrCode Scene::onKeyboardPress(int key, bool down)
+{
+    if (key == KEY_R && down) {
+        camera_.reset();
+        model_.reset();
+    }
+    return MyErrCode::kOk;
+}

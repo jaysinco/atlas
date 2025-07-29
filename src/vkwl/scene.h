@@ -15,6 +15,13 @@ namespace glm
 std::string toString(vec3 const& v);
 }  // namespace glm
 
+struct Axis
+{
+    glm::vec3 front;
+    glm::vec3 right;
+    glm::vec3 up;
+};
+
 struct Vertex
 {
     glm::vec3 pos;
@@ -22,17 +29,26 @@ struct Vertex
     glm::vec2 tex_coord;
 };
 
+struct BoundingBox
+{
+    glm::vec3 lower;
+    glm::vec3 high;
+};
+
+struct Trackball
+{
+    double last_mouse_x;
+    double last_mouse_y;
+    bool left_mouse_pressed;
+    bool right_mouse_pressed;
+    bool middle_mouse_pressed;
+};
+
 struct UniformBufferObject
 {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
-};
-
-struct BoundingBox
-{
-    glm::vec3 lower;
-    glm::vec3 high;
 };
 
 class Camera
@@ -58,14 +74,9 @@ public:
     void nod(float ddegree);
     glm::mat4 getViewMatrix() const;
     glm::mat4 getProjectionMatrix() const;
+    Axis getAxis() const;
 
 private:
-    struct Axis
-    {
-        glm::vec3 front, right, up;
-    };
-
-    Axis getAxis() const;
     glm::vec3 const init_pos_;
     float const near_, far_, fov_;
     float aspect_;
@@ -132,5 +143,6 @@ public:
 private:
     Camera camera_;
     Model model_;
+    Trackball trackball_;
     UniformBufferObject ubo_;
 };
