@@ -310,11 +310,8 @@ MyErrCode Scene::onMouseMove(double xpos, double ypos)
         camera_.shake(-0.15 * dx);
         camera_.nod(-0.15 * dy);
     } else if (trackball_.right_mouse_pressed) {
-        Axis camera_axis = camera_.getAxis();
-        glm::vec3 camera_dir = dx * camera_axis.right - dy * camera_axis.up;
-        glm::vec3 spin_dir = glm::cross(camera_dir, camera_axis.front);
-        float distance = std::sqrt(dx * dx + dy * dy);
-        model_.spin(distance, spin_dir.x, spin_dir.y, spin_dir.z);
+        glm::vec3 spin_dir = camera_.getAxis().up;
+        model_.spin(dx, spin_dir.x, spin_dir.y, spin_dir.z);
     }
     trackball_.last_mouse_x = xpos;
     trackball_.last_mouse_y = ypos;
