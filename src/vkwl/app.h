@@ -45,7 +45,8 @@ private:
                                     VkMemoryPropertyFlags properties,
                                     VmaAllocationCreateFlags flags, MyVkBuffer& buffer);
     static MyErrCode createVkImage(uint32_t width, uint32_t height, uint32_t mip_levels,
-                                   VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+                                   VkSampleCountFlagBits num_samples, VkFormat format,
+                                   VkImageTiling tiling, VkImageUsageFlags usage,
                                    VkMemoryPropertyFlags properties, VmaAllocationCreateFlags flags,
                                    MyVkImage& image);
     static MyErrCode createVkImageView(VkImage image, VkFormat format, uint32_t mip_levels,
@@ -77,6 +78,7 @@ private:
     static MyErrCode createSwapchain();
     static MyErrCode recreateSwapchain();
     static MyErrCode createSwapchainImageViews();
+    static MyErrCode createColorImagesAndViews();
     static MyErrCode createDepthImagesAndViews();
     static MyErrCode createRenderPass();
     static MyErrCode createFramebuffers();
@@ -136,8 +138,11 @@ private:
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;
     static VkFormat depth_image_format;
+    static constexpr VkSampleCountFlagBits kMsaaSamples = VK_SAMPLE_COUNT_8_BIT;
     static std::vector<VkImage> swapchain_images;
     static std::vector<VkImageView> swapchain_image_views;
+    static std::vector<MyVkImage> color_images;
+    static std::vector<VkImageView> color_image_views;
     static std::vector<MyVkImage> depth_images;
     static std::vector<VkImageView> depth_image_views;
     static std::vector<VkFramebuffer> swapchain_frame_buffers;

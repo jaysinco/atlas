@@ -66,6 +66,8 @@ VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
 VkFormat Application::depth_image_format = VK_FORMAT_UNDEFINED;
 std::vector<VkImage> Application::swapchain_images;
 std::vector<VkImageView> Application::swapchain_image_views;
+std::vector<MyVkImage> Application::color_images;
+std::vector<VkImageView> Application::color_image_views;
 std::vector<MyVkImage> Application::depth_images;
 std::vector<VkImageView> Application::depth_image_views;
 std::vector<VkFramebuffer> Application::swapchain_frame_buffers;
@@ -261,6 +263,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createVkAllocator());
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createSwapchainImageViews());
+    CHECK_ERR_RET(createColorImagesAndViews());
     CHECK_ERR_RET(createDepthImagesAndViews());
     CHECK_ERR_RET(createRenderPass());
     CHECK_ERR_RET(createFramebuffers());
@@ -318,6 +321,7 @@ MyErrCode Application::recreateSwapchain()
     CHECK_ERR_RET(cleanupSwapchain());
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createSwapchainImageViews());
+    CHECK_ERR_RET(createColorImagesAndViews());
     CHECK_ERR_RET(createDepthImagesAndViews());
     CHECK_ERR_RET(createFramebuffers());
     return MyErrCode::kOk;
@@ -329,6 +333,8 @@ MyErrCode Application::cleanupSwapchain()
         vkDestroyFramebuffer(device, swapchain_frame_buffers[i], nullptr);
         vkDestroyImageView(device, depth_image_views[i], nullptr);
         vmaDestroyImage(vma_allocator, depth_images[i].img, depth_images[i].alloc);
+        vkDestroyImageView(device, color_image_views[i], nullptr);
+        vmaDestroyImage(vma_allocator, color_images[i].img, color_images[i].alloc);
         vkDestroyImageView(device, swapchain_image_views[i], nullptr);
     }
     vkDestroySwapchainKHR(device, swapchain, nullptr);
@@ -466,7 +472,8 @@ MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usag
 }
 
 MyErrCode Application::createVkImage(uint32_t width, uint32_t height, uint32_t mip_levels,
-                                     VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+                                     VkSampleCountFlagBits num_samples, VkFormat format,
+                                     VkImageTiling tiling, VkImageUsageFlags usage,
                                      VkMemoryPropertyFlags properties,
                                      VmaAllocationCreateFlags flags, MyVkImage& image)
 {
@@ -482,7 +489,7 @@ MyErrCode Application::createVkImage(uint32_t width, uint32_t height, uint32_t m
     image_info.tiling = tiling;
     image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image_info.usage = usage;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.samples = num_samples;
     image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VmaAllocationCreateInfo alloc_info = {};
@@ -851,7 +858,8 @@ MyErrCode Application::createTextureImage()
     memcpy(staging_buffer.alloc_info.pMappedData, img.data, image_size);
 
     CHECK_ERR_RET(createVkImage(image_width, image_height, texture_mip_levels,
-                                VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                                VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_B8G8R8A8_SRGB,
+                                VK_IMAGE_TILING_OPTIMAL,
                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                     VK_IMAGE_USAGE_SAMPLED_BIT,
                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, texture_image));
@@ -1086,13 +1094,29 @@ MyErrCode Application::createSwapchainImageViews()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::createColorImagesAndViews()
+{
+    color_images.resize(swapchain_images.size());
+    color_image_views.resize(swapchain_images.size());
+    VkFormat color_image_format = swapchain_image_format;
+    for (size_t i = 0; i < color_images.size(); i++) {
+        CHECK_ERR_RET(createVkImage(
+            curr_width, curr_height, 1, kMsaaSamples, color_image_format, VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, color_images[i]));
+        CHECK_ERR_RET(createVkImageView(color_images[i].img, color_image_format, 1,
+                                        VK_IMAGE_ASPECT_COLOR_BIT, color_image_views[i]));
+    }
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createDepthImagesAndViews()
 {
     depth_images.resize(swapchain_images.size());
     depth_image_views.resize(swapchain_images.size());
     depth_image_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
     for (size_t i = 0; i < depth_images.size(); i++) {
-        CHECK_ERR_RET(createVkImage(curr_width, curr_height, 1, depth_image_format,
+        CHECK_ERR_RET(createVkImage(curr_width, curr_height, 1, kMsaaSamples, depth_image_format,
                                     VK_IMAGE_TILING_OPTIMAL,
                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, depth_images[i]));
@@ -1106,7 +1130,8 @@ MyErrCode Application::createFramebuffers()
 {
     swapchain_frame_buffers.resize(swapchain_images.size());
     for (size_t i = 0; i < swapchain_frame_buffers.size(); i++) {
-        std::array<VkImageView, 2> attachments = {swapchain_image_views[i], depth_image_views[i]};
+        std::array<VkImageView, 3> attachments = {color_image_views[i], depth_image_views[i],
+                                                  swapchain_image_views[i]};
         VkFramebufferCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         create_info.renderPass = render_pass;
@@ -1180,23 +1205,33 @@ MyErrCode Application::createRenderPass()
 {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = swapchain_image_format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.samples = kMsaaSamples;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription depth_attachment = {};
     depth_attachment.format = depth_image_format;
-    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.samples = kMsaaSamples;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription color_attachment_resolve{};
+    color_attachment_resolve.format = swapchain_image_format;
+    color_attachment_resolve.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment_resolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment_resolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment_resolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment_resolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment_resolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -1206,11 +1241,16 @@ MyErrCode Application::createRenderPass()
     depth_attachment_ref.attachment = 1;
     depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentReference color_attachment_resolve_ref{};
+    color_attachment_resolve_ref.attachment = 2;
+    color_attachment_resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
     VkSubpassDescription subpass = {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_ref;
     subpass.pDepthStencilAttachment = &depth_attachment_ref;
+    subpass.pResolveAttachments = &color_attachment_resolve_ref;
 
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -1223,7 +1263,8 @@ MyErrCode Application::createRenderPass()
     dependency.dstAccessMask =
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkAttachmentDescription, 2> attachments = {color_attachment, depth_attachment};
+    std::array<VkAttachmentDescription, 3> attachments = {color_attachment, depth_attachment,
+                                                          color_attachment_resolve};
     VkRenderPassCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     create_info.flags = 0;
@@ -1348,8 +1389,8 @@ MyErrCode Application::createGraphicsPipeline()
     // multisampling
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.rasterizationSamples = kMsaaSamples;
+    multisampling.sampleShadingEnable = VK_TRUE;
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr;
     multisampling.alphaToCoverageEnable = VK_FALSE;
