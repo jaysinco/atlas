@@ -296,3 +296,11 @@ MyErrCode Scene::onScreenResize(int width, int height)
     camera_.onScreenResize(width, height);
     return MyErrCode::kOk;
 }
+
+MyErrCode Scene::onMouseMove(double xpos, double ypos) { return MyErrCode::kOk; }
+
+MyErrCode Scene::onMousePress(int button, bool down) { return MyErrCode::kOk; }
+
+MyErrCode Scene::onMouseScroll(double xoffset, double yoffset) { return MyErrCode::kOk; }
+
+MyErrCode Scene::onKeyboardPress(int key, bool down) { return MyErrCode::kOk; }

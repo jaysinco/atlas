@@ -3,6 +3,7 @@
 #include "toolkit/toolkit.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <linux/input.h>
 
 #define GET_VK_EXTENSION_FUNCTION(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
 
@@ -32,15 +33,40 @@ wl_surface* Application::surface = nullptr;
 xdg_wm_base* Application::shell = nullptr;
 xdg_surface* Application::shell_surface = nullptr;
 xdg_toplevel* Application::toplevel = nullptr;
+wl_seat* Application::seat = nullptr;
+wl_pointer* Application::pointer = nullptr;
+wl_keyboard* Application::keyboard = nullptr;
+wl_registry_listener Application::registry_listener = {
+    .global = &handleRegistry,
+};
+xdg_wm_base_listener Application::shell_listener = {
+    .ping = handleShellPing,
+};
+xdg_surface_listener Application::shell_surface_listener = {
+    .configure = handleShellSurfaceConfigure,
+};
+xdg_toplevel_listener Application::toplevel_listener = {
+    .configure = handleToplevelConfigure,
+    .close = handleToplevelClose,
+};
+wl_seat_listener Application::seat_listener = {
+    .capabilities = handleSeatCapabilities,
+};
+wl_pointer_listener Application::pointer_listener = {
+    .enter = handlePointerEnter,
+    .leave = handlePointerLeave,
+    .motion = handlePointerMotion,
+    .button = handlePointerButton,
+    .axis = handlePointerAxis,
+};
+wl_keyboard_listener Application::keyboard_listener = {
+    .keymap = handleKeyboardKeymap,
+    .enter = handleKeyboardEnter,
+    .leave = handleKeyboardLeave,
+    .key = handleKeyboardKey,
+    .modifiers = handleKeyboardModifiers,
+};
 
-wl_registry_listener Application::registry_listener = {.global = &handleRegistry};
-xdg_wm_base_listener Application::shell_listener = {.ping = handleShellPing};
-xdg_surface_listener Application::shell_surface_listener = {.configure =
-                                                                handleShellSurfaceConfigure};
-xdg_toplevel_listener Application::toplevel_listener = {.configure = handleToplevelConfigure,
-                                                        .close = handleToplevelClose};
-
-std::shared_ptr<Scene> Application::scene = nullptr;
 VkInstance Application::instance = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT Application::debug_messenger = VK_NULL_HANDLE;
 VkSurfaceKHR Application::vulkan_surface = VK_NULL_HANDLE;
@@ -78,6 +104,7 @@ std::vector<VkFence> Application::in_flight_fences;
 std::vector<MyVkBuffer> Application::uniform_buffers;
 std::vector<VkDescriptorSet> Application::descriptor_sets;
 
+std::shared_ptr<Scene> Application::scene = nullptr;
 bool Application::need_quit = false;
 bool Application::ready_to_resize = false;
 bool Application::need_resize = false;
@@ -220,6 +247,9 @@ void Application::handleRegistry(void* data, struct wl_registry* registry, uint3
         CHECK_WL_ERR(shell =
                          (xdg_wm_base*)wl_registry_bind(registry, name, &xdg_wm_base_interface, 1));
         xdg_wm_base_add_listener(shell, &shell_listener, nullptr);
+    } else if (strcmp(interface, wl_seat_interface.name) == 0) {
+        CHECK_WL_ERR(seat = (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, 1));
+        wl_seat_add_listener(seat, &seat_listener, nullptr);
     }
 }
 
@@ -251,6 +281,90 @@ void Application::handleToplevelConfigure(void* data, struct xdg_toplevel* tople
 void Application::handleToplevelClose(void* data, struct xdg_toplevel* toplevel)
 {
     need_quit = true;
+}
+
+void Application::handleSeatCapabilities(void* data, struct wl_seat* seat, uint32_t caps)
+{
+    if ((caps & WL_SEAT_CAPABILITY_POINTER) && !pointer) {
+        pointer = wl_seat_get_pointer(seat);
+        wl_pointer_add_listener(pointer, &pointer_listener, nullptr);
+    } else if (!(caps & WL_SEAT_CAPABILITY_POINTER) && pointer) {
+        wl_pointer_destroy(pointer);
+        pointer = nullptr;
+    }
+
+    if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !keyboard) {
+        keyboard = wl_seat_get_keyboard(seat);
+        wl_keyboard_add_listener(keyboard, &keyboard_listener, nullptr);
+    } else if (!(caps & WL_SEAT_CAPABILITY_KEYBOARD) && keyboard) {
+        wl_keyboard_destroy(keyboard);
+        keyboard = nullptr;
+    }
+}
+
+void Application::handlePointerEnter(void* data, struct wl_pointer* pointer, uint32_t serial,
+                                     struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy)
+{
+}
+
+void Application::handlePointerLeave(void* data, struct wl_pointer* pointer, uint32_t serial,
+                                     struct wl_surface* surface)
+{
+}
+
+void Application::handlePointerMotion(void* data, struct wl_pointer* pointer, uint32_t time,
+                                      wl_fixed_t sx, wl_fixed_t sy)
+{
+    scene->onMouseMove(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+}
+
+void Application::handlePointerButton(void* data, struct wl_pointer* wl_pointer, uint32_t serial,
+                                      uint32_t time, uint32_t button, uint32_t state)
+{
+    int btn = 0;
+    if (button == BTN_LEFT) {
+        btn = 0;
+    } else if (button == BTN_RIGHT) {
+        btn = 1;
+    } else if (button == BTN_MIDDLE) {
+        btn = 2;
+    }
+    scene->onMousePress(btn, state == WL_POINTER_BUTTON_STATE_PRESSED);
+}
+
+void Application::handlePointerAxis(void* data, struct wl_pointer* wl_pointer, uint32_t time,
+                                    uint32_t axis, wl_fixed_t value)
+{
+    if (axis == 0) {
+        scene->onMouseScroll(0.0, wl_fixed_to_double(value));
+    }
+}
+
+void Application::handleKeyboardKeymap(void* data, struct wl_keyboard* keyboard, uint32_t format,
+                                       int fd, uint32_t size)
+{
+}
+
+void Application::handleKeyboardEnter(void* data, struct wl_keyboard* keyboard, uint32_t serial,
+                                      struct wl_surface* surface, struct wl_array* keys)
+{
+}
+
+void Application::handleKeyboardLeave(void* data, struct wl_keyboard* keyboard, uint32_t serial,
+                                      struct wl_surface* surface)
+{
+}
+
+void Application::handleKeyboardKey(void* data, struct wl_keyboard* keyboard, uint32_t serial,
+                                    uint32_t time, uint32_t key, uint32_t state)
+{
+    scene->onKeyboardPress(key, state == 1);
+}
+
+void Application::handleKeyboardModifiers(void* data, struct wl_keyboard* keyboard, uint32_t serial,
+                                          uint32_t mods_depressed, uint32_t mods_latched,
+                                          uint32_t mods_locked, uint32_t group)
+{
 }
 
 MyErrCode Application::initVulkan(char const* app_name)

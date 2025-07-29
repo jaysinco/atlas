@@ -124,6 +124,10 @@ public:
 
     MyErrCode onFrameDraw();
     MyErrCode onScreenResize(int width, int height);
+    MyErrCode onMouseMove(double xpos, double ypos);
+    MyErrCode onMousePress(int button, bool down);
+    MyErrCode onMouseScroll(double xoffset, double yoffset);
+    MyErrCode onKeyboardPress(int key, bool down);
 
 private:
     Camera camera_;
