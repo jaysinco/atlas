@@ -196,7 +196,7 @@ glm::mat4 Model::getModelMatrix() const
     return this->translate_ * this->rotate_ * this->scale_ * this->init_;
 }
 
-std::pair<int, int> Scene::getScreenInitSize() const { return {300, 200}; }
+std::pair<int, int> Scene::getScreenInitSize() const { return {600, 500}; }
 
 std::filesystem::path Scene::getModelPath() const
 {
