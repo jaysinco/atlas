@@ -49,6 +49,8 @@ struct UniformBufferObject
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+    alignas(16) glm::vec3 light_pos;
+    alignas(16) glm::vec3 light_color;
 };
 
 class Camera
@@ -65,7 +67,7 @@ public:
     };
 
     // z is up, right hand
-    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(3.0f, 0.0f, 0.0f),
+    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(0.0f, 3.0f, 0.0f),
            glm::vec3 init_center = glm::vec3(0.0f, 0.0f, 0.0f), float near = 0.1f,
            float far = 100.0f, float fov = 45.0f);
     void reset();

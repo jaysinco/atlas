@@ -285,6 +285,8 @@ MyErrCode Scene::onFrameDraw()
     ubo_.model = model_.getModelMatrix();
     ubo_.view = camera_.getViewMatrix();
     ubo_.proj = camera_.getProjectionMatrix();
+    ubo_.light_pos = ubo_.view * ubo_.model * glm::vec4(3.0f, 3.0f, 5.0f, 1.0f);
+    ubo_.light_color = glm::vec3(1.0f, 1.0f, 1.0f);
     return MyErrCode::kOk;
 }
 
