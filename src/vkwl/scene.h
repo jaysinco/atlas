@@ -64,8 +64,10 @@ public:
         kDown,
     };
 
-    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(3.0f, 0.0f, 0.0f), float near = 0.1f,
-           float far = 10.0f, float fov = 45.0f);
+    // z is up, right hand
+    Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(3.0f, 0.0f, 0.0f),
+           glm::vec3 init_center = glm::vec3(0.0f, 0.0f, 0.0f), float near = 0.1f,
+           float far = 100.0f, float fov = 45.0f);
     void reset();
     void onScreenResize(int width, int height);
     void move(Face face, float distance);
@@ -78,6 +80,7 @@ public:
 
 private:
     glm::vec3 const init_pos_;
+    glm::vec3 const init_center_;
     float const near_, far_, fov_;
     float aspect_;
     glm::vec3 pos_;

@@ -13,64 +13,65 @@ namespace glm
 std::string toString(glm::vec3 const& v) { return FSTR("({}, {}, {})", v.x, v.y, v.z); }
 }  // namespace glm
 
-Camera::Camera(float aspect, glm::vec3 init_pos, float near, float far, float fov)
-    : aspect_(aspect), init_pos_(init_pos), near_(near), far_(far), fov_(fov)
+Camera::Camera(float aspect, glm::vec3 init_pos, glm::vec3 init_center, float near, float far,
+               float fov)
+    : aspect_(aspect),
+      init_pos_(init_pos),
+      init_center_(init_center),
+      near_(near),
+      far_(far),
+      fov_(fov)
 {
-    this->reset();
+    reset();
 }
 
 void Camera::reset()
 {
-    this->pos_ = this->init_pos_;
-    this->yaw_ = 180.0f;
-    this->pitch_ = 0.0f;
+    pos_ = init_pos_;
+    glm::vec3 lookat = glm::normalize(init_center_ - init_pos_);
+    pitch_ = glm::degrees(asin(lookat.z));
+    yaw_ = glm::degrees(atan2(lookat.y, lookat.x));
 }
 
-void Camera::onScreenResize(int width, int height)
-{
-    this->aspect_ = static_cast<float>(width) / height;
-}
+void Camera::onScreenResize(int width, int height) { aspect_ = static_cast<float>(width) / height; }
 
 void Camera::move(Face face, float distance)
 {
-    Axis axis = this->getAxis();
+    Axis axis = getAxis();
     switch (face) {
         case kForward:
-            this->pos_ += axis.front * distance;
+            pos_ += axis.front * distance;
             break;
         case kBackward:
-            this->pos_ -= axis.front * distance;
+            pos_ -= axis.front * distance;
             break;
         case kLeft:
-            this->pos_ -= axis.right * distance;
+            pos_ -= axis.right * distance;
             break;
         case kRight:
-            this->pos_ += axis.right * distance;
+            pos_ += axis.right * distance;
             break;
         case kUp:
-            this->pos_ += axis.up * distance;
+            pos_ += axis.up * distance;
             break;
         case kDown:
-            this->pos_ -= axis.up * distance;
+            pos_ -= axis.up * distance;
             break;
     }
 }
 
-void Camera::move(float dx, float dy, float dz) { this->pos_ += glm::vec3(dx, dy, dz); }
+void Camera::move(float dx, float dy, float dz) { pos_ += glm::vec3(dx, dy, dz); }
 
-void Camera::shake(float ddegree) { this->yaw_ += ddegree; }
+void Camera::shake(float ddegree) { yaw_ += ddegree; }
 
-void Camera::nod(float ddegree)
-{
-    this->pitch_ = std::max(std::min(this->pitch_ + ddegree, 89.0f), -89.0f);
-}
+void Camera::nod(float ddegree) { pitch_ = std::max(std::min(pitch_ + ddegree, 89.0f), -89.0f); }
 
 Axis Camera::getAxis() const
 {
     Axis axis;
-    float x = cos(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
-    float y = sin(glm::radians(this->yaw_)) * cos(glm::radians(this->pitch_));
-    float z = sin(glm::radians(this->pitch_));
+    float x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+    float y = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+    float z = sin(glm::radians(pitch_));
     axis.front = glm::normalize(glm::vec3(x, y, z));
     axis.right = glm::normalize(glm::cross(axis.front, glm::vec3(0.0f, 0.0f, 1.0f)));
     axis.up = glm::normalize(glm::cross(axis.right, axis.front));
@@ -79,14 +80,14 @@ Axis Camera::getAxis() const
 
 glm::mat4 Camera::getViewMatrix() const
 {
-    Axis axis = this->getAxis();
-    auto center = this->pos_ + axis.front;
-    return glm::lookAt(this->pos_, center, axis.up);
+    Axis axis = getAxis();
+    auto center = pos_ + axis.front;
+    return glm::lookAt(pos_, center, axis.up);
 }
 
 glm::mat4 Camera::getProjectionMatrix() const
 {
-    auto proj = glm::perspective(glm::radians(this->fov_), this->aspect_, this->near_, this->far_);
+    auto proj = glm::perspective(glm::radians(fov_), aspect_, near_, far_);
     proj[1][1] *= -1;
     return proj;
 }
@@ -152,9 +153,9 @@ MyErrCode Model::load(std::string const& model_path)
     glm::vec3 center = (bbox_.high + bbox_.lower) / 2.0f;
     glm::vec3 size = bbox_.high - bbox_.lower;
     float factor = 2.0f / std::max({size.x, size.y, size.z});
-    this->init_ =
+    init_ =
         glm::scale(glm::mat4(1.0f), glm::vec3(factor)) * glm::translate(glm::mat4(1.0f), -center);
-    this->reset();
+    reset();
 
     return MyErrCode::kOk;
 }
@@ -170,43 +171,37 @@ MyErrCode Model::unload()
 
 void Model::reset()
 {
-    this->translate_ = glm::mat4(1.0f);
-    this->rotate_ = glm::mat4(1.0f);
-    this->scale_ = glm::mat4(1.0f);
+    translate_ = glm::mat4(1.0f);
+    rotate_ = glm::mat4(1.0f);
+    scale_ = glm::mat4(1.0f);
 }
 
 void Model::move(float dx, float dy, float dz)
 {
-    this->translate_ = glm::translate(glm::mat4(1.0f), glm::vec3(dx, dy, dz)) * this->translate_;
+    translate_ = glm::translate(glm::mat4(1.0f), glm::vec3(dx, dy, dz)) * translate_;
 }
 
 void Model::spin(float ddegree, float axis_x, float axis_y, float axis_z)
 {
-    this->rotate_ =
+    rotate_ =
         glm::rotate(glm::mat4(1.0f), glm::radians(ddegree), glm::vec3(axis_x, axis_y, axis_z)) *
-        this->rotate_;
+        rotate_;
 }
 
 void Model::zoom(float dx, float dy, float dz)
 {
-    this->scale_ = glm::scale(glm::mat4(1.0f), glm::vec3(dx, dy, dz)) * this->scale_;
+    scale_ = glm::scale(glm::mat4(1.0f), glm::vec3(dx, dy, dz)) * scale_;
 }
 
-glm::mat4 Model::getModelMatrix() const
-{
-    return this->translate_ * this->rotate_ * this->scale_ * this->init_;
-}
+glm::mat4 Model::getModelMatrix() const { return translate_ * rotate_ * scale_ * init_; }
 
 std::pair<int, int> Scene::getScreenInitSize() const { return {600, 500}; }
 
-std::filesystem::path Scene::getModelPath() const
-{
-    return toolkit::getDataDir() / "terracotta.obj";
-}
+std::filesystem::path Scene::getModelPath() const { return toolkit::getDataDir() / "lyran.obj"; }
 
 std::filesystem::path Scene::getTextureImagePath() const
 {
-    return toolkit::getDataDir() / "terracotta-diffuse.jpg";
+    return toolkit::getDataDir() / "lyran-diffuse.jpg";
 }
 
 std::filesystem::path Scene::getVertSpvPath() const
@@ -304,11 +299,11 @@ MyErrCode Scene::onMouseMove(double xpos, double ypos)
     float dx = xpos - trackball_.last_mouse_x;
     float dy = ypos - trackball_.last_mouse_y;
     if (trackball_.middle_mouse_pressed) {
-        camera_.move(Camera::kRight, -0.01 * dx);
-        camera_.move(Camera::kUp, 0.01 * dy);
-    } else if (trackball_.left_mouse_pressed) {
         camera_.shake(-0.15 * dx);
         camera_.nod(-0.15 * dy);
+    } else if (trackball_.left_mouse_pressed) {
+        camera_.move(Camera::kRight, -0.01 * dx);
+        camera_.move(Camera::kUp, 0.01 * dy);
     } else if (trackball_.right_mouse_pressed) {
         glm::vec3 spin_dir = camera_.getAxis().up;
         model_.spin(dx, spin_dir.x, spin_dir.y, spin_dir.z);
