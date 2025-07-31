@@ -195,7 +195,7 @@ void Model::zoom(float dx, float dy, float dz)
 
 glm::mat4 Model::getModelMatrix() const { return translate_ * rotate_ * scale_ * init_; }
 
-std::pair<int, int> Scene::getScreenInitSize() const { return {600, 500}; }
+std::pair<int, int> Scene::getScreenInitSize() const { return {300, 300}; }
 
 std::filesystem::path Scene::getModelPath() const { return toolkit::getDataDir() / "lyran.obj"; }
 

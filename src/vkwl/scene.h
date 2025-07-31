@@ -5,6 +5,9 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <filesystem>
+#define BUILD_WITH_EASY_PROFILER
+#define USING_EASY_PROFILER
+#include <easy/profiler.h>
 
 class aiScene;
 class aiNode;

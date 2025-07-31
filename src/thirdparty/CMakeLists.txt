@@ -18,6 +18,7 @@ if(UNIX)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
     add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
     add_subdirectory(${TC_THIRDPARTY}/assimp assimp)
+    add_subdirectory(${TC_THIRDPARTY}/easy-profiler easy-profiler)
 
     set(COPY_FILE_LIST
         ${TC_INSTALL_DIR}/lib/libz.so
@@ -60,6 +61,7 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libtcmalloc_minimal.so.4
         ${TC_INSTALL_DIR}/lib/libglm.so
         ${TC_INSTALL_DIR}/lib/libassimp.so
+        ${TC_INSTALL_DIR}/lib/libeasy_profiler.so
     )
 
     if(TC_CROSS_COMPILE)

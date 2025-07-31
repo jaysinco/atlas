@@ -31,6 +31,7 @@ target_link_libraries(${TARGET_NAME}
     vulkan
     opencv
     assimp
+    easy-profiler 
 )
 
 file(COPY

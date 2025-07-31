@@ -130,6 +130,8 @@ MyErrCode Application::mainLoop()
 {
     int curr_frame = 0;
     while (!need_quit) {
+        EASY_BLOCK("one loop", profiler::colors::Red100);
+
         if (need_resize && ready_to_resize) {
             curr_width = new_width;
             curr_height = new_height;
@@ -139,8 +141,11 @@ MyErrCode Application::mainLoop()
             wl_surface_commit(surface);
         }
 
+        EASY_BLOCK("wait fence", profiler::colors::Blue100);
         CHECK_VK_ERR_RET(
             vkWaitForFences(device, 1, &in_flight_fences[curr_frame], VK_TRUE, UINT64_MAX));
+        EASY_END_BLOCK;
+
         uint32_t image_index;
         VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
                                                 image_available_semaphores[curr_frame],
@@ -190,7 +195,12 @@ MyErrCode Application::mainLoop()
         }
 
         curr_frame = (curr_frame + 1) % kMaxFramesInFight;
+
+        EASY_BLOCK("wayland handle event", profiler::colors::Green100);
         wl_display_roundtrip(display);
+        EASY_END_BLOCK;
+
+        EASY_END_BLOCK;
     }
 
     return MyErrCode::kOk;
