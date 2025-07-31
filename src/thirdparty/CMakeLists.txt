@@ -11,12 +11,12 @@ add_subdirectory(${TC_THIRDPARTY}/uwebsockets uwebsockets)
 add_subdirectory(${TC_THIRDPARTY}/libcpr libcpr)
 add_subdirectory(${TC_THIRDPARTY}/opencv opencv)
 add_subdirectory(${TC_THIRDPARTY}/sentencepiece sentencepiece)
-add_subdirectory(${TC_THIRDPARTY}/glm glm)
 
 if(UNIX)
     add_subdirectory(imgui)
     add_subdirectory(${TC_THIRDPARTY}/opencl-clhpp opencl-clhpp)
     add_subdirectory(${TC_THIRDPARTY}/ftxui ftxui)
+    add_subdirectory(${TC_THIRDPARTY}/glm glm)
     add_subdirectory(${TC_THIRDPARTY}/assimp assimp)
     add_subdirectory(${TC_THIRDPARTY}/easy-profiler easy-profiler)
 

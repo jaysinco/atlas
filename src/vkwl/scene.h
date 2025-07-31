@@ -8,6 +8,7 @@
 #define BUILD_WITH_EASY_PROFILER
 #define USING_EASY_PROFILER
 #include <easy/profiler.h>
+#include <easy/arbitrary_value.h>
 
 class aiScene;
 class aiNode;

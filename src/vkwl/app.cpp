@@ -147,9 +147,12 @@ MyErrCode Application::mainLoop()
         EASY_END_BLOCK;
 
         uint32_t image_index;
+
+        EASY_BLOCK("wait next image", profiler::colors::Pink100);
         VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
                                                 image_available_semaphores[curr_frame],
                                                 VK_NULL_HANDLE, &image_index);
+        EASY_END_BLOCK;
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
             CHECK_ERR_RET(recreateSwapchain());
             continue;
@@ -157,6 +160,8 @@ MyErrCode Application::mainLoop()
             CHECK_VK_ERR_RET(result);
         }
         CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
+
+        EASY_VALUE("image index", image_index);
 
         CHECK_ERR_RET(scene->onFrameDraw());
         memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
