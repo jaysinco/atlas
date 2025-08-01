@@ -44,6 +44,11 @@ if(UNIX)
         ${TC_INSTALL_DIR}/lib/libopencv_imgcodecs.so
         ${TC_INSTALL_DIR}/lib/libopencv_imgproc.so
         ${TC_INSTALL_DIR}/lib/libopencv_ximgproc.so
+        ${TC_INSTALL_DIR}/lib/libopencv_video.so
+        ${TC_INSTALL_DIR}/lib/libopencv_calib3d.so
+        ${TC_INSTALL_DIR}/lib/libopencv_dnn.so
+        ${TC_INSTALL_DIR}/lib/libopencv_features2d.so
+        ${TC_INSTALL_DIR}/lib/libopencv_flann.so
         ${TC_INSTALL_DIR}/lib/libjpeg.so
         ${TC_INSTALL_DIR}/lib/libwebp.so
         ${TC_INSTALL_DIR}/lib/libpng16.so
@@ -68,6 +73,8 @@ if(UNIX)
         list(APPEND COPY_FILE_LIST
             ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
             ${TC_INSTALL_DIR}/lib/libpcap.so
+            ${TC_INSTALL_DIR}/lib/libwayland-client.so
+            ${TC_INSTALL_DIR}/lib/libffi.so.8
         )
     endif()
 

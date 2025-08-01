@@ -33,3 +33,8 @@ target_link_libraries(${TARGET_NAME}-device-query PUBLIC
     toolkit
     opencl-clhpp
 )
+
+file(COPY
+    ../cuda/data/hdr.jpg
+    DESTINATION ${MY_RUNTIME_DIR}/data
+)
