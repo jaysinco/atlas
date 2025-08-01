@@ -13,4 +13,6 @@ add_executable(${TARGET_NAME}
     cpuid.s
 )
 
+target_link_options(${TARGET_NAME} PUBLIC -z noexecstack)
+
 target_link_libraries(${TARGET_NAME} toolkit)
