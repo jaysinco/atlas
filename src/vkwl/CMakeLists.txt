@@ -11,6 +11,7 @@ add_executable(${TARGET_NAME}
     ${WAYLAND_PROTO_SRC}
     vk-mem-alloc.cpp
     scene.cpp
+    keycode.cpp
     app.cpp
     main.cpp
 )

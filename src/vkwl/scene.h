@@ -46,6 +46,8 @@ struct Trackball
     bool left_mouse_pressed;
     bool right_mouse_pressed;
     bool middle_mouse_pressed;
+    bool shift_down;
+    bool ctrl_down;
 };
 
 struct UniformBufferObject
@@ -147,10 +149,10 @@ public:
     MyErrCode onMouseMove(double xpos, double ypos);
     MyErrCode onMousePress(int button, bool down);
     MyErrCode onMouseScroll(double xoffset, double yoffset);
-    MyErrCode onKeyboardPress(int key, bool down);
+    MyErrCode onKeyboardPress(int key, bool down, bool& need_quit);
 
 private:
-    MyErrCode drawImgui();
+    MyErrCode drawImGui();
 
     Camera camera_;
     Model model_;

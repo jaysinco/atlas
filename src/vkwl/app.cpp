@@ -338,19 +338,14 @@ void Application::handlePointerLeave(void* data, struct wl_pointer* pointer, uin
 void Application::handlePointerMotion(void* data, struct wl_pointer* pointer, uint32_t time,
                                       wl_fixed_t sx, wl_fixed_t sy)
 {
-    ImGuiIO& io = ImGui::GetIO();
     double x = wl_fixed_to_double(sx);
     double y = wl_fixed_to_double(sy);
-    io.AddMousePosEvent(x, y);
-    if (!io.WantCaptureMouse) {
-        scene->onMouseMove(x, y);
-    }
+    scene->onMouseMove(x, y);
 }
 
 void Application::handlePointerButton(void* data, struct wl_pointer* wl_pointer, uint32_t serial,
                                       uint32_t time, uint32_t button, uint32_t state)
 {
-    ImGuiIO& io = ImGui::GetIO();
     int btn = 0;
     if (button == BTN_LEFT) {
         btn = 0;
@@ -360,22 +355,15 @@ void Application::handlePointerButton(void* data, struct wl_pointer* wl_pointer,
         btn = 2;
     }
     bool down = state == WL_POINTER_BUTTON_STATE_PRESSED;
-    io.AddMouseButtonEvent(btn, down);
-    if (!io.WantCaptureMouse) {
-        scene->onMousePress(btn, down);
-    }
+    scene->onMousePress(btn, down);
 }
 
 void Application::handlePointerAxis(void* data, struct wl_pointer* wl_pointer, uint32_t time,
                                     uint32_t axis, wl_fixed_t value)
 {
-    ImGuiIO& io = ImGui::GetIO();
     if (axis == 0) {
         double yoffset = wl_fixed_to_double(value);
-        io.AddMouseWheelEvent(0.0, yoffset / -10.0);
-        if (!io.WantCaptureMouse) {
-            scene->onMouseScroll(0.0, yoffset);
-        }
+        scene->onMouseScroll(0.0, yoffset);
     }
 }
 
@@ -397,15 +385,8 @@ void Application::handleKeyboardLeave(void* data, struct wl_keyboard* keyboard, 
 void Application::handleKeyboardKey(void* data, struct wl_keyboard* keyboard, uint32_t serial,
                                     uint32_t time, uint32_t key, uint32_t state)
 {
-    ImGuiIO& io = ImGui::GetIO();
     bool down = state == 1;
-    if (key == KEY_Q && down) {
-        need_quit = true;
-    }
-    // io.AddInputCharacter();
-    if (!io.WantCaptureKeyboard) {
-        scene->onKeyboardPress(key, down);
-    }
+    scene->onKeyboardPress(key, down, need_quit);
 }
 
 void Application::handleKeyboardModifiers(void* data, struct wl_keyboard* keyboard, uint32_t serial,

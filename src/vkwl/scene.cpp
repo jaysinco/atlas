@@ -8,6 +8,7 @@
 #include <assimp/postprocess.h>
 #include <linux/input.h>
 #include <imgui/imgui.h>
+#include "keycode.h"
 
 namespace glm
 {
@@ -283,7 +284,7 @@ void const* Scene::getUniformData() const { return &ubo_; }
 
 MyErrCode Scene::onFrameDraw()
 {
-    CHECK_ERR_RET(drawImgui());
+    CHECK_ERR_RET(drawImGui());
 
     ubo_.model = model_.getModelMatrix();
     ubo_.view = camera_.getViewMatrix();
@@ -302,6 +303,12 @@ MyErrCode Scene::onScreenResize(int width, int height)
 
 MyErrCode Scene::onMouseMove(double xpos, double ypos)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMousePosEvent(xpos, ypos);
+    if (io.WantCaptureMouse) {
+        return MyErrCode::kOk;
+    }
+
     float dx = xpos - trackball_.last_mouse_x;
     float dy = ypos - trackball_.last_mouse_y;
     if (trackball_.middle_mouse_pressed) {
@@ -321,6 +328,12 @@ MyErrCode Scene::onMouseMove(double xpos, double ypos)
 
 MyErrCode Scene::onMousePress(int button, bool down)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMouseButtonEvent(button, down);
+    if (io.WantCaptureMouse) {
+        return MyErrCode::kOk;
+    }
+
     if (button == 0) {
         trackball_.left_mouse_pressed = down;
     } else if (button == 1) {
@@ -333,21 +346,51 @@ MyErrCode Scene::onMousePress(int button, bool down)
 
 MyErrCode Scene::onMouseScroll(double xoffset, double yoffset)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMouseWheelEvent(0.0, yoffset / -10.0);
+    if (io.WantCaptureMouse) {
+        return MyErrCode::kOk;
+    }
+
     double sensitivity = -0.03;
     camera_.move(Camera::kForward, yoffset * sensitivity);
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onKeyboardPress(int key, bool down)
+MyErrCode Scene::onKeyboardPress(int key, bool down, bool& need_quit)
 {
-    if (key == KEY_R && down) {
+    if (key == KEY_LEFTSHIFT) {
+        trackball_.shift_down = down;
+    } else if (key == KEY_LEFTCTRL) {
+        trackball_.ctrl_down = down;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (key == KEY_BACKSPACE || key == KEY_LEFT || key == KEY_RIGHT) {
+        io.AddKeyEvent(static_cast<ImGuiKey>(KeyCode::convertTo(KeyCode::kImGui, key, false)),
+                       down);
+    } else if (down) {
+        if (int c = KeyCode::convertTo(KeyCode::kAscii, key, trackball_.shift_down); c >= 0) {
+            io.AddInputCharacter(c);
+        }
+    }
+    if (io.WantCaptureKeyboard) {
+        return MyErrCode::kOk;
+    }
+
+    if (!down) {
+        return MyErrCode::kOk;
+    }
+    if (key == KEY_Q) {
+        need_quit = true;
+    } else if (key == KEY_R) {
         camera_.reset();
         model_.reset();
     }
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::drawImgui()
+MyErrCode Scene::drawImGui()
 {
     ImGui::ShowDemoWindow();
     return MyErrCode::kOk;
