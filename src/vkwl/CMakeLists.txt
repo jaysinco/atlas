@@ -32,6 +32,7 @@ target_link_libraries(${TARGET_NAME}
     opencv
     assimp
     easy-profiler 
+    imgui
 )
 
 file(COPY

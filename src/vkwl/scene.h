@@ -150,6 +150,8 @@ public:
     MyErrCode onKeyboardPress(int key, bool down);
 
 private:
+    MyErrCode drawImgui();
+
     Camera camera_;
     Model model_;
     Trackball trackball_;

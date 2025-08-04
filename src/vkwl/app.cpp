@@ -4,6 +4,8 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <linux/input.h>
+#include <imgui/imgui.h>
+#include <imgui/backends/imgui_impl_vulkan.h>
 
 #define GET_VK_EXTENSION_FUNCTION(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
 
@@ -75,6 +77,7 @@ VkDevice Application::device = VK_NULL_HANDLE;
 VmaAllocator Application::vma_allocator = VK_NULL_HANDLE;
 uint32_t Application::graphics_queue_family_index = 0;
 VkQueue Application::graphics_queue = VK_NULL_HANDLE;
+VkDescriptorPool Application::imgui_descriptor_pool = VK_NULL_HANDLE;
 VkDescriptorSetLayout Application::descriptor_set_layout = VK_NULL_HANDLE;
 VkDescriptorPool Application::descriptor_pool = VK_NULL_HANDLE;
 VkPipeline Application::graphics_pipeline = VK_NULL_HANDLE;
@@ -163,9 +166,14 @@ MyErrCode Application::mainLoop()
 
         EASY_VALUE("image index", image_index);
 
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(curr_width, curr_height);
+        ImGui_ImplVulkan_NewFrame();
+        ImGui::NewFrame();
         CHECK_ERR_RET(scene->onFrameDraw());
         memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
                scene->getUniformDataSize());
+        ImGui::Render();
 
         CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
         CHECK_ERR_RET(recordCommandBuffer(curr_frame, image_index));
@@ -330,12 +338,19 @@ void Application::handlePointerLeave(void* data, struct wl_pointer* pointer, uin
 void Application::handlePointerMotion(void* data, struct wl_pointer* pointer, uint32_t time,
                                       wl_fixed_t sx, wl_fixed_t sy)
 {
-    scene->onMouseMove(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    ImGuiIO& io = ImGui::GetIO();
+    double x = wl_fixed_to_double(sx);
+    double y = wl_fixed_to_double(sy);
+    io.AddMousePosEvent(x, y);
+    if (!io.WantCaptureMouse) {
+        scene->onMouseMove(x, y);
+    }
 }
 
 void Application::handlePointerButton(void* data, struct wl_pointer* wl_pointer, uint32_t serial,
                                       uint32_t time, uint32_t button, uint32_t state)
 {
+    ImGuiIO& io = ImGui::GetIO();
     int btn = 0;
     if (button == BTN_LEFT) {
         btn = 0;
@@ -344,14 +359,23 @@ void Application::handlePointerButton(void* data, struct wl_pointer* wl_pointer,
     } else if (button == BTN_MIDDLE) {
         btn = 2;
     }
-    scene->onMousePress(btn, state == WL_POINTER_BUTTON_STATE_PRESSED);
+    bool down = state == WL_POINTER_BUTTON_STATE_PRESSED;
+    io.AddMouseButtonEvent(btn, down);
+    if (!io.WantCaptureMouse) {
+        scene->onMousePress(btn, down);
+    }
 }
 
 void Application::handlePointerAxis(void* data, struct wl_pointer* wl_pointer, uint32_t time,
                                     uint32_t axis, wl_fixed_t value)
 {
+    ImGuiIO& io = ImGui::GetIO();
     if (axis == 0) {
-        scene->onMouseScroll(0.0, wl_fixed_to_double(value));
+        double yoffset = wl_fixed_to_double(value);
+        io.AddMouseWheelEvent(0.0, yoffset / -10.0);
+        if (!io.WantCaptureMouse) {
+            scene->onMouseScroll(0.0, yoffset);
+        }
     }
 }
 
@@ -373,11 +397,15 @@ void Application::handleKeyboardLeave(void* data, struct wl_keyboard* keyboard, 
 void Application::handleKeyboardKey(void* data, struct wl_keyboard* keyboard, uint32_t serial,
                                     uint32_t time, uint32_t key, uint32_t state)
 {
+    ImGuiIO& io = ImGui::GetIO();
     bool down = state == 1;
     if (key == KEY_Q && down) {
         need_quit = true;
     }
-    scene->onKeyboardPress(key, down);
+    // io.AddInputCharacter();
+    if (!io.WantCaptureKeyboard) {
+        scene->onKeyboardPress(key, down);
+    }
 }
 
 void Application::handleKeyboardModifiers(void* data, struct wl_keyboard* keyboard, uint32_t serial,
@@ -414,6 +442,7 @@ MyErrCode Application::initVulkan(char const* app_name)
     CHECK_ERR_RET(createDescriptorSets());
     CHECK_ERR_RET(createCommandBuffers());
     CHECK_ERR_RET(createSyncObjects());
+    CHECK_ERR_RET(setupImgui());
     return MyErrCode::kOk;
 }
 
@@ -421,6 +450,9 @@ MyErrCode Application::cleanupVulkan()
 {
     CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
+    vkDestroyDescriptorPool(device, imgui_descriptor_pool, nullptr);
+    ImGui_ImplVulkan_Shutdown();
+    ImGui::DestroyContext();
     vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
@@ -1413,6 +1445,60 @@ MyErrCode Application::createRenderPass()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::setupImgui()
+{
+    VkDescriptorPoolSize pool_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000},
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000;
+    pool_info.poolSizeCount = std::size(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+    CHECK_VK_ERR_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &imgui_descriptor_pool));
+
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.LogFilename = nullptr;
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Alpha = 1.0;
+    style.ButtonTextAlign = ImVec2(0.0, 0.0);
+
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = instance;
+    init_info.PhysicalDevice = physical_device;
+    init_info.Device = device;
+    init_info.Queue = graphics_queue;
+    init_info.DescriptorPool = imgui_descriptor_pool;
+    init_info.MinImageCount = swapchain_images.size();
+    init_info.ImageCount = swapchain_images.size();
+    init_info.MSAASamples = kMsaaSamples;
+    ImGui_ImplVulkan_Init(&init_info, render_pass);
+
+    VkCommandBuffer cmd_buf;
+    CHECK_ERR_RET(beginSingleTimeCommands(cmd_buf));
+    ImGui_ImplVulkan_CreateFontsTexture(cmd_buf);
+    CHECK_ERR_RET(endSingleTimeCommands(cmd_buf));
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::createDescriptorSetLayout()
 {
     VkDescriptorSetLayoutBinding ubo_layout_binding{};
@@ -1645,6 +1731,8 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
                             &descriptor_sets[curr_frame], 0, nullptr);
 
     vkCmdDrawIndexed(command_buffer, scene->getIndexSize(), 1, 0, 0, 0);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
 
     vkCmdEndRenderPass(command_buffer);
     CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));

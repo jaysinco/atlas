@@ -118,6 +118,7 @@ private:
     static MyErrCode createDescriptorSets();
     static MyErrCode createCommandBuffers();
     static MyErrCode createSyncObjects();
+    static MyErrCode setupImgui();
     static MyErrCode recordCommandBuffer(int curr_frame, int image_index);
 
 private:
@@ -151,6 +152,7 @@ private:
     static VmaAllocator vma_allocator;
     static uint32_t graphics_queue_family_index;
     static VkQueue graphics_queue;
+    static VkDescriptorPool imgui_descriptor_pool;
     static VkDescriptorSetLayout descriptor_set_layout;
     static VkDescriptorPool descriptor_pool;
     static VkPipeline graphics_pipeline;

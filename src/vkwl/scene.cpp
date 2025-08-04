@@ -7,6 +7,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <linux/input.h>
+#include <imgui/imgui.h>
 
 namespace glm
 {
@@ -282,11 +283,14 @@ void const* Scene::getUniformData() const { return &ubo_; }
 
 MyErrCode Scene::onFrameDraw()
 {
+    CHECK_ERR_RET(drawImgui());
+
     ubo_.model = model_.getModelMatrix();
     ubo_.view = camera_.getViewMatrix();
     ubo_.proj = camera_.getProjectionMatrix();
     ubo_.light_pos = ubo_.view * ubo_.model * glm::vec4(3.0f, 3.0f, 5.0f, 1.0f);
     ubo_.light_color = glm::vec3(1.0f, 1.0f, 1.0f);
+
     return MyErrCode::kOk;
 }
 
@@ -340,5 +344,11 @@ MyErrCode Scene::onKeyboardPress(int key, bool down)
         camera_.reset();
         model_.reset();
     }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Scene::drawImgui()
+{
+    ImGui::ShowDemoWindow();
     return MyErrCode::kOk;
 }
