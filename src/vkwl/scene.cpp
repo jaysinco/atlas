@@ -218,7 +218,7 @@ std::filesystem::path Scene::getFragSpvPath() const
 
 MyErrCode Scene::load()
 {
-    trackball_ = {};
+    gs_ = {};
     CHECK_ERR_RET(model_.load(getModelPath().string()));
     auto [width, height] = getScreenInitSize();
     CHECK_ERR_RET(onScreenResize(width, height));
@@ -284,7 +284,7 @@ void const* Scene::getUniformData() const { return &ubo_; }
 
 MyErrCode Scene::onFrameDraw()
 {
-    CHECK_ERR_RET(drawImGui());
+    CHECK_ERR_RET(drawGui());
 
     ubo_.model = model_.getModelMatrix();
     ubo_.view = camera_.getViewMatrix();
@@ -309,20 +309,20 @@ MyErrCode Scene::onMouseMove(double xpos, double ypos)
         return MyErrCode::kOk;
     }
 
-    float dx = xpos - trackball_.last_mouse_x;
-    float dy = ypos - trackball_.last_mouse_y;
-    if (trackball_.middle_mouse_pressed) {
+    float dx = xpos - gs_.last_mouse_x;
+    float dy = ypos - gs_.last_mouse_y;
+    if (gs_.middle_mouse_pressed) {
         camera_.shake(-0.15 * dx);
         camera_.nod(-0.15 * dy);
-    } else if (trackball_.left_mouse_pressed) {
+    } else if (gs_.left_mouse_pressed) {
         camera_.move(Camera::kRight, -0.01 * dx);
         camera_.move(Camera::kUp, 0.01 * dy);
-    } else if (trackball_.right_mouse_pressed) {
+    } else if (gs_.right_mouse_pressed) {
         glm::vec3 spin_dir = camera_.getAxis().up;
         model_.spin(dx, spin_dir.x, spin_dir.y, spin_dir.z);
     }
-    trackball_.last_mouse_x = xpos;
-    trackball_.last_mouse_y = ypos;
+    gs_.last_mouse_x = xpos;
+    gs_.last_mouse_y = ypos;
     return MyErrCode::kOk;
 }
 
@@ -335,11 +335,11 @@ MyErrCode Scene::onMousePress(int button, bool down)
     }
 
     if (button == 0) {
-        trackball_.left_mouse_pressed = down;
+        gs_.left_mouse_pressed = down;
     } else if (button == 1) {
-        trackball_.right_mouse_pressed = down;
+        gs_.right_mouse_pressed = down;
     } else if (button == 2) {
-        trackball_.middle_mouse_pressed = down;
+        gs_.middle_mouse_pressed = down;
     }
     return MyErrCode::kOk;
 }
@@ -360,21 +360,21 @@ MyErrCode Scene::onMouseScroll(double xoffset, double yoffset)
 MyErrCode Scene::onKeyboardPress(int key, bool down, bool& need_quit)
 {
     if (key == KEY_LEFTSHIFT) {
-        trackball_.shift_down = down;
+        gs_.shift_down = down;
     } else if (key == KEY_LEFTCTRL) {
-        trackball_.ctrl_down = down;
+        gs_.ctrl_down = down;
     }
 
     ImGuiIO& io = ImGui::GetIO();
-    if (key == KEY_BACKSPACE || key == KEY_LEFT || key == KEY_RIGHT) {
-        io.AddKeyEvent(static_cast<ImGuiKey>(KeyCode::convertTo(KeyCode::kImGui, key, false)),
-                       down);
-    } else if (down) {
-        if (int c = KeyCode::convertTo(KeyCode::kAscii, key, trackball_.shift_down); c >= 0) {
-            io.AddInputCharacter(c);
-        }
-    }
     if (io.WantCaptureKeyboard) {
+        if (key == KEY_BACKSPACE || key == KEY_LEFT || key == KEY_RIGHT) {
+            io.AddKeyEvent(static_cast<ImGuiKey>(KeyCode::convertTo(KeyCode::kImGui, key, false)),
+                           down);
+        } else if (down) {
+            if (int c = KeyCode::convertTo(KeyCode::kAscii, key, gs_.shift_down); c >= 0) {
+                io.AddInputCharacter(c);
+            }
+        }
         return MyErrCode::kOk;
     }
 
@@ -390,8 +390,16 @@ MyErrCode Scene::onKeyboardPress(int key, bool down, bool& need_quit)
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::drawImGui()
+MyErrCode Scene::drawGui()
 {
-    ImGui::ShowDemoWindow();
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
+    ImGui::Begin("vkwl");
+    ImGui::Checkbox("Show Demo", &gs_.show_demo);
+    ImGui::End();
+
+    if (gs_.show_demo) {
+        ImGui::ShowDemoWindow();
+    }
+
     return MyErrCode::kOk;
 }

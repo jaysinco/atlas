@@ -26,39 +26,6 @@ struct Axis
     glm::vec3 up;
 };
 
-struct Vertex
-{
-    glm::vec3 pos;
-    glm::vec3 normal;
-    glm::vec2 tex_coord;
-};
-
-struct BoundingBox
-{
-    glm::vec3 lower;
-    glm::vec3 high;
-};
-
-struct Trackball
-{
-    double last_mouse_x;
-    double last_mouse_y;
-    bool left_mouse_pressed;
-    bool right_mouse_pressed;
-    bool middle_mouse_pressed;
-    bool shift_down;
-    bool ctrl_down;
-};
-
-struct UniformBufferObject
-{
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
-    alignas(16) glm::vec3 light_pos;
-    alignas(16) glm::vec3 light_color;
-};
-
 class Camera
 {
 public:
@@ -95,6 +62,19 @@ private:
     float yaw_, pitch_;
 };
 
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 tex_coord;
+};
+
+struct BoundingBox
+{
+    glm::vec3 lower;
+    glm::vec3 high;
+};
+
 class Model
 {
 public:
@@ -116,6 +96,27 @@ private:
     std::vector<uint32_t> indices_;
     BoundingBox bbox_;
     glm::mat4 translate_, rotate_, scale_, init_;
+};
+
+struct UniformBufferObject
+{
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+    alignas(16) glm::vec3 light_pos;
+    alignas(16) glm::vec3 light_color;
+};
+
+struct GuiState
+{
+    double last_mouse_x;
+    double last_mouse_y;
+    bool left_mouse_pressed;
+    bool right_mouse_pressed;
+    bool middle_mouse_pressed;
+    bool shift_down;
+    bool ctrl_down;
+    bool show_demo;
 };
 
 class Scene
@@ -152,10 +153,10 @@ public:
     MyErrCode onKeyboardPress(int key, bool down, bool& need_quit);
 
 private:
-    MyErrCode drawImGui();
+    MyErrCode drawGui();
 
     Camera camera_;
     Model model_;
-    Trackball trackball_;
     UniformBufferObject ubo_;
+    GuiState gs_;
 };

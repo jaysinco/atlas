@@ -1543,8 +1543,10 @@ MyErrCode Application::createGraphicsPipeline()
     VkPipelineShaderStageCreateInfo shader_stages_info[] = {vert_stage_info, frag_stage_info};
 
     // dynamic state
-    std::vector<VkDynamicState> dynamic_states = {VK_DYNAMIC_STATE_VIEWPORT,
-                                                  VK_DYNAMIC_STATE_SCISSOR};
+    std::vector<VkDynamicState> dynamic_states = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
     VkPipelineDynamicStateCreateInfo dynamic_state_info{};
     dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_state_info.dynamicStateCount = dynamic_states.size();
