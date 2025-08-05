@@ -1,4 +1,3 @@
-
 #include "app.h"
 #include "toolkit/args.h"
 #include "toolkit/logging.h"

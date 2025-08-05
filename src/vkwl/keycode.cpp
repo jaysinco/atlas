@@ -95,7 +95,7 @@ std::map<uint32_t, KeyCode::Data> KeyCode::key_mapping = {
 int KeyCode::convertTo(Type type, uint32_t key, bool shift)
 {
     if (key_mapping.find(key) == key_mapping.end()) {
-        ELOG("failed to convert event key to {}: {}", type, key);
+        DLOG("failed to convert key to {}: {}", type, key);
         switch (type) {
             case kKeysym:
                 return XK_VoidSymbol;

@@ -1,5 +1,6 @@
 #pragma once
 #include "toolkit/error.h"
+#define VK_ONLY_EXPORTED_PROTOTYPES
 #include <vulkan/vulkan.h>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
