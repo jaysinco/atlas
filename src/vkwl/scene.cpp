@@ -282,9 +282,9 @@ VkDeviceSize Scene::getUniformDataSize() const { return sizeof(ubo_); }
 
 void const* Scene::getUniformData() const { return &ubo_; }
 
-MyErrCode Scene::onFrameDraw()
+MyErrCode Scene::onFrameDraw(bool& recreate_pipeline)
 {
-    CHECK_ERR_RET(drawGui());
+    CHECK_ERR_RET(drawGui(recreate_pipeline));
 
     ubo_.model = model_.getModelMatrix();
     ubo_.view = camera_.getViewMatrix();
@@ -390,11 +390,16 @@ MyErrCode Scene::onKeyboardPress(int key, bool down, bool& need_quit)
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::drawGui()
+GuiState const& Scene::getGuiState() const { return gs_; }
+
+MyErrCode Scene::drawGui(bool& recreate_pipeline)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
     ImGui::Begin("vkwl");
     ImGui::Checkbox("Show Demo", &gs_.show_demo);
+    if (ImGui::Checkbox("Wire Frame", &gs_.wire_frame)) {
+        recreate_pipeline = true;
+    }
     ImGui::End();
 
     if (gs_.show_demo) {

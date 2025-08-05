@@ -117,6 +117,7 @@ struct GuiState
     bool shift_down;
     bool ctrl_down;
     bool show_demo;
+    bool wire_frame;
 };
 
 class Scene
@@ -145,15 +146,17 @@ public:
     VkVertexInputBindingDescription getVertexBindingDesc() const;
     std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs() const;
 
-    MyErrCode onFrameDraw();
+    MyErrCode onFrameDraw(bool& recreate_pipeline);
     MyErrCode onScreenResize(int width, int height);
     MyErrCode onMouseMove(double xpos, double ypos);
     MyErrCode onMousePress(int button, bool down);
     MyErrCode onMouseScroll(double xoffset, double yoffset);
     MyErrCode onKeyboardPress(int key, bool down, bool& need_quit);
 
+    GuiState const& getGuiState() const;
+
 private:
-    MyErrCode drawGui();
+    MyErrCode drawGui(bool& recreate_pipeline);
 
     Camera camera_;
     Model model_;

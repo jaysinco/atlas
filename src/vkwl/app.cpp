@@ -129,96 +129,6 @@ MyErrCode Application::run(char const* win_title, char const* app_id)
     return MyErrCode::kOk;
 }
 
-MyErrCode Application::mainLoop()
-{
-    int curr_frame = 0;
-    while (!need_quit) {
-        EASY_BLOCK("one loop", profiler::colors::Red100);
-
-        if (need_resize && ready_to_resize) {
-            curr_width = new_width;
-            curr_height = new_height;
-            CHECK_ERR_RET(recreateSwapchain());
-            ready_to_resize = false;
-            need_resize = false;
-            wl_surface_commit(surface);
-        }
-
-        EASY_BLOCK("wait fence", profiler::colors::Blue100);
-        CHECK_VK_ERR_RET(
-            vkWaitForFences(device, 1, &in_flight_fences[curr_frame], VK_TRUE, UINT64_MAX));
-        EASY_END_BLOCK;
-
-        uint32_t image_index;
-
-        EASY_BLOCK("wait next image", profiler::colors::Pink100);
-        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-                                                image_available_semaphores[curr_frame],
-                                                VK_NULL_HANDLE, &image_index);
-        EASY_END_BLOCK;
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-            CHECK_ERR_RET(recreateSwapchain());
-            continue;
-        } else {
-            CHECK_VK_ERR_RET(result);
-        }
-        CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
-
-        EASY_VALUE("image index", image_index);
-
-        ImGuiIO& io = ImGui::GetIO();
-        io.DisplaySize = ImVec2(curr_width, curr_height);
-        ImGui_ImplVulkan_NewFrame();
-        ImGui::NewFrame();
-        CHECK_ERR_RET(scene->onFrameDraw());
-        memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
-               scene->getUniformDataSize());
-        ImGui::Render();
-
-        CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
-        CHECK_ERR_RET(recordCommandBuffer(curr_frame, image_index));
-
-        VkSubmitInfo submit_info = {};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.waitSemaphoreCount = 1;
-        submit_info.pWaitSemaphores = &image_available_semaphores[curr_frame];
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        submit_info.pWaitDstStageMask = &wait_stage;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &command_buffers[curr_frame];
-        submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &render_finished_semaphores[image_index];
-        CHECK_VK_ERR_RET(
-            vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
-
-        VkPresentInfoKHR present_info = {};
-        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = &render_finished_semaphores[image_index];
-        present_info.swapchainCount = 1;
-        present_info.pSwapchains = &swapchain;
-        present_info.pImageIndices = &image_index;
-
-        result = vkQueuePresentKHR(graphics_queue, &present_info);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-            CHECK_ERR_RET(recreateSwapchain());
-            continue;
-        } else {
-            CHECK_VK_ERR_RET(result);
-        }
-
-        curr_frame = (curr_frame + 1) % kMaxFramesInFight;
-
-        EASY_BLOCK("wayland handle event", profiler::colors::Green100);
-        wl_display_roundtrip(display);
-        EASY_END_BLOCK;
-
-        EASY_END_BLOCK;
-    }
-
-    return MyErrCode::kOk;
-}
-
 MyErrCode Application::initWayland(char const* win_title, char const* app_id)
 {
     CHECK_WL_ERR_RET(display = wl_display_connect(nullptr));
@@ -1579,7 +1489,8 @@ MyErrCode Application::createGraphicsPipeline()
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode =
+        scene->getGuiState().wire_frame ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = scene->getFrontFace();
@@ -1663,6 +1574,15 @@ MyErrCode Application::createGraphicsPipeline()
     return MyErrCode::kOk;
 }
 
+MyErrCode Application::recreateGraphicsPipeline()
+{
+    DLOG("recreate graphics pipeline");
+    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+    vkDestroyPipeline(device, graphics_pipeline, nullptr);
+    CHECK_ERR_RET(createGraphicsPipeline());
+    return MyErrCode::kOk;
+}
+
 MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
 {
     VkCommandBuffer command_buffer = command_buffers[curr_frame];
@@ -1719,5 +1639,101 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
 
     vkCmdEndRenderPass(command_buffer);
     CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Application::mainLoop()
+{
+    int curr_frame = 0;
+    while (!need_quit) {
+        EASY_BLOCK("one loop", profiler::colors::Red100);
+
+        if (need_resize && ready_to_resize) {
+            curr_width = new_width;
+            curr_height = new_height;
+            CHECK_ERR_RET(recreateSwapchain());
+            ready_to_resize = false;
+            need_resize = false;
+            wl_surface_commit(surface);
+        }
+
+        EASY_BLOCK("wait fence", profiler::colors::Blue100);
+        CHECK_VK_ERR_RET(
+            vkWaitForFences(device, 1, &in_flight_fences[curr_frame], VK_TRUE, UINT64_MAX));
+        EASY_END_BLOCK;
+
+        uint32_t image_index;
+
+        EASY_BLOCK("wait next image", profiler::colors::Pink100);
+        VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+                                                image_available_semaphores[curr_frame],
+                                                VK_NULL_HANDLE, &image_index);
+        EASY_END_BLOCK;
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            CHECK_ERR_RET(recreateSwapchain());
+            continue;
+        } else {
+            CHECK_VK_ERR_RET(result);
+        }
+        CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
+
+        EASY_VALUE("image index", image_index);
+
+        EASY_BLOCK("draw imgui", profiler::colors::Amber100);
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(curr_width, curr_height);
+        ImGui_ImplVulkan_NewFrame();
+        ImGui::NewFrame();
+        bool recreate_pipeline = false;
+        CHECK_ERR_RET(scene->onFrameDraw(recreate_pipeline));
+        if (recreate_pipeline) {
+            CHECK_ERR_RET(recreateGraphicsPipeline());
+        }
+        memcpy(uniform_buffers[curr_frame].alloc_info.pMappedData, scene->getUniformData(),
+               scene->getUniformDataSize());
+        ImGui::Render();
+        EASY_END_BLOCK;
+
+        CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
+        CHECK_ERR_RET(recordCommandBuffer(curr_frame, image_index));
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &image_available_semaphores[curr_frame];
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        submit_info.pWaitDstStageMask = &wait_stage;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffers[curr_frame];
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &render_finished_semaphores[image_index];
+        CHECK_VK_ERR_RET(
+            vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
+
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &render_finished_semaphores[image_index];
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &swapchain;
+        present_info.pImageIndices = &image_index;
+
+        result = vkQueuePresentKHR(graphics_queue, &present_info);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            CHECK_ERR_RET(recreateSwapchain());
+            continue;
+        } else {
+            CHECK_VK_ERR_RET(result);
+        }
+
+        curr_frame = (curr_frame + 1) % kMaxFramesInFight;
+
+        EASY_BLOCK("wayland handle event", profiler::colors::Green100);
+        wl_display_roundtrip(display);
+        EASY_END_BLOCK;
+
+        EASY_END_BLOCK;
+    }
+
     return MyErrCode::kOk;
 }

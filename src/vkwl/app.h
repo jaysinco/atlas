@@ -25,8 +25,6 @@ public:
     static MyErrCode run(char const* win_title, char const* app_id);
 
 private:
-    static MyErrCode mainLoop();
-
 private:
     static MyErrCode initWayland(char const* win_title, char const* app_id);
     static MyErrCode cleanupWayland();
@@ -107,6 +105,7 @@ private:
     static MyErrCode createDescriptorSetLayout();
     static MyErrCode createPipelineLayout();
     static MyErrCode createGraphicsPipeline();
+    static MyErrCode recreateGraphicsPipeline();
     static MyErrCode createCommandPool();
     static MyErrCode createTextureImage();
     static MyErrCode createTextureImageView();
@@ -120,6 +119,7 @@ private:
     static MyErrCode createSyncObjects();
     static MyErrCode setupImgui();
     static MyErrCode recordCommandBuffer(int curr_frame, int image_index);
+    static MyErrCode mainLoop();
 
 private:
     static wl_display* display;
