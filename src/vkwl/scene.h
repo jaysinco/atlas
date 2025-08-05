@@ -118,6 +118,7 @@ struct GuiState
     bool ctrl_down;
     bool show_demo;
     bool wire_frame;
+    bool face_clockwise;
 };
 
 class Scene
@@ -142,7 +143,6 @@ public:
     VkDeviceSize getIndexDataSize() const;
     void const* getIndexData() const;
 
-    VkFrontFace getFrontFace() const;
     VkVertexInputBindingDescription getVertexBindingDesc() const;
     std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs() const;
 

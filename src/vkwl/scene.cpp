@@ -256,8 +256,6 @@ VkVertexInputBindingDescription Scene::getVertexBindingDesc() const
     return desc;
 }
 
-VkFrontFace Scene::getFrontFace() const { return VK_FRONT_FACE_COUNTER_CLOCKWISE; }
-
 std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs() const
 {
     std::vector<VkVertexInputAttributeDescription> descs{3};
@@ -396,8 +394,11 @@ MyErrCode Scene::drawGui(bool& recreate_pipeline)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
     ImGui::Begin("vkwl");
-    ImGui::Checkbox("Show Demo", &gs_.show_demo);
-    if (ImGui::Checkbox("Wire Frame", &gs_.wire_frame)) {
+    ImGui::Checkbox("show demo", &gs_.show_demo);
+    if (ImGui::Checkbox("wire frame", &gs_.wire_frame)) {
+        recreate_pipeline = true;
+    }
+    if (ImGui::Checkbox("face clockwise", &gs_.face_clockwise)) {
         recreate_pipeline = true;
     }
     ImGui::End();
