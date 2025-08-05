@@ -423,7 +423,7 @@ MyErrCode Application::createInstance(char const* app_name)
     app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
     app_info.pEngineName = "No Engine";
     app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-    app_info.apiVersion = VK_API_VERSION_1_0;
+    app_info.apiVersion = kVkApiVersion;
 
     VkDebugUtilsMessengerCreateInfoEXT debug_info{};
     CHECK_ERR_RET(populateDebugMessengerInfo(debug_info));
@@ -896,7 +896,7 @@ MyErrCode Application::createLogicalDevice()
 MyErrCode Application::createVkAllocator()
 {
     VmaAllocatorCreateInfo create_info = {};
-    create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    create_info.vulkanApiVersion = kVkApiVersion;
     create_info.physicalDevice = physical_device;
     create_info.device = device;
     create_info.instance = instance;
@@ -909,7 +909,8 @@ MyErrCode Application::createCommandPool()
     VkCommandPoolCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     create_info.queueFamilyIndex = graphics_queue_family_index;
-    create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    create_info.flags =
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     CHECK_VK_ERR_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
     return MyErrCode::kOk;
 }

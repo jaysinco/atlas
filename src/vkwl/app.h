@@ -25,7 +25,6 @@ public:
     static MyErrCode run(char const* win_title, char const* app_id);
 
 private:
-private:
     static MyErrCode initWayland(char const* win_title, char const* app_id);
     static MyErrCode cleanupWayland();
     static void handleRegistry(void* data, struct wl_registry* registry, uint32_t name,
@@ -141,6 +140,7 @@ private:
     static wl_keyboard_listener keyboard_listener;
 
     static VkInstance instance;
+    static constexpr uint32_t kVkApiVersion = VK_API_VERSION_1_3;
     static constexpr char const* const kInstanceExtensions[] = {
         "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
     static constexpr char const* const kInstanceLayers[] = {"VK_LAYER_KHRONOS_validation"};
