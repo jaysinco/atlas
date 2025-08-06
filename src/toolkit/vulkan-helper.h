@@ -48,10 +48,13 @@ private:
     VmaAllocator allocator_;
 };
 
+void loadInstanceProcAddr(vk::Instance instance);
+void loadDeviceProcAddr(vk::Device device);
 Allocator createAllocator(uint32_t vk_api_version, vk::PhysicalDevice physical_device,
                           vk::Device device, vk::Instance instance, bool set_default = true);
-
 Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
                     VmaAllocationCreateFlags flags, Allocator allocator = Allocator::getDefault());
 
 }  // namespace toolkit::myvk
+
+namespace myvk = toolkit::myvk;

@@ -80,4 +80,39 @@ Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropert
     return {buf, alloc, alloc_info, allocator};
 }
 
+// NOLINTBEGIN
+
+#define FOR_EACH_INSTANCE_PROC        \
+    X(vkCreateDebugUtilsMessengerEXT) \
+    X(vkDestroyDebugUtilsMessengerEXT)
+
+#define X(_id) static PFN_##_id _id = nullptr;
+FOR_EACH_INSTANCE_PROC
+#undef X
+
+void loadInstanceProcAddr(vk::Instance instance)
+{
+#define X(_id) _id = ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)));
+    FOR_EACH_INSTANCE_PROC
+#undef X
+}
+
+void loadDeviceProcAddr(vk::Device device) {}
+
 }  // namespace toolkit::myvk
+
+VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance,
+                                        VkDebugUtilsMessengerCreateInfoEXT const* pCreateInfo,
+                                        VkAllocationCallbacks const* pAllocator,
+                                        VkDebugUtilsMessengerEXT* pMessenger)
+{
+    return myvk::vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+}
+
+void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
+                                     VkAllocationCallbacks const* pAllocator)
+{
+    return myvk::vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+}
+
+// NOLINTEND

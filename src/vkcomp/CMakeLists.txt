@@ -13,7 +13,6 @@ target_glsl_shaders(${TARGET_NAME}
         -fshader-stage=compute
 )
 
-
 target_link_libraries(${TARGET_NAME}
     toolkit
 )
