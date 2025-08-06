@@ -9,7 +9,6 @@ wayland_gen_protocols(WAYLAND_PROTO_SRC
 
 add_executable(${TARGET_NAME}
     ${WAYLAND_PROTO_SRC}
-    vk-mem-alloc.cpp
     scene.cpp
     keycode.cpp
     app.cpp
@@ -22,7 +21,6 @@ target_glsl_shaders(${TARGET_NAME}
         data/vkwl.frag
     COMPILE_OPTIONS
         --target-env=vulkan1.3
-        --target-spv=spv1.3
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
@@ -30,7 +28,6 @@ target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(${TARGET_NAME}
     toolkit
     wayland-client
-    vulkan
     opencv
     assimp
     easy-profiler 

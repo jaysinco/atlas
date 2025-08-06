@@ -26,22 +26,12 @@
         }                                   \
     } while (0)
 
-#define FOR_EACH_VK_EXT_FUNC                     \
-    X(vkCreateDebugUtilsMessengerEXT)            \
-    X(vkDestroyDebugUtilsMessengerEXT)           \
-    X(vkCreateWaylandSurfaceKHR)                 \
-    X(vkDestroySurfaceKHR)                       \
-    X(vkGetPhysicalDeviceSurfaceSupportKHR)      \
-    X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
-    X(vkGetPhysicalDeviceSurfaceFormatsKHR)      \
-    X(vkCreateSwapchainKHR)                      \
-    X(vkDestroySwapchainKHR)                     \
-    X(vkGetSwapchainImagesKHR)                   \
-    X(vkAcquireNextImageKHR)                     \
-    X(vkQueuePresentKHR)
+#define FOR_EACH_VK_EXT_FUNC          \
+    X(vkCreateDebugUtilsMessengerEXT) \
+    X(vkDestroyDebugUtilsMessengerEXT)
 
 // NOLINTBEGIN
-#define X(_id) static PFN_##_id _id = nullptr;
+#define X(_id) static PFN_##_id my##_id = nullptr;
 FOR_EACH_VK_EXT_FUNC
 #undef X
 // NOLINTEND
@@ -384,7 +374,7 @@ MyErrCode Application::cleanupVulkan()
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
-    vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+    myvkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
 }
@@ -477,7 +467,7 @@ MyErrCode Application::createInstance(char const* app_name)
     CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
 
     // load function
-#define X(_id) _id = ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)));
+#define X(_id) my##_id = ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)));
     FOR_EACH_VK_EXT_FUNC
 #undef X
 
@@ -504,7 +494,7 @@ MyErrCode Application::setupDebugMessenger()
     VkDebugUtilsMessengerCreateInfoEXT create_info{};
     CHECK_ERR_RET(populateDebugMessengerInfo(create_info));
     CHECK_VK_ERR_RET(
-        vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
+        myvkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
     return MyErrCode::kOk;
 }
 
