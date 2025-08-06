@@ -6,37 +6,12 @@
 namespace toolkit::myvk
 {
 
-Allocator Allocator::default_allocator;
+Buffer::Buffer(): buf_(VK_NULL_HANDLE), alloc_(VK_NULL_HANDLE) {}
 
-Allocator::Allocator(): allocator_(VK_NULL_HANDLE) {}
-
-Allocator::Allocator(VmaAllocator allocator): allocator_(allocator) {}
-
-void Allocator::destory() { vmaDestroyAllocator(allocator_); }
-
-Allocator::operator VmaAllocator() const { return allocator_; }
-
-Allocator::operator bool() const { return allocator_ != VK_NULL_HANDLE; }
-
-Allocator Allocator::getDefault() { return default_allocator; }
-
-void Allocator::setDefault(Allocator allocator)
-{
-    if (default_allocator) {
-        default_allocator.destory();
-    }
-    default_allocator = allocator;
-}
-
-Buffer::Buffer(): buf_(VK_NULL_HANDLE), alloc_(VK_NULL_HANDLE), allocator_(VK_NULL_HANDLE) {}
-
-Buffer::Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc_info,
-               VmaAllocator allocator)
-    : buf_(buf), alloc_(alloc), alloc_info_(alloc_info), allocator_(allocator)
+Buffer::Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc_info)
+    : buf_(buf), alloc_(alloc), alloc_info_(alloc_info)
 {
 }
-
-void Buffer::destory() { vmaDestroyBuffer(allocator_, buf_, alloc_); }
 
 void* Buffer::getMappedData() const { return alloc_info_.pMappedData; }
 
@@ -46,26 +21,18 @@ Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
 
-Allocator createAllocator(uint32_t vk_api_version, vk::PhysicalDevice physical_device,
-                          vk::Device device, vk::Instance instance, bool set_default)
-{
-    VmaAllocatorCreateInfo create_info = {};
-    create_info.vulkanApiVersion = vk_api_version;
-    create_info.physicalDevice = physical_device;
-    create_info.device = device;
-    create_info.instance = instance;
+Allocator::Allocator(): allocator_(VK_NULL_HANDLE) {}
 
-    VmaAllocator allocator;
-    CHECK_VK_ERR_THROW(vmaCreateAllocator(&create_info, &allocator));
-    if (set_default) {
-        Allocator::setDefault(allocator);
-    }
+Allocator::Allocator(VmaAllocator allocator): allocator_(allocator) {}
 
-    return allocator;
-}
+void Allocator::destroy() { vmaDestroyAllocator(allocator_); }
 
-Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
-                    VmaAllocationCreateFlags flags, Allocator allocator)
+Allocator::operator VmaAllocator() const { return allocator_; }
+
+Allocator::operator bool() const { return allocator_ != VK_NULL_HANDLE; }
+
+Buffer Allocator::createBuffer(uint64_t size, vk::BufferUsageFlags usage,
+                               vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
 {
     vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, size, usage,
                                      vk::SharingMode::eExclusive);
@@ -78,9 +45,28 @@ Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropert
     VmaAllocation alloc;
     VmaAllocationInfo alloc_info;
     CHECK_VK_ERR_THROW(
-        vmaCreateBuffer(allocator, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
+        vmaCreateBuffer(*this, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
 
-    return {buf, alloc, alloc_info, allocator};
+    return {buf, alloc, alloc_info};
+}
+
+void Allocator::destroyBuffer(Buffer& buffer)
+{
+    vmaDestroyBuffer(*this, buffer.buf_, buffer.alloc_);
+}
+
+Allocator createAllocator(uint32_t vk_api_version, vk::PhysicalDevice physical_device,
+                          vk::Device device, vk::Instance instance)
+{
+    VmaAllocatorCreateInfo create_info = {};
+    create_info.vulkanApiVersion = vk_api_version;
+    create_info.physicalDevice = physical_device;
+    create_info.device = device;
+    create_info.instance = instance;
+
+    VmaAllocator allocator;
+    CHECK_VK_ERR_THROW(vmaCreateAllocator(&create_info, &allocator));
+    return allocator;
 }
 
 vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path const& spv)

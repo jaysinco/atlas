@@ -9,42 +9,50 @@ int main(int argc, char** argv)
     toolkit::Args args(argc, argv);
     args.parse();
 
+    // instance
     vk::ApplicationInfo app_info{"vkcomp", VK_MAKE_VERSION(0, 1, 0), "No Engine",
                                  VK_MAKE_VERSION(0, 1, 0), VK_API_VERSION_1_3};
     std::vector<char const*> const layers = {"VK_LAYER_KHRONOS_validation"};
     auto instance = vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers});
 
+    // physical device
     auto physical_device = instance.enumeratePhysicalDevices().front();
     auto device_props = physical_device.getProperties();
+    auto device_limits = device_props.limits;
+
     ILOG("Device Name: {}", device_props.deviceName);
     ILOG("Vulkan Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
          VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
-    auto device_limits = device_props.limits;
     ILOG("Max Compute Shared Memory Size: {} KB", device_limits.maxComputeSharedMemorySize / 1024);
 
+    // device & queue
     auto queue_family_props = physical_device.getQueueFamilyProperties();
-    auto prop_it = std::find_if(queue_family_props.begin(), queue_family_props.end(),
-                                [](vk::QueueFamilyProperties const& prop) {
-                                    return prop.queueFlags & vk::QueueFlagBits::eCompute;
-                                });
-    uint32_t const compute_queue_family_index = std::distance(queue_family_props.begin(), prop_it);
-    ILOG("Compute Queue Family Index: {}", compute_queue_family_index);
+    auto prop_chosen = std::find_if(queue_family_props.begin(), queue_family_props.end(),
+                                    [](vk::QueueFamilyProperties const& prop) {
+                                        return prop.queueFlags & vk::QueueFlagBits::eCompute;
+                                    });
+    uint32_t const queue_family_index = std::distance(queue_family_props.begin(), prop_chosen);
+    ILOG("Compute Queue Family Index: {}", queue_family_index);
 
     float const queue_priority = 1.0f;
-    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(),
-                                                compute_queue_family_index, 1, &queue_priority);
+    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(), queue_family_index, 1,
+                                                &queue_priority);
+
     auto device = physical_device.createDevice({vk::DeviceCreateFlags(), queue_create_info});
+    vk::Queue queue = device.getQueue(queue_family_index, 0);
+
+    // allocator & buffer
     auto allocator = myvk::createAllocator(VK_API_VERSION_1_3, physical_device, device, instance);
 
     uint32_t const num_elements = 10;
     uint32_t const buffer_size = num_elements * sizeof(int32_t);
 
-    auto in_buffer = myvk::createBuffer(
+    auto in_buffer = allocator.createBuffer(
         buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
         VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-    auto out_buffer = myvk::createBuffer(
+    auto out_buffer = allocator.createBuffer(
         buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
         VMA_ALLOCATION_CREATE_MAPPED_BIT);
@@ -54,79 +62,73 @@ int main(int argc, char** argv)
         in_buffer_data[i] = i;
     }
 
+    // pipeline
     auto shader_module =
         myvk::createShaderModule(device, toolkit::getDataDir() / "vkcomp.glsl.spv");
 
-    std::vector<vk::DescriptorSetLayoutBinding> const descriptor_set_layout_bindings = {
-        {0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-        {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}};
-    vk::DescriptorSetLayout descriptor_set_layout = device.createDescriptorSetLayout(
+    auto descriptor_set_layout_bindings = {
+        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eStorageBuffer, 1,
+                                       vk::ShaderStageFlagBits::eCompute},
+        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer, 1,
+                                       vk::ShaderStageFlagBits::eCompute}};
+
+    auto descriptor_set_layout = device.createDescriptorSetLayout(
         {vk::DescriptorSetLayoutCreateFlags(), descriptor_set_layout_bindings});
 
-    vk::PipelineLayout pipeline_layout =
+    auto pipeline_layout =
         device.createPipelineLayout({vk::PipelineLayoutCreateFlags(), descriptor_set_layout});
 
-    vk::PipelineShaderStageCreateInfo pipeline_shader_create_info(
-        vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shader_module,
-        "main");
-    vk::ComputePipelineCreateInfo pipeline_create_info(
-        vk::PipelineCreateFlags(), pipeline_shader_create_info, pipeline_layout);
-    vk::Pipeline pipeline = device.createComputePipeline({}, pipeline_create_info).value;
+    vk::PipelineShaderStageCreateInfo pipeline_shader(vk::PipelineShaderStageCreateFlags(),
+                                                      vk::ShaderStageFlagBits::eCompute,
+                                                      shader_module, "main");
 
+    vk::ComputePipelineCreateInfo pipeline_create_info(vk::PipelineCreateFlags(), pipeline_shader,
+                                                       pipeline_layout);
+
+    auto pipeline = device.createComputePipeline({}, pipeline_create_info).value;
+
+    // descriptor
     vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 2);
-    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1,
-                                                             descriptor_pool_size);
-    vk::DescriptorPool descriptor_pool = device.createDescriptorPool(descriptor_pool_create_info);
+    auto descriptor_pool =
+        device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size});
 
-    vk::DescriptorSetAllocateInfo DescriptorSetAllocInfo(descriptor_pool, 1,
-                                                         &descriptor_set_layout);
-    std::vector<vk::DescriptorSet> const DescriptorSets =
-        device.allocateDescriptorSets(DescriptorSetAllocInfo);
-    vk::DescriptorSet DescriptorSet = DescriptorSets.front();
-    vk::DescriptorBufferInfo InBufferInfo(in_buffer, 0, num_elements * sizeof(int32_t));
-    vk::DescriptorBufferInfo OutBufferInfo(out_buffer, 0, num_elements * sizeof(int32_t));
+    auto descriptor_sets =
+        device.allocateDescriptorSets({descriptor_pool, 1, &descriptor_set_layout});
+    auto descriptor_set = descriptor_sets.front();
 
-    std::vector<vk::WriteDescriptorSet> const WriteDescriptorSets = {
-        {DescriptorSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &InBufferInfo},
-        {DescriptorSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &OutBufferInfo},
+    vk::DescriptorBufferInfo in_buffer_info(in_buffer, 0, buffer_size);
+    vk::DescriptorBufferInfo out_buffer_info(out_buffer, 0, buffer_size);
+
+    std::vector<vk::WriteDescriptorSet> const write_descriptor_sets = {
+        vk::WriteDescriptorSet{descriptor_set, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
+                               &in_buffer_info},
+        vk::WriteDescriptorSet{descriptor_set, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr,
+                               &out_buffer_info},
     };
-    device.updateDescriptorSets(WriteDescriptorSets, {});
 
-    vk::CommandPoolCreateInfo CommandPoolCreateInfo(vk::CommandPoolCreateFlags(),
-                                                    compute_queue_family_index);
-    vk::CommandPool CommandPool = device.createCommandPool(CommandPoolCreateInfo);
+    device.updateDescriptorSets(write_descriptor_sets, {});
 
-    vk::CommandBufferAllocateInfo CommandBufferAllocInfo(CommandPool,  // Command Pool
-                                                         vk::CommandBufferLevel::ePrimary,  // Level
-                                                         1);  // Num Command Buffers
-    std::vector<vk::CommandBuffer> const CmdBuffers =
-        device.allocateCommandBuffers(CommandBufferAllocInfo);
-    vk::CommandBuffer CmdBuffer = CmdBuffers.front();
+    // command buffer
+    auto command_pool =
+        device.createCommandPool({vk::CommandPoolCreateFlags(), queue_family_index});
+    auto command_buffers =
+        device.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1});
+    auto command_buffer = command_buffers.front();
 
-    vk::CommandBufferBeginInfo CmdBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    CmdBuffer.begin(CmdBufferBeginInfo);
-    CmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
-    CmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,  // Bind point
-                                 pipeline_layout,                  // Pipeline Layout
-                                 0,                                // First descriptor set
-                                 {DescriptorSet},                  // List of descriptor sets
-                                 {});                              // Dynamic offsets
-    CmdBuffer.dispatch(num_elements, 1, 1);
-    CmdBuffer.end();
+    // dispatch
+    command_buffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline_layout, 0,
+                                      descriptor_set, {});
+    command_buffer.dispatch(num_elements, 1, 1);
+    command_buffer.end();
 
-    vk::Queue Queue = device.getQueue(compute_queue_family_index, 0);
-    vk::Fence Fence = device.createFence(vk::FenceCreateInfo());
+    auto fence = device.createFence({});
+    vk::SubmitInfo submit_info(0, nullptr, nullptr, 1, &command_buffer);
+    queue.submit({submit_info}, fence);
+    auto result = device.waitForFences(fence, true, -1);
 
-    vk::SubmitInfo SubmitInfo(0,            // Num Wait Semaphores
-                              nullptr,      // Wait Semaphores
-                              nullptr,      // Pipeline Stage Flags
-                              1,            // Num Command Buffers
-                              &CmdBuffer);  // List of command buffers
-    Queue.submit({SubmitInfo}, Fence);
-    auto result = device.waitForFences({Fence},        // List of fences
-                                       true,           // Wait All
-                                       uint64_t(-1));  // Timeout
-
+    // print output
     for (uint32_t i = 0; i < num_elements; ++i) {
         std::cout << in_buffer_data[i] << " ";
     }
@@ -138,17 +140,20 @@ int main(int argc, char** argv)
     }
     std::cout << std::endl;
 
-    in_buffer.destory();
-    out_buffer.destory();
-    allocator.destory();
-    device.destroyFence(Fence);
+    // cleanup
+    allocator.destroyBuffer(in_buffer);
+    allocator.destroyBuffer(out_buffer);
+    allocator.destroy();
+
+    device.destroyFence(fence);
     device.destroyDescriptorSetLayout(descriptor_set_layout);
     device.destroyPipelineLayout(pipeline_layout);
     device.destroyShaderModule(shader_module);
     device.destroyPipeline(pipeline);
     device.destroyDescriptorPool(descriptor_pool);
-    device.destroyCommandPool(CommandPool);
+    device.destroyCommandPool(command_pool);
     device.destroy();
+
     instance.destroy();
 
     return 0;
