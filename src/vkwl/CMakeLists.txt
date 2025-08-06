@@ -18,10 +18,11 @@ add_executable(${TARGET_NAME}
 
 target_glsl_shaders(${TARGET_NAME}
     PRIVATE
-        data/test.vert
-        data/test.frag
+        data/vkwl.vert
+        data/vkwl.frag
     COMPILE_OPTIONS
-        --target-env=vulkan1.0
+        --target-env=vulkan1.3
+        --target-spv=spv1.3
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})

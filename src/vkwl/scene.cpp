@@ -208,12 +208,12 @@ std::filesystem::path Scene::getTextureImagePath() const
 
 std::filesystem::path Scene::getVertSpvPath() const
 {
-    return toolkit::getDataDir() / "test.vert.spv";
+    return toolkit::getDataDir() / "vkwl.vert.spv";
 }
 
 std::filesystem::path Scene::getFragSpvPath() const
 {
-    return toolkit::getDataDir() / "test.frag.spv";
+    return toolkit::getDataDir() / "vkwl.frag.spv";
 }
 
 MyErrCode Scene::load()

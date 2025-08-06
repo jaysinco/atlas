@@ -25,6 +25,7 @@ if(UNIX)
     add_subdirectory(ocl)
     add_subdirectory(asm)
     add_subdirectory(vkwl)
+    add_subdirectory(vkcomp)
 endif()
 
 if(NOT TC_CROSS_COMPILE)
