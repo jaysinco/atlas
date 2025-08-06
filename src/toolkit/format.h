@@ -4,6 +4,7 @@
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>
 #include <fmt/ostream.h>
+#include "error.h"
 
 #define MY_CONCAT_HELPER(a, b) a##b
 #define MY_CONCAT(a, b) MY_CONCAT_HELPER(a, b)
@@ -12,6 +13,12 @@
 #define LOG_FSTR(f, ...) \
     (FSTR("[{}:{}] " f, toolkit::filename(__FILE__), __LINE__ MY_VA_ARGS(__VA_ARGS__)))
 #define MY_THROW(...) throw std::runtime_error(LOG_FSTR(__VA_ARGS__))
+#define CHECK_ERR_THROW(err)                             \
+    do {                                                 \
+        if (auto _err = (err); _err != MyErrCode::kOk) { \
+            MY_THROW("check failed: {}", _err);          \
+        }                                                \
+    } while (0)
 
 namespace toolkit
 {
@@ -28,6 +35,8 @@ struct HasToStr<T, std::void_t<decltype(std::declval<T>().toStr())>>
 };
 
 inline std::string toString(std::filesystem::path const& fp) { return fp.string(); }
+
+inline std::string toString(MyErrCode err) { return std::to_string(static_cast<int>(err)); }
 
 template <typename T>
 std::enable_if_t<HasToStr<T>::value, std::string> toString(T&& arg)

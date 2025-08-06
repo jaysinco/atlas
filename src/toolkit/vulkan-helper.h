@@ -27,7 +27,7 @@ public:
 
 private:
     VmaAllocator allocator_;
-    static Allocator default_a;
+    static Allocator default_allocator;
 };
 
 class Buffer
@@ -37,6 +37,7 @@ public:
     Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc_info,
            VmaAllocator allocator);
     void destory();
+    void* getMappedData() const;
     operator VkBuffer() const;
     operator vk::Buffer() const;
     operator bool() const;
@@ -54,6 +55,7 @@ Allocator createAllocator(uint32_t vk_api_version, vk::PhysicalDevice physical_d
                           vk::Device device, vk::Instance instance, bool set_default = true);
 Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
                     VmaAllocationCreateFlags flags, Allocator allocator = Allocator::getDefault());
+vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path const& spv);
 
 }  // namespace toolkit::myvk
 

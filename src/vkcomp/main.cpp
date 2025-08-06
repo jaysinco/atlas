@@ -12,8 +12,7 @@ int main(int argc, char** argv)
     vk::ApplicationInfo app_info{"vkcomp", VK_MAKE_VERSION(0, 1, 0), "No Engine",
                                  VK_MAKE_VERSION(0, 1, 0), VK_API_VERSION_1_3};
     std::vector<char const*> const layers = {"VK_LAYER_KHRONOS_validation"};
-    vk::InstanceCreateInfo instance_create_info(vk::InstanceCreateFlags(), &app_info, layers);
-    auto instance = vk::createInstance(instance_create_info);
+    auto instance = vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers});
 
     auto physical_device = instance.enumeratePhysicalDevices().front();
     auto device_props = physical_device.getProperties();
@@ -32,104 +31,60 @@ int main(int argc, char** argv)
     ILOG("Compute Queue Family Index: {}", compute_queue_family_index);
 
     float const queue_priority = 1.0f;
-    vk::DeviceQueueCreateInfo device_queue_create_info(
-        vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, &queue_priority);
-    vk::DeviceCreateInfo device_create_info(vk::DeviceCreateFlags(), device_queue_create_info);
-    auto device = physical_device.createDevice(device_create_info);
+    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(),
+                                                compute_queue_family_index, 1, &queue_priority);
+    auto device = physical_device.createDevice({vk::DeviceCreateFlags(), queue_create_info});
+    auto allocator = myvk::createAllocator(VK_API_VERSION_1_3, physical_device, device, instance);
 
     uint32_t const num_elements = 10;
     uint32_t const buffer_size = num_elements * sizeof(int32_t);
 
-    vk::BufferCreateInfo buffer_create_info{vk::BufferCreateFlags(), buffer_size,
-                                            vk::BufferUsageFlagBits::eStorageBuffer,
-                                            vk::SharingMode::eExclusive};
-    auto vkBufferCreateInfo = static_cast<VkBufferCreateInfo>(buffer_create_info);
+    auto in_buffer = myvk::createBuffer(
+        buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-    VmaAllocatorCreateInfo AllocatorInfo = {};
-    AllocatorInfo.vulkanApiVersion = device_props.apiVersion;
-    AllocatorInfo.physicalDevice = physical_device;
-    AllocatorInfo.device = device;
-    AllocatorInfo.instance = instance;
+    auto out_buffer = myvk::createBuffer(
+        buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-    VmaAllocator Allocator;
-    vmaCreateAllocator(&AllocatorInfo, &Allocator);
-
-    VkBuffer InBufferRaw;
-    VkBuffer OutBufferRaw;
-
-    VmaAllocationCreateInfo AllocationInfo = {};
-    AllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-    VmaAllocation InBufferAllocation;
-    vmaCreateBuffer(Allocator, &vkBufferCreateInfo, &AllocationInfo, &InBufferRaw,
-                    &InBufferAllocation, nullptr);
-
-    AllocationInfo.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-    VmaAllocation OutBufferAllocation;
-    vmaCreateBuffer(Allocator, &vkBufferCreateInfo, &AllocationInfo, &OutBufferRaw,
-                    &OutBufferAllocation, nullptr);
-
-    vk::Buffer InBuffer = InBufferRaw;
-    vk::Buffer OutBuffer = OutBufferRaw;
-
-    int32_t* InBufferPtr = nullptr;
-    vmaMapMemory(Allocator, InBufferAllocation, reinterpret_cast<void**>(&InBufferPtr));
-    for (int32_t I = 0; I < num_elements; ++I) {
-        InBufferPtr[I] = I;
-    }
-    vmaUnmapMemory(Allocator, InBufferAllocation);
-
-    std::vector<char> ShaderContents;
-    if (std::ifstream ShaderFile{toolkit::getDataDir() / "vkcomp.glsl.spv",
-                                 std::ios::binary | std::ios::ate}) {
-        size_t const FileSize = ShaderFile.tellg();
-        ShaderFile.seekg(0);
-        ShaderContents.resize(FileSize, '\0');
-        ShaderFile.read(ShaderContents.data(), FileSize);
+    int32_t* in_buffer_data = reinterpret_cast<int32_t*>(in_buffer.getMappedData());
+    for (int32_t i = 0; i < num_elements; ++i) {
+        in_buffer_data[i] = i;
     }
 
-    vk::ShaderModuleCreateInfo ShaderModuleCreateInfo(
-        vk::ShaderModuleCreateFlags(),                              // Flags
-        ShaderContents.size(),                                      // Code size
-        reinterpret_cast<uint32_t const*>(ShaderContents.data()));  // Code
-    vk::ShaderModule ShaderModule = device.createShaderModule(ShaderModuleCreateInfo);
+    auto shader_module =
+        myvk::createShaderModule(device, toolkit::getDataDir() / "vkcomp.glsl.spv");
 
-    std::vector<vk::DescriptorSetLayoutBinding> const DescriptorSetLayoutBinding = {
+    std::vector<vk::DescriptorSetLayoutBinding> const descriptor_set_layout_bindings = {
         {0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
         {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}};
-    vk::DescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo(
-        vk::DescriptorSetLayoutCreateFlags(), DescriptorSetLayoutBinding);
-    vk::DescriptorSetLayout DescriptorSetLayout =
-        device.createDescriptorSetLayout(DescriptorSetLayoutCreateInfo);
+    vk::DescriptorSetLayout descriptor_set_layout = device.createDescriptorSetLayout(
+        {vk::DescriptorSetLayoutCreateFlags(), descriptor_set_layout_bindings});
 
-    vk::PipelineLayoutCreateInfo PipelineLayoutCreateInfo(vk::PipelineLayoutCreateFlags(),
-                                                          DescriptorSetLayout);
-    vk::PipelineLayout PipelineLayout = device.createPipelineLayout(PipelineLayoutCreateInfo);
-    vk::PipelineCache PipelineCache = device.createPipelineCache(vk::PipelineCacheCreateInfo());
+    vk::PipelineLayout pipeline_layout =
+        device.createPipelineLayout({vk::PipelineLayoutCreateFlags(), descriptor_set_layout});
 
-    vk::PipelineShaderStageCreateInfo PipelineShaderCreateInfo(
-        vk::PipelineShaderStageCreateFlags(),  // Flags
-        vk::ShaderStageFlagBits::eCompute,     // Stage
-        ShaderModule,                          // Shader Module
-        "main");                               // Shader Entry Point
-    vk::ComputePipelineCreateInfo ComputePipelineCreateInfo(
-        vk::PipelineCreateFlags(),  // Flags
-        PipelineShaderCreateInfo,   // Shader Create Info struct
-        PipelineLayout);            // Pipeline Layout
-    vk::Pipeline ComputePipeline =
-        device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo).value;
+    vk::PipelineShaderStageCreateInfo pipeline_shader_create_info(
+        vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shader_module,
+        "main");
+    vk::ComputePipelineCreateInfo pipeline_create_info(
+        vk::PipelineCreateFlags(), pipeline_shader_create_info, pipeline_layout);
+    vk::Pipeline pipeline = device.createComputePipeline({}, pipeline_create_info).value;
 
-    vk::DescriptorPoolSize DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 2);
-    vk::DescriptorPoolCreateInfo DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlags(), 1,
-                                                          DescriptorPoolSize);
-    vk::DescriptorPool DescriptorPool = device.createDescriptorPool(DescriptorPoolCreateInfo);
+    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 2);
+    vk::DescriptorPoolCreateInfo descriptor_pool_create_info(vk::DescriptorPoolCreateFlags(), 1,
+                                                             descriptor_pool_size);
+    vk::DescriptorPool descriptor_pool = device.createDescriptorPool(descriptor_pool_create_info);
 
-    vk::DescriptorSetAllocateInfo DescriptorSetAllocInfo(DescriptorPool, 1, &DescriptorSetLayout);
+    vk::DescriptorSetAllocateInfo DescriptorSetAllocInfo(descriptor_pool, 1,
+                                                         &descriptor_set_layout);
     std::vector<vk::DescriptorSet> const DescriptorSets =
         device.allocateDescriptorSets(DescriptorSetAllocInfo);
     vk::DescriptorSet DescriptorSet = DescriptorSets.front();
-    vk::DescriptorBufferInfo InBufferInfo(InBuffer, 0, num_elements * sizeof(int32_t));
-    vk::DescriptorBufferInfo OutBufferInfo(OutBuffer, 0, num_elements * sizeof(int32_t));
+    vk::DescriptorBufferInfo InBufferInfo(in_buffer, 0, num_elements * sizeof(int32_t));
+    vk::DescriptorBufferInfo OutBufferInfo(out_buffer, 0, num_elements * sizeof(int32_t));
 
     std::vector<vk::WriteDescriptorSet> const WriteDescriptorSets = {
         {DescriptorSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &InBufferInfo},
@@ -150,9 +105,9 @@ int main(int argc, char** argv)
 
     vk::CommandBufferBeginInfo CmdBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
     CmdBuffer.begin(CmdBufferBeginInfo);
-    CmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, ComputePipeline);
+    CmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
     CmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,  // Bind point
-                                 PipelineLayout,                   // Pipeline Layout
+                                 pipeline_layout,                  // Pipeline Layout
                                  0,                                // First descriptor set
                                  {DescriptorSet},                  // List of descriptor sets
                                  {});                              // Dynamic offsets
@@ -172,78 +127,26 @@ int main(int argc, char** argv)
                                        true,           // Wait All
                                        uint64_t(-1));  // Timeout
 
-    vmaMapMemory(Allocator, InBufferAllocation, reinterpret_cast<void**>(&InBufferPtr));
-    for (uint32_t I = 0; I < num_elements; ++I) {
-        std::cout << InBufferPtr[I] << " ";
+    for (uint32_t i = 0; i < num_elements; ++i) {
+        std::cout << in_buffer_data[i] << " ";
     }
     std::cout << std::endl;
-    vmaUnmapMemory(Allocator, InBufferAllocation);
 
-    int32_t* OutBufferPtr = nullptr;
-    vmaMapMemory(Allocator, OutBufferAllocation, reinterpret_cast<void**>(&OutBufferPtr));
-    for (uint32_t I = 0; I < num_elements; ++I) {
-        std::cout << OutBufferPtr[I] << " ";
+    int32_t* out_buffer_data = reinterpret_cast<int32_t*>(out_buffer.getMappedData());
+    for (uint32_t i = 0; i < num_elements; ++i) {
+        std::cout << out_buffer_data[i] << " ";
     }
     std::cout << std::endl;
-    vmaUnmapMemory(Allocator, OutBufferAllocation);
 
-    struct BufferInfo
-    {
-        VkBuffer Buffer;
-        VmaAllocation Allocation;
-    };
-
-    // Lets allocate a couple of buffers to see how they are layed out in memory
-    auto AllocateBuffer = [Allocator, compute_queue_family_index](size_t SizeInBytes,
-                                                                  VmaMemoryUsage Usage) {
-        vk::BufferCreateInfo BufferCreateInfo{
-            vk::BufferCreateFlags(),                  // Flags
-            SizeInBytes,                              // Size
-            vk::BufferUsageFlagBits::eStorageBuffer,  // Usage
-            vk::SharingMode::eExclusive,              // Sharing mode
-            1,                                        // Number of queue family indices
-            &compute_queue_family_index               // List of queue family indices
-        };
-
-        auto vkBufferCreateInfo = static_cast<VkBufferCreateInfo>(BufferCreateInfo);
-
-        VmaAllocationCreateInfo AllocationInfo = {};
-        AllocationInfo.usage = Usage;
-
-        BufferInfo Info;
-        vmaCreateBuffer(Allocator, &vkBufferCreateInfo, &AllocationInfo, &Info.Buffer,
-                        &Info.Allocation, nullptr);
-
-        return Info;
-    };
-
-    auto DestroyBuffer = [Allocator](BufferInfo Info) {
-        vmaDestroyBuffer(Allocator, Info.Buffer, Info.Allocation);
-    };
-
-    constexpr size_t MB = 1024 * 1024;
-    BufferInfo B1 = AllocateBuffer(4 * MB, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    BufferInfo B2 = AllocateBuffer(10 * MB, VMA_MEMORY_USAGE_GPU_TO_CPU);
-    BufferInfo B3 = AllocateBuffer(20 * MB, VMA_MEMORY_USAGE_GPU_ONLY);
-    BufferInfo B4 = AllocateBuffer(100 * MB, VMA_MEMORY_USAGE_CPU_ONLY);
-
-    DestroyBuffer(B1);
-    DestroyBuffer(B2);
-    DestroyBuffer(B3);
-    DestroyBuffer(B4);
-
-    vmaDestroyBuffer(Allocator, InBuffer, InBufferAllocation);
-    vmaDestroyBuffer(Allocator, OutBuffer, OutBufferAllocation);
-    vmaDestroyAllocator(Allocator);
-
-    device.resetCommandPool(CommandPool, vk::CommandPoolResetFlags());
+    in_buffer.destory();
+    out_buffer.destory();
+    allocator.destory();
     device.destroyFence(Fence);
-    device.destroyDescriptorSetLayout(DescriptorSetLayout);
-    device.destroyPipelineLayout(PipelineLayout);
-    device.destroyPipelineCache(PipelineCache);
-    device.destroyShaderModule(ShaderModule);
-    device.destroyPipeline(ComputePipeline);
-    device.destroyDescriptorPool(DescriptorPool);
+    device.destroyDescriptorSetLayout(descriptor_set_layout);
+    device.destroyPipelineLayout(pipeline_layout);
+    device.destroyShaderModule(shader_module);
+    device.destroyPipeline(pipeline);
+    device.destroyDescriptorPool(descriptor_pool);
     device.destroyCommandPool(CommandPool);
     device.destroy();
     instance.destroy();

@@ -71,7 +71,7 @@ if(UNIX)
 
     if(TC_CROSS_COMPILE)
         list(APPEND COPY_FILE_LIST
-            ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
+            # ${TC_INSTALL_DIR}/../lib/libstdc++.so.6
             ${TC_INSTALL_DIR}/lib/libpcap.so
             ${TC_INSTALL_DIR}/lib/libwayland-client.so
             ${TC_INSTALL_DIR}/lib/libffi.so.8

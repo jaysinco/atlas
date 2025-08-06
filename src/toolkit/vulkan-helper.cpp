@@ -1,11 +1,12 @@
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 #include "vulkan-helper.h"
+#include "toolkit.h"
 
 namespace toolkit::myvk
 {
 
-Allocator Allocator::default_a;
+Allocator Allocator::default_allocator;
 
 Allocator::Allocator(): allocator_(VK_NULL_HANDLE) {}
 
@@ -17,14 +18,14 @@ Allocator::operator VmaAllocator() const { return allocator_; }
 
 Allocator::operator bool() const { return allocator_ != VK_NULL_HANDLE; }
 
-Allocator Allocator::getDefault() { return default_a; }
+Allocator Allocator::getDefault() { return default_allocator; }
 
 void Allocator::setDefault(Allocator allocator)
 {
-    if (default_a) {
-        default_a.destory();
+    if (default_allocator) {
+        default_allocator.destory();
     }
-    default_a = allocator;
+    default_allocator = allocator;
 }
 
 Buffer::Buffer(): buf_(VK_NULL_HANDLE), alloc_(VK_NULL_HANDLE), allocator_(VK_NULL_HANDLE) {}
@@ -36,6 +37,8 @@ Buffer::Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc
 }
 
 void Buffer::destory() { vmaDestroyBuffer(allocator_, buf_, alloc_); }
+
+void* Buffer::getMappedData() const { return alloc_info_.pMappedData; }
 
 Buffer::operator VkBuffer() const { return buf_; }
 
@@ -78,6 +81,15 @@ Buffer createBuffer(uint64_t size, vk::BufferUsageFlags usage, vk::MemoryPropert
         vmaCreateBuffer(allocator, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
 
     return {buf, alloc, alloc_info, allocator};
+}
+
+vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path const& spv)
+{
+    std::vector<uint8_t> code;
+    CHECK_ERR_THROW(toolkit::readBinaryFile(spv, code));
+    vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
+                                           reinterpret_cast<uint32_t const*>(code.data()));
+    return device.createShaderModule(create_info);
 }
 
 // NOLINTBEGIN
