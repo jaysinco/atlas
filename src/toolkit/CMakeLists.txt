@@ -8,11 +8,6 @@ add_library(${TARGET_NAME}
     args.cpp
     variant.cpp
     sqlite-helper.cpp
-    $<IF:$<BOOL:${UNIX}>,vulkan-helper.cpp,>
-)
-
-target_compile_options(${TARGET_NAME} PUBLIC
-    $<IF:$<BOOL:${UNIX}>,-Wno-deprecated,>
 )
 
 execute_process(COMMAND git rev-parse HEAD
@@ -34,7 +29,6 @@ set_source_files_properties(logging.cpp
 
 target_link_libraries(${TARGET_NAME} PUBLIC
     $<IF:$<BOOL:${UNIX}>,pthread,>
-    $<IF:$<BOOL:${UNIX}>,vulkan,>
     boost
     spdlog
     fmt

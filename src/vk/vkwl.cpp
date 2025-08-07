@@ -1,6 +1,7 @@
-#include "app.h"
+#include "vkwl.h"
 #include "toolkit/logging.h"
 #include "toolkit/toolkit.h"
+#include "toolkit/args.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <linux/input.h>
@@ -113,6 +114,17 @@ int Application::new_width = 0;
 int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
+
+int main(int argc, char** argv)
+{
+    toolkit::Args args(argc, argv);
+    args.parse();
+    EASY_MAIN_THREAD;
+    profiler::startListen(28077);
+    Application::run("vkwl", "vkwl");
+    ILOG("end!");
+    return 0;
+}
 
 MyErrCode Application::run(char const* win_title, char const* app_id)
 {

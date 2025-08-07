@@ -88,8 +88,8 @@ flapp_src_folder=$source_folder/flapp
 source $tc_toolchain_dir/env.sh
 
 function clean_build() {
-    rm -rf $git_root/out
-    rm -rf $git_root/bin
+    rm -rf $build_folder
+    rm -rf $binary_folder
     rm -rf $flapp_src_folder/build
     rm -rf $flapp_src_folder/.idea
     rm -rf $flapp_src_folder/*.iml

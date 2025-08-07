@@ -1,4 +1,4 @@
-#include "toolkit/vulkan-helper.h"
+#include "vulkan-helper.h"
 #include "toolkit/toolkit.h"
 #include "toolkit/args.h"
 #include "toolkit/logging.h"

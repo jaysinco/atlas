@@ -1,5 +1,5 @@
 #version 450
-#include "common.glsl"
+#include "vkwl.glsl"
 
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inNormal;

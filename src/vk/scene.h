@@ -1,6 +1,6 @@
 #pragma once
 #include "toolkit/error.h"
-#include "toolkit/vulkan-helper.h"
+#include "vulkan-helper.h"
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <vector>
