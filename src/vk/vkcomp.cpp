@@ -11,8 +11,12 @@ int main(int argc, char** argv)
 
     // instance
     vk::ApplicationInfo app_info{"vkcomp", VK_MAKE_VERSION(0, 1, 0), "No Engine",
-                                 VK_MAKE_VERSION(0, 1, 0), VK_API_VERSION_1_3};
-    std::vector<char const*> const layers = {"VK_LAYER_KHRONOS_validation"};
+                                 VK_MAKE_VERSION(0, 1, 0), MYVK_API_VERSION};
+    std::vector<char const*> const layers = {
+#ifdef MYVK_ENABLE_VALIDATION_LAYER
+        "VK_LAYER_KHRONOS_validation"
+#endif
+    };
     auto instance = vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers});
 
     // physical device
@@ -42,7 +46,7 @@ int main(int argc, char** argv)
     vk::Queue queue = device.getQueue(queue_family_index, 0);
 
     // allocator & buffer
-    auto allocator = myvk::createAllocator(VK_API_VERSION_1_3, physical_device, device, instance);
+    auto allocator = myvk::createAllocator(physical_device, device, instance);
 
     uint32_t const num_elements = 10;
     uint32_t const buffer_size = num_elements * sizeof(int32_t);

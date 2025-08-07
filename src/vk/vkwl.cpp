@@ -415,7 +415,7 @@ MyErrCode Application::createInstance(char const* app_name)
     app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
     app_info.pEngineName = "No Engine";
     app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-    app_info.apiVersion = kVkApiVersion;
+    app_info.apiVersion = MYVK_API_VERSION;
 
     VkDebugUtilsMessengerCreateInfoEXT debug_info{};
     CHECK_ERR_RET(populateDebugMessengerInfo(debug_info));
@@ -886,7 +886,7 @@ MyErrCode Application::createLogicalDevice()
 MyErrCode Application::createVkAllocator()
 {
     VmaAllocatorCreateInfo create_info = {};
-    create_info.vulkanApiVersion = kVkApiVersion;
+    create_info.vulkanApiVersion = MYVK_API_VERSION;
     create_info.physicalDevice = physical_device;
     create_info.device = device;
     create_info.instance = instance;

@@ -55,11 +55,11 @@ void Allocator::destroyBuffer(Buffer& buffer)
     vmaDestroyBuffer(*this, buffer.buf_, buffer.alloc_);
 }
 
-Allocator createAllocator(uint32_t vk_api_version, vk::PhysicalDevice physical_device,
-                          vk::Device device, vk::Instance instance)
+Allocator createAllocator(vk::PhysicalDevice physical_device, vk::Device device,
+                          vk::Instance instance)
 {
     VmaAllocatorCreateInfo create_info = {};
-    create_info.vulkanApiVersion = vk_api_version;
+    create_info.vulkanApiVersion = MYVK_API_VERSION;
     create_info.physicalDevice = physical_device;
     create_info.device = device;
     create_info.instance = instance;

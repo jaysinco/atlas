@@ -1,7 +1,18 @@
 get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 set(TARGET_NAME ${CURRENT_DIR_NAME})
 
+set(MYVK_API_VERSION_MAJOR 1)
+set(MYVK_API_VERSION_MINOR 0)
+set(MYVK_ENABLE_VALIDATION_LAYER ON)
+
 add_compile_options(-Wno-deprecated)
+add_definitions(
+    -DMYVK_API_VERSION_MAJOR=${MYVK_API_VERSION_MAJOR}
+    -DMYVK_API_VERSION_MINOR=${MYVK_API_VERSION_MINOR}
+)
+if(MYVK_ENABLE_VALIDATION_LAYER)
+   add_definitions(-DMYVK_ENABLE_VALIDATION_LAYER=)
+endif()
 
 ###############################################################################
 # vkwl
@@ -25,7 +36,7 @@ target_glsl_shaders(vkwl
         data/vkwl.vert
         data/vkwl.frag
     COMPILE_OPTIONS
-        --target-env=vulkan1.3
+        --target-env=vulkan${MYVK_API_VERSION_MAJOR}.${MYVK_API_VERSION_MINOR}
 )
 
 target_include_directories(vkwl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
@@ -58,7 +69,7 @@ target_glsl_shaders(vkcomp
     PRIVATE
         data/vkcomp.glsl
     COMPILE_OPTIONS
-        --target-env=vulkan1.3
+        --target-env=vulkan${MYVK_API_VERSION_MAJOR}.${MYVK_API_VERSION_MINOR}
         -fshader-stage=compute
 )
 
