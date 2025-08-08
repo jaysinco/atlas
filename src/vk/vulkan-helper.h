@@ -50,6 +50,9 @@ private:
 
 void loadInstanceProcAddr(vk::Instance instance);
 void loadDeviceProcAddr(vk::Device device);
+
+vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
+
 Allocator createAllocator(vk::PhysicalDevice physical_device, vk::Device device,
                           vk::Instance instance);
 vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path const& spv);

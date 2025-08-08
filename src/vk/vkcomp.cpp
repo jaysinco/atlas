@@ -12,12 +12,17 @@ int main(int argc, char** argv)
     // instance
     vk::ApplicationInfo app_info{"vkcomp", VK_MAKE_VERSION(0, 1, 0), "No Engine",
                                  VK_MAKE_VERSION(0, 1, 0), MYVK_API_VERSION};
-    std::vector<char const*> const layers = {
+    std::vector<char const*> const instance_layers = {
 #ifdef MYVK_ENABLE_VALIDATION_LAYER
         "VK_LAYER_KHRONOS_validation"
 #endif
     };
-    auto instance = vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers});
+    std::vector<char const*> instance_extensions = {"VK_EXT_debug_utils"};
+    auto instance = vk::createInstance(
+        {vk::InstanceCreateFlags(), &app_info, instance_layers, instance_extensions});
+
+    myvk::loadInstanceProcAddr(instance);
+    auto debug_messenger = instance.createDebugUtilsMessengerEXT(myvk::getDebugMessengerInfo());
 
     // physical device
     auto physical_device = instance.enumeratePhysicalDevices().front();
@@ -158,6 +163,7 @@ int main(int argc, char** argv)
     device.destroyCommandPool(command_pool);
     device.destroy();
 
+    instance.destroyDebugUtilsMessengerEXT(debug_messenger);
     instance.destroy();
 
     return 0;

@@ -2,6 +2,7 @@
 #include <vk_mem_alloc.h>
 #include "vulkan-helper.h"
 #include "toolkit/toolkit.h"
+#include "toolkit/logging.h"
 
 namespace toolkit::myvk
 {
@@ -76,6 +77,44 @@ vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path con
     vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
                                            reinterpret_cast<uint32_t const*>(code.data()));
     return device.createShaderModule(create_info);
+}
+
+VkBool32 debugMessengerUserCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+                                    vk::DebugUtilsMessageTypeFlagsEXT type,
+                                    vk::DebugUtilsMessengerCallbackDataEXT const* callback_data,
+                                    void* user_data)
+{
+    switch (severity) {
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+            TLOG("{}", callback_data->pMessage);
+            break;
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+            DLOG("{}", callback_data->pMessage);
+            break;
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+            WLOG("{}", callback_data->pMessage);
+            break;
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+            ELOG("{}", callback_data->pMessage);
+            break;
+        default:
+            break;
+    }
+    return VK_FALSE;
+}
+
+vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo()
+{
+    vk::DebugUtilsMessengerCreateInfoEXT create_info;
+    create_info.setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                   vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
+                                   vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                   vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    create_info.setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                               vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+                               vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance);
+    create_info.pfnUserCallback = &debugMessengerUserCallback;
+    return create_info;
 }
 
 // NOLINTBEGIN
