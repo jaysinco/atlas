@@ -79,6 +79,7 @@ private:
                                            VkImageLayout new_layout, uint32_t mip_levels);
     static MyErrCode generateMipmaps(VkImage image, int32_t width, int32_t height,
                                      uint32_t mip_levels);
+    static VkSampleCountFlagBits getMaxUsableSampleCount(VkPhysicalDevice device);
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
                                   VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
@@ -171,7 +172,7 @@ private:
     static VkSwapchainKHR swapchain;
     static VkFormat swapchain_image_format;
     static VkFormat depth_image_format;
-    static constexpr VkSampleCountFlagBits kMsaaSamples = VK_SAMPLE_COUNT_8_BIT;
+    static VkSampleCountFlagBits msaa_samples;
     static std::vector<VkImage> swapchain_images;
     static std::vector<VkImageView> swapchain_image_views;
     static std::vector<MyVkImage> color_images;

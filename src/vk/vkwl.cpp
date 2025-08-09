@@ -92,6 +92,7 @@ VkSwapchainKHR Application::swapchain = VK_NULL_HANDLE;
 VkRenderPass Application::render_pass = VK_NULL_HANDLE;
 VkFormat Application::swapchain_image_format = VK_FORMAT_UNDEFINED;
 VkFormat Application::depth_image_format = VK_FORMAT_UNDEFINED;
+VkSampleCountFlagBits Application::msaa_samples = VK_SAMPLE_COUNT_1_BIT;
 std::vector<VkImage> Application::swapchain_images;
 std::vector<VkImageView> Application::swapchain_image_views;
 std::vector<MyVkImage> Application::color_images;
@@ -776,6 +777,24 @@ MyErrCode Application::generateMipmaps(VkImage image, int32_t width, int32_t hei
     return MyErrCode::kOk;
 }
 
+VkSampleCountFlagBits Application::getMaxUsableSampleCount(VkPhysicalDevice device)
+{
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(device, &properties);
+    VkSampleCountFlags flags = properties.limits.framebufferColorSampleCounts &
+                               properties.limits.framebufferDepthSampleCounts;
+    if (flags & VK_SAMPLE_COUNT_8_BIT) {
+        return VK_SAMPLE_COUNT_8_BIT;
+    }
+    if (flags & VK_SAMPLE_COUNT_4_BIT) {
+        return VK_SAMPLE_COUNT_4_BIT;
+    }
+    if (flags & VK_SAMPLE_COUNT_2_BIT) {
+        return VK_SAMPLE_COUNT_2_BIT;
+    }
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
 MyErrCode Application::createVkSurface()
 {
     VkWaylandSurfaceCreateInfoKHR create_info = {};
@@ -810,6 +829,8 @@ MyErrCode Application::pickPhysicalDevice()
         ELOG("failed to find a suitable gpu");
         return MyErrCode::kFailed;
     }
+    msaa_samples = getMaxUsableSampleCount(physical_device);
+    DLOG("msaa_samples={}", msaa_samples);
     return MyErrCode::kOk;
 }
 
@@ -1172,7 +1193,7 @@ MyErrCode Application::createColorImagesAndViews()
     VkFormat color_image_format = swapchain_image_format;
     for (size_t i = 0; i < color_images.size(); i++) {
         CHECK_ERR_RET(createVkImage(
-            curr_width, curr_height, 1, kMsaaSamples, color_image_format, VK_IMAGE_TILING_OPTIMAL,
+            curr_width, curr_height, 1, msaa_samples, color_image_format, VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, color_images[i]));
         CHECK_ERR_RET(createVkImageView(color_images[i].img, color_image_format, 1,
@@ -1187,7 +1208,7 @@ MyErrCode Application::createDepthImagesAndViews()
     depth_image_views.resize(swapchain_images.size());
     depth_image_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
     for (size_t i = 0; i < depth_images.size(); i++) {
-        CHECK_ERR_RET(createVkImage(curr_width, curr_height, 1, kMsaaSamples, depth_image_format,
+        CHECK_ERR_RET(createVkImage(curr_width, curr_height, 1, msaa_samples, depth_image_format,
                                     VK_IMAGE_TILING_OPTIMAL,
                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, depth_images[i]));
@@ -1246,8 +1267,7 @@ MyErrCode Application::createSwapchain()
     VkSwapchainCreateInfoKHR create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.surface = vulkan_surface;
-    create_info.minImageCount =
-        std::min(capabilities.minImageCount + 1, capabilities.maxImageCount);
+    create_info.minImageCount = capabilities.minImageCount + 1;
     create_info.imageFormat = chosen_format.format;
     create_info.imageColorSpace = chosen_format.colorSpace;
     create_info.imageExtent.width = curr_width;
@@ -1276,7 +1296,7 @@ MyErrCode Application::createRenderPass()
 {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = swapchain_image_format;
-    color_attachment.samples = kMsaaSamples;
+    color_attachment.samples = msaa_samples;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1286,7 +1306,7 @@ MyErrCode Application::createRenderPass()
 
     VkAttachmentDescription depth_attachment = {};
     depth_attachment.format = depth_image_format;
-    depth_attachment.samples = kMsaaSamples;
+    depth_attachment.samples = msaa_samples;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1393,7 +1413,7 @@ MyErrCode Application::setupImgui()
     init_info.DescriptorPool = imgui_descriptor_pool;
     init_info.MinImageCount = swapchain_images.size();
     init_info.ImageCount = swapchain_images.size();
-    init_info.MSAASamples = kMsaaSamples;
+    init_info.MSAASamples = msaa_samples;
     ImGui_ImplVulkan_Init(&init_info, render_pass);
 
     VkCommandBuffer cmd_buf;
@@ -1518,7 +1538,7 @@ MyErrCode Application::createGraphicsPipeline()
     // multisampling
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = kMsaaSamples;
+    multisampling.rasterizationSamples = msaa_samples;
     multisampling.sampleShadingEnable = VK_TRUE;
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr;
