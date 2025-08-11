@@ -1,6 +1,7 @@
 #pragma once
 #include "scene.h"
 #include <wayland-client.h>
+#include <wayland-cursor.h>
 #include <xdg-shell.h>
 #include <vulkan/vulkan_wayland.h>
 #include <vk_mem_alloc.h>
@@ -132,6 +133,10 @@ private:
     static wl_seat* seat;
     static wl_pointer* pointer;
     static wl_keyboard* keyboard;
+    static wl_shm* shm;
+    static wl_cursor_theme* cursor_theme;
+    static wl_cursor* default_cursor;
+    static wl_surface* cursor_surface;
     static wl_registry_listener registry_listener;
     static xdg_wm_base_listener shell_listener;
     static xdg_surface_listener shell_surface_listener;

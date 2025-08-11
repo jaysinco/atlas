@@ -37,6 +37,10 @@ xdg_toplevel* Application::toplevel = nullptr;
 wl_seat* Application::seat = nullptr;
 wl_pointer* Application::pointer = nullptr;
 wl_keyboard* Application::keyboard = nullptr;
+wl_shm* Application::shm = nullptr;
+wl_cursor_theme* Application::cursor_theme = nullptr;
+wl_cursor* Application::default_cursor = nullptr;
+wl_surface* Application::cursor_surface = nullptr;
 wl_registry_listener Application::registry_listener = {
     .global = &handleRegistry,
 };
@@ -149,6 +153,7 @@ MyErrCode Application::initWayland(char const* win_title, char const* app_id)
     wl_display_roundtrip(display);
 
     CHECK_WL_ERR_RET(surface = wl_compositor_create_surface(compositor));
+    CHECK_WL_ERR_RET(cursor_surface = wl_compositor_create_surface(compositor));
 
     CHECK_WL_ERR_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell, surface));
     xdg_surface_add_listener(shell_surface, &shell_surface_listener, nullptr);
@@ -174,6 +179,8 @@ MyErrCode Application::cleanupWayland()
     xdg_toplevel_destroy(toplevel);
     xdg_surface_destroy(shell_surface);
     wl_surface_destroy(surface);
+    wl_surface_destroy(cursor_surface);
+    wl_cursor_theme_destroy(cursor_theme);
     xdg_wm_base_destroy(shell);
     wl_compositor_destroy(compositor);
     wl_registry_destroy(registry);
@@ -194,6 +201,10 @@ void Application::handleRegistry(void* data, struct wl_registry* registry, uint3
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
         CHECK_WL_ERR(seat = (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, 1));
         wl_seat_add_listener(seat, &seat_listener, nullptr);
+    } else if (strcmp(interface, wl_shm_interface.name) == 0) {
+        CHECK_WL_ERR(shm = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, 1));
+        CHECK_WL_ERR(cursor_theme = wl_cursor_theme_load(nullptr, 24, shm));
+        CHECK_WL_ERR(default_cursor = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr"));
     }
 }
 
@@ -249,6 +260,21 @@ void Application::handleSeatCapabilities(void* data, struct wl_seat* seat, uint3
 void Application::handlePointerEnter(void* data, struct wl_pointer* pointer, uint32_t serial,
                                      struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy)
 {
+    if (!default_cursor) {
+        return;
+    }
+    wl_cursor_image* image = default_cursor->images[0];
+    if (!image) {
+        return;
+    }
+    wl_buffer* buffer = wl_cursor_image_get_buffer(image);
+    if (!buffer) {
+        return;
+    }
+    wl_pointer_set_cursor(pointer, serial, cursor_surface, image->hotspot_x, image->hotspot_y);
+    wl_surface_attach(cursor_surface, buffer, 0, 0);
+    wl_surface_damage(cursor_surface, 0, 0, image->width, image->height);
+    wl_surface_commit(cursor_surface);
 }
 
 void Application::handlePointerLeave(void* data, struct wl_pointer* pointer, uint32_t serial,
@@ -1398,6 +1424,7 @@ MyErrCode Application::setupImgui()
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
 

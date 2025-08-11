@@ -45,6 +45,7 @@ target_link_libraries(vkwl
     toolkit
     vulkan
     wayland-client
+    wayland-cursor
     opencv
     assimp
     easy-profiler 
