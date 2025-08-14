@@ -26,6 +26,18 @@ Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
 
+Queue::Queue(): queue_(VK_NULL_HANDLE), family_index_(-1) {}
+
+Queue::Queue(VkQueue queue, uint32_t family_index): queue_(queue), family_index_(family_index) {}
+
+uint32_t Queue::getFamilyIndex() const { return family_index_; }
+
+Queue::operator VkQueue() const { return queue_; }
+
+Queue::operator vk::Queue() const { return queue_; }
+
+Queue::operator bool() const { return queue_ != VK_NULL_HANDLE; }
+
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
     vk::DebugUtilsMessengerCallbackDataEXT const* callback_data, void* user_data)
@@ -68,27 +80,31 @@ MyErrCode Context::createInstance(char const* name, std::vector<char const*> con
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
     vk::ApplicationInfo app_info{name, VK_MAKE_VERSION(0, 1, 0), "No Engine",
                                  VK_MAKE_VERSION(0, 1, 0), MYVK_API_VERSION};
-    std::vector<char const*> const layers = {};
+    auto debug_info = getDebugMessengerInfo();
     instance_ = CHECK_VKHPP_RET(
-        vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers, extensions}));
+        vk::createInstance({vk::InstanceCreateFlags(), &app_info, {}, extensions, &debug_info}));
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(instance_);
 
-    debug_messenger_ =
-        CHECK_VKHPP_RET(instance_.createDebugUtilsMessengerEXT(getDebugMessengerInfo()));
+    debug_messenger_ = CHECK_VKHPP_RET(instance_.createDebugUtilsMessengerEXT(debug_info));
 
     return MyErrCode::kOk;
 }
 
-MyErrCode Context ::createPhysicalDevice(
-    std::function<bool(vk::PhysicalDeviceProperties const&)> const& picker)
+MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
 {
     auto physical_devices = CHECK_VKHPP_RET(instance_.enumeratePhysicalDevices());
+    bool found = false;
     for (auto& d: physical_devices) {
-        if (picker(d.getProperties())) {
+        if (device_picker(d.getProperties(), d.getFeatures())) {
             physical_device_ = d;
+            found = true;
             break;
         }
+    }
+    if (!found) {
+        ELOG("no proper device found");
+        return MyErrCode::kFailed;
     }
 
     auto device_props = physical_device_.getProperties();
@@ -101,23 +117,37 @@ MyErrCode Context ::createPhysicalDevice(
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createDevice(
-    std::function<bool(vk::QueueFamilyProperties const&)> const& queue_picker,
-    std::vector<char const*> const& extensions)
+MyErrCode Context::createDevice(std::vector<QueuePicker> const& queue_pickers,
+                                std::vector<char const*> const& extensions)
 {
     auto queue_props = physical_device_.getQueueFamilyProperties();
-    auto queue_picked = std::find_if(queue_props.begin(), queue_props.end(), queue_picker);
-    queue_family_index_ = std::distance(queue_props.begin(), queue_picked);
-    ILOG("Compute Queue Family Index: {}", queue_family_index_);
-
     float const queue_priority = 1.0f;
-    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(), queue_family_index_,
-                                                1, &queue_priority);
-    device_ = CHECK_VKHPP_RET(physical_device_.createDevice(
-        {vk::DeviceCreateFlags(), queue_create_info, {}, extensions}));
+    std::vector<vk::DeviceQueueCreateInfo> queue_infos;
+    for (auto& picker: queue_pickers) {
+        bool found = false;
+        for (uint32_t i = 0; i < queue_props.size(); ++i) {
+            if (picker(queue_props[i])) {
+                queue_infos.emplace_back(vk::DeviceQueueCreateFlags(), i, 1, &queue_priority);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            ELOG("no proper queue found");
+            return MyErrCode::kFailed;
+        }
+    }
+
+    device_ = CHECK_VKHPP_RET(
+        physical_device_.createDevice({vk::DeviceCreateFlags(), queue_infos, {}, extensions}));
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
-    queue_ = device_.getQueue(queue_family_index_, 0);
+
+    for (auto& info: queue_infos) {
+        auto family_index = info.queueFamilyIndex;
+        auto queue = device_.getQueue(family_index, 0);
+        queues_.emplace_back(queue, family_index);
+    }
 
     return MyErrCode::kOk;
 }
@@ -133,20 +163,55 @@ MyErrCode Context::createAllocator()
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::destroy()
+MyErrCode Context::createCommandPools(std::vector<vk::CommandPoolCreateFlags> const& flags)
 {
-    for (auto [_, buf]: buffers_) {
-        vmaDestroyBuffer(allocator_, buf.buf_, buf.alloc_);
+    for (int i = 0; i < flags.size(); ++i) {
+        command_pools_.push_back(
+            CHECK_VKHPP_RET(device_.createCommandPool({flags[i], getQueue(i).getFamilyIndex()})));
     }
-    for (auto [_, shm]: shader_modules_) {
-        device_.destroyShaderModule(shm);
-    }
-    vmaDestroyAllocator(allocator_);
-    device_.destroy();
-    instance_.destroyDebugUtilsMessengerEXT(debug_messenger_);
-    instance_.destroy();
     return MyErrCode::kOk;
 }
+
+MyErrCode Context::createDescriptorPool(uint32_t max_sets,
+                                        std::vector<vk::DescriptorPoolSize> const& pool_sizes)
+{
+    descriptor_pool_ = CHECK_VKHPP_RET(
+        device_.createDescriptorPool({vk::DescriptorPoolCreateFlags(), max_sets, pool_sizes}));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy()
+{
+    for (auto& [_, i]: buffers_) {
+        vmaDestroyBuffer(allocator_, i.buf_, i.alloc_);
+    }
+    for (auto& [_, i]: shader_modules_) {
+        device_.destroyShaderModule(i);
+    }
+    if (descriptor_pool_) {
+        device_.destroyDescriptorPool(descriptor_pool_);
+    }
+    for (auto& i: command_pools_) {
+        device_.destroyCommandPool(i);
+    }
+    if (allocator_) {
+        vmaDestroyAllocator(allocator_);
+    }
+    if (device_) {
+        device_.destroy();
+    }
+    if (debug_messenger_) {
+        instance_.destroyDebugUtilsMessengerEXT(debug_messenger_);
+    }
+    if (instance_) {
+        instance_.destroy();
+    }
+    return MyErrCode::kOk;
+}
+
+Queue& Context::getQueue(int i) { return queues_.at(i); }
+
+vk::CommandPool& Context::getCommandPool(int i) { return command_pools_.at(i); };
 
 MyErrCode Context::createShaderModule(char const* name, std::filesystem::path const& spv_path)
 {
@@ -178,49 +243,39 @@ MyErrCode Context::destroyShaderModule(char const* name)
 MyErrCode Context::createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
                                 vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
 {
+    if (buffers_.find(name) != buffers_.end()) {
+        CHECK_ERR_RET(destroyBuffer(name));
+    }
+
+    vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, size, usage,
+                                     vk::SharingMode::eExclusive);
+
+    VmaAllocationCreateInfo creation_info = {};
+    creation_info.flags = flags;
+    creation_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(properties);
+
+    VkBuffer buf;
+    VmaAllocation alloc;
+    VmaAllocationInfo alloc_info;
+    CHECK_VK_RET(
+        vmaCreateBuffer(allocator_, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
+
+    buffers_[name] = {buf, alloc, alloc_info};
+    return MyErrCode::kOk;
 }
 
-Buffer& Context::getBuffer(char const* name) {}
+Buffer& Context::getBuffer(char const* name) { return buffers_.at(name); }
 
-MyErrCode Context::destroyBuffer(char const* name) {}
-
-// void Allocator::destroy() {  }
-//
-//
-//
-// MyErrCode Allocator::createBuffer(uint64_t size, vk::BufferUsageFlags usage,
-//                                   vk::MemoryPropertyFlags properties,
-//                                   VmaAllocationCreateFlags flags, Buffer& buffer)
-// {
-//     vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, size, usage,
-//                                      vk::SharingMode::eExclusive);
-//
-//     VmaAllocationCreateInfo creation_info = {};
-//     creation_info.flags = flags;
-//     creation_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(properties);
-//
-//     VkBuffer buf;
-//     VmaAllocation alloc;
-//     VmaAllocationInfo alloc_info;
-//     CHECK_VK_RET(vmaCreateBuffer(*this, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
-//
-//     buffer = {buf, alloc, alloc_info};
-//     return MyErrCode::kOk;
-// }
-//
-// void Allocator::destroyBuffer(Buffer& buffer)
-// {
-//     vmaDestroyBuffer(*this, buffer.buf_, buffer.alloc_);
-// }
-
-// MyErrCode createAllocator(vk::PhysicalDevice physical_device, vk::Device device,
-//                           vk::Instance instance, Allocator& allocator)
-// {
-// }
-//
-// MyErrCode createShaderModule(vk::Device device, std::filesystem::path const& spv_path,
-//                              vk::ShaderModule& shader_module)
-// {
-// }
+MyErrCode Context::destroyBuffer(char const* name)
+{
+    if (auto it = buffers_.find(name); it != buffers_.end()) {
+        vmaDestroyBuffer(allocator_, it->second.buf_, it->second.alloc_);
+        buffers_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("name not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
 
 }  // namespace myvk

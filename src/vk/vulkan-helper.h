@@ -46,26 +46,63 @@ private:
     VmaAllocationInfo alloc_info_;
 };
 
+class Queue
+{
+public:
+    Queue();
+    Queue(VkQueue queue, uint32_t family_index);
+    uint32_t getFamilyIndex() const;
+    operator VkQueue() const;
+    operator vk::Queue() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    VkQueue queue_;
+    uint32_t family_index_;
+};
+
 class Context
 {
 public:
-    MyErrCode createInstance(char const* name, std::vector<char const*> const& extensions);
-    MyErrCode createPhysicalDevice(
-        std::function<bool(vk::PhysicalDeviceProperties const&)> const& picker);
-    MyErrCode createDevice(
-        std::function<bool(vk::QueueFamilyProperties const&)> const& queue_picker,
-        std::vector<char const*> const& extensions);
-    MyErrCode createAllocator();
-    MyErrCode destroy();
+    using DevicePicker =
+        std::function<bool(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
+    using QueuePicker = std::function<bool(vk::QueueFamilyProperties const&)>;
 
-    MyErrCode createShaderModule(char const* name, std::filesystem::path const& spv_path);
-    vk::ShaderModule& getShaderModule(char const* name);
-    MyErrCode destroyShaderModule(char const* name);
+    MyErrCode createInstance(char const* name, std::vector<char const*> const& extensions);
+    MyErrCode createPhysicalDevice(DevicePicker const& device_picker);
+    MyErrCode createDevice(std::vector<QueuePicker> const& queue_pickers,
+                           std::vector<char const*> const& extensions);
+    MyErrCode createAllocator();
+    MyErrCode createCommandPools(std::vector<vk::CommandPoolCreateFlags> const& flags);
+    MyErrCode createDescriptorPool(uint32_t max_sets,
+                                   std::vector<vk::DescriptorPoolSize> const& pool_sizes);
+
+    Queue& getQueue(int i = 0);
+    vk::CommandPool& getCommandPool(int i = 0);
+    MyErrCode destroy();
 
     MyErrCode createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
     Buffer& getBuffer(char const* name);
     MyErrCode destroyBuffer(char const* name);
+
+    MyErrCode createShaderModule(char const* name, std::filesystem::path const& spv_path);
+    vk::ShaderModule& getShaderModule(char const* name);
+    MyErrCode destroyShaderModule(char const* name);
+
+    MyErrCode createDescriptorSetLayout(
+        char const* name, std::vector<vk::DescriptorSetLayoutBinding> const& bindings);
+    vk::DescriptorSetLayout& getDescriptorSetLayout(char const* name);
+    MyErrCode destroyDescriptorSetLayout(char const* name);
+
+    MyErrCode createPipelineLayout(char const* name, std::vector<char const*> const& set_layouts);
+    vk::PipelineLayout& getPipelineLayout(char const* name);
+    MyErrCode destroyPipelineLayout(char const* name);
+
+    MyErrCode createComputePipeline(char const* name);
+    vk::PipelineLayout& getPipeline(char const* name);
+    MyErrCode destroyPipeline(char const* name);
 
 protected:
     vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
@@ -75,11 +112,16 @@ private:
     vk::DebugUtilsMessengerEXT debug_messenger_;
     vk::PhysicalDevice physical_device_;
     vk::Device device_;
-    uint32_t queue_family_index_;
-    vk::Queue queue_;
+    std::vector<Queue> queues_;
+    std::vector<vk::CommandPool> command_pools_;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
-    std::map<std::string, vk::ShaderModule> shader_modules_;
+    vk::DescriptorPool descriptor_pool_;
+
     std::map<std::string, Buffer> buffers_;
+    std::map<std::string, vk::ShaderModule> shader_modules_;
+    std::map<std::string, vk::DescriptorSetLayout> descriptor_set_layouts_;
+    std::map<std::string, vk::PipelineLayout> pipeline_layouts_;
+    std::map<std::string, vk::Pipeline> pipelines_;
 };
 
 }  // namespace myvk
