@@ -69,8 +69,6 @@ public:
 
 protected:
     vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
-    MyErrCode destroyShaderModule(vk::ShaderModule& shader_module);
-    MyErrCode destroyBuffer(Buffer& buffer);
 
 private:
     vk::Instance instance_;

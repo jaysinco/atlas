@@ -8,8 +8,7 @@ add_compile_options(-Wno-deprecated)
 
 set_source_files_properties(vulkan-helper.cpp 
     PROPERTIES COMPILE_DEFINITIONS 
-    "MYVK_API_VERSION_MAJOR=\"${MYVK_API_VERSION_MAJOR}\""
-    "MYVK_API_VERSION_MINOR=\"${MYVK_API_VERSION_MINOR}\""
+    "MYVK_API_VERSION_MAJOR=${MYVK_API_VERSION_MAJOR};MYVK_API_VERSION_MINOR=${MYVK_API_VERSION_MINOR}"
 )
 
 ###############################################################################

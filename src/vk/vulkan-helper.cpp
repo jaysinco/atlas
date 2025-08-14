@@ -77,7 +77,7 @@ MyErrCode Context::createInstance(char const* name, std::vector<char const*> con
     debug_messenger_ =
         CHECK_VKHPP_RET(instance_.createDebugUtilsMessengerEXT(getDebugMessengerInfo()));
 
-    return kOk;
+    return MyErrCode::kOk;
 }
 
 MyErrCode Context ::createPhysicalDevice(
@@ -98,7 +98,7 @@ MyErrCode Context ::createPhysicalDevice(
          VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
     ILOG("Max Compute Shared Memory Size: {} KB", device_limits.maxComputeSharedMemorySize / 1024);
 
-    return kOk;
+    return MyErrCode::kOk;
 }
 
 MyErrCode Context::createDevice(
@@ -119,7 +119,7 @@ MyErrCode Context::createDevice(
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
     queue_ = device_.getQueue(queue_family_index_, 0);
 
-    return kOk;
+    return MyErrCode::kOk;
 }
 
 MyErrCode Context::createAllocator()
@@ -145,28 +145,35 @@ MyErrCode Context::destroy()
     device_.destroy();
     instance_.destroyDebugUtilsMessengerEXT(debug_messenger_);
     instance_.destroy();
-    return kOk;
+    return MyErrCode::kOk;
 }
 
 MyErrCode Context::createShaderModule(char const* name, std::filesystem::path const& spv_path)
 {
     if (shader_modules_.find(name) != shader_modules_.end()) {
-        ELOG("duplicated name: {}", name);
-        return MyErrCode::kFailed;
+        CHECK_ERR_RET(destroyShaderModule(name));
     }
     std::vector<uint8_t> code;
     CHECK_ERR_RET(toolkit::readBinaryFile(spv_path, code));
     vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
                                            reinterpret_cast<uint32_t const*>(code.data()));
-    shader_modules_[name] = CHECK_VKHPP_RET(device.createShaderModule(create_info));
+    shader_modules_[name] = CHECK_VKHPP_RET(device_.createShaderModule(create_info));
     return MyErrCode::kOk;
 }
 
-vk::ShaderModule& Context::getShaderModule(char const* name) {}
+vk::ShaderModule& Context::getShaderModule(char const* name) { return shader_modules_.at(name); }
 
-MyErrCode Context::destroyShaderModule(char const* name) {}
-
-MyErrCode Context::destroyShaderModule(vk::ShaderModule& shader_module) {}
+MyErrCode Context::destroyShaderModule(char const* name)
+{
+    if (auto it = shader_modules_.find(name); it != shader_modules_.end()) {
+        device_.destroyShaderModule(it->second);
+        shader_modules_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("name not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
 
 MyErrCode Context::createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
                                 vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
@@ -176,8 +183,6 @@ MyErrCode Context::createBuffer(char const* name, uint64_t size, vk::BufferUsage
 Buffer& Context::getBuffer(char const* name) {}
 
 MyErrCode Context::destroyBuffer(char const* name) {}
-
-MyErrCode Context::destroyBuffer(Buffer& buffer) {}
 
 // void Allocator::destroy() {  }
 //
