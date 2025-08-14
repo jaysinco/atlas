@@ -38,7 +38,7 @@ MyErrCode drawTui(toolkit::Args const& args)
     return MyErrCode::kOk;
 };
 
-int main(int argc, char* argv[])
+MY_MAIN
 {
     MY_TRY
     toolkit::runAsRoot(argc, argv);
@@ -48,13 +48,14 @@ int main(int argc, char* argv[])
     logger_opt.callback = [](toolkit::LogLevel level, std::string_view mesg) {
         Context::instance().pushLog(level, mesg);
     };
-    CHECK_ERR_RTI(toolkit::initLogger(std::move(logger_opt)));
+    CHECK_ERR_RET(toolkit::initLogger(std::move(logger_opt)));
 
     toolkit::Args args(argc, argv);
     args.positional("ip", po::value<std::string>()->default_value(""), "ipv4 address", 1);
     args.optional("filter,f", po::value<std::string>()->default_value(""), "capture filter");
-    CHECK_ERR_RTI(args.parse(false));
-    CHECK_ERR_RTI(drawTui(args));
+    CHECK_ERR_RET(args.parse(false));
+    CHECK_ERR_RET(drawTui(args));
 
-    MY_CATCH_RTI
+    MY_CATCH_RET
+    return MyErrCode::kOk;
 }

@@ -2,7 +2,7 @@
 #include "toolkit/logging.h"
 #include <cpr/cpr.h>
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -10,5 +10,5 @@ int main(int argc, char** argv)
     ILOG("status: {}", r.status_code);
     ILOG("type: {}", r.header["content-type"]);
     ILOG("text: {}", r.text);
-    return 0;
+    return MyErrCode::kOk;
 }

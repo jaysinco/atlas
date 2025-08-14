@@ -26,7 +26,7 @@ net::Mac forgeMacAddr(net::Mac const& origin)
     return forged;
 }
 
-int main(int argc, char* argv[])
+MY_MAIN
 {
     MY_TRY
     toolkit::runAsRoot(argc, argv);
@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
                   "listener mac");
     args.optional("per,p", po::value<int>()->default_value(10000), "send period (ms)");
     args.optional("ratio,r", po::value<float>()->default_value(5), "attack ratio (%)");
-    CHECK_ERR_RTI(args.parse());
+    CHECK_ERR_RET(args.parse());
 
     auto opt_ip = args.get<std::string>("ip");
     auto opt_attack_mac = args.get<std::string>("attack");
@@ -47,13 +47,13 @@ int main(int argc, char* argv[])
 
     if (opt_ip.empty() && opt_attack_mac.empty()) {
         ELOG("empty ipv4 address, please input ip");
-        return -1;
+        return MyErrCode::kFailed;
     }
 
     net::Ip4 ip = !opt_ip.empty() ? net::Ip4(opt_ip) : net::Ip4::kZeros;
     auto& apt = net::Adaptor::fit(ip);
     void* handle;
-    CHECK_ERR_RTI(net::Transport::open(apt, handle));
+    CHECK_ERR_RET(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     if (opt_attack_mac.empty()) {
@@ -97,11 +97,11 @@ int main(int argc, char* argv[])
             // TLOG("forge victim {} at {}", victim_forged_mac, victim_ip);
             rarp_cnt = (rarp_cnt + 1) % rarp_cycle;
             if (lie_per > 0) {
-                CHECK_ERR_RTI(net::Transport::send(handle, lie));
+                CHECK_ERR_RET(net::Transport::send(handle, lie));
                 std::this_thread::sleep_for(std::chrono::milliseconds(lie_per));
             }
             if (true_per > 0) {
-                CHECK_ERR_RTI(net::Transport::send(handle, truth));
+                CHECK_ERR_RET(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(true_per));
             }
         }
@@ -110,11 +110,12 @@ int main(int argc, char* argv[])
             truth = net::Packet::arp(victim_actual_mac, victim_ip, victim_actual_mac, victim_ip,
                                      true, false, listener_mac);
             for (int i = 0; i < 5; ++i) {
-                CHECK_ERR_RTI(net::Transport::send(handle, truth));
+                CHECK_ERR_RET(net::Transport::send(handle, truth));
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             ILOG("victim {} restored at {}", victim_actual_mac, victim_ip);
         }
     }
-    MY_CATCH_RTI
+    MY_CATCH_RET
+    return MyErrCode::kOk;
 }

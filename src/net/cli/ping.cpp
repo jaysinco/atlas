@@ -5,14 +5,14 @@
 #include "protocol/ipv4.h"
 #include <iostream>
 
-int main(int argc, char* argv[])
+MY_MAIN
 {
     MY_TRY
     toolkit::runAsRoot(argc, argv);
     toolkit::Args args(argc, argv);
     args.positional("target", po::value<std::string>(), "ipv4 or host name", 1);
     args.optional("count,c", po::value<int>()->default_value(5), "send count");
-    CHECK_ERR_RTI(args.parse());
+    CHECK_ERR_RET(args.parse());
 
     auto opt_target = args.get<std::string>("target");
     auto opt_count = args.get<int>("count");
@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     } else {
         if (net::Ip4::fromDomain(opt_target, &target_ip) != MyErrCode::kOk) {
             ELOG("invalid ip or host name: {}", opt_target);
-            return -1;
+            return MyErrCode::kFailed;
         }
         ip_desc << opt_target << " [" << target_ip.toStr() << "]";
     }
@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
 
     auto& apt = net::Adaptor::fit(net::Ip4::kZeros);
     void* handle;
-    CHECK_ERR_RTI(net::Transport::open(apt, handle));
+    CHECK_ERR_RET(net::Transport::open(apt, handle));
     auto handle_guard = toolkit::scopeExit([&] { net::Transport::close(handle); });
 
     int recv_cnt = 0;
@@ -72,5 +72,6 @@ int main(int argc, char* argv[])
         std::cout << "    min=" << min_cost << "ms, max=" << max_cost
                   << "ms, avg=" << (sum_cost) / opt_count << "ms\n";
     }
-    MY_CATCH_RTI
+    MY_CATCH_RET
+    return MyErrCode::kOk;
 }

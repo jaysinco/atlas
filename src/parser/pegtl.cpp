@@ -39,7 +39,7 @@ struct Action<Name>
 
 }  // namespace hello
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -51,4 +51,5 @@ int main(int argc, char** argv)
     } else {
         ELOG("failed to parse");
     }
+    return MyErrCode::kOk;
 }

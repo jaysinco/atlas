@@ -2,16 +2,19 @@
 #define CATCH_CONFIG_RUNNER
 #include <catch2/catch_all.hpp>
 
-int main(int argc, char** argv)
+MY_MAIN
 {
-    CHECK_ERR_RTI(toolkit::initLogger());
+    CHECK_ERR_RET(toolkit::initLogger());
     Catch::Session session;
     int return_code = session.applyCommandLine(argc, argv);
     if (return_code != 0) {
-        return return_code;
+        return MyErrCode::kFailed;
     }
     auto& config = session.configData();
     config.shouldDebugBreak = true;
     int num_failed = session.run();
-    return num_failed;
+    if (num_failed != 0) {
+        return MyErrCode::kFailed;
+    }
+    return MyErrCode::kOk;
 }

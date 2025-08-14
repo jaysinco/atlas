@@ -5,14 +5,15 @@
 
 using namespace ocl;
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::installCrashHook();
     toolkit::Args args(argc, argv);
     args.parse();
 
     MY_TRY
-    CHECK_ERR_RTI(txiGuided(argc, argv));
-    // CHECK_ERR_RTI(spatialDenoise(argc, argv));
-    MY_CATCH_RTI return 0;
+    CHECK_ERR_RET(txiGuided(argc, argv));
+    // CHECK_ERR_RET(spatialDenoise(argc, argv));
+    return MyErrCode::kOk;
+    MY_CATCH_RET
 }

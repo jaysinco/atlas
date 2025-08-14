@@ -3,8 +3,10 @@
 #define CHECK_ERR_RET(err) \
     if (auto _err = (err); _err != MyErrCode::kOk) return _err
 
-#define CHECK_ERR_RTI(err) \
-    if (auto _err = (err); _err != MyErrCode::kOk) return static_cast<int>(_err)
+#define MY_MAIN                                                                       \
+    static MyErrCode my_main(int argc, char** argv);                                  \
+    int main(int argc, char** argv) { return static_cast<int>(my_main(argc, argv)); } \
+    static MyErrCode my_main(int argc, char** argv)
 
 enum class MyErrCode : int
 {

@@ -4,7 +4,11 @@
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
 
-namespace toolkit::myvk
+#define MYVK_API_VERSION VK_MAKE_API_VERSION(0, MYVK_API_VERSION_MAJOR, MYVK_API_VERSION_MINOR, 0)
+
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+
+namespace myvk
 {
 
 Buffer::Buffer(): buf_(VK_NULL_HANDLE), alloc_(VK_NULL_HANDLE) {}
@@ -22,67 +26,9 @@ Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
 
-Allocator::Allocator(): allocator_(VK_NULL_HANDLE) {}
-
-Allocator::Allocator(VmaAllocator allocator): allocator_(allocator) {}
-
-void Allocator::destroy() { vmaDestroyAllocator(allocator_); }
-
-Allocator::operator VmaAllocator() const { return allocator_; }
-
-Allocator::operator bool() const { return allocator_ != VK_NULL_HANDLE; }
-
-Buffer Allocator::createBuffer(uint64_t size, vk::BufferUsageFlags usage,
-                               vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
-{
-    vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, size, usage,
-                                     vk::SharingMode::eExclusive);
-
-    VmaAllocationCreateInfo creation_info = {};
-    creation_info.flags = flags;
-    creation_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(properties);
-
-    VkBuffer buf;
-    VmaAllocation alloc;
-    VmaAllocationInfo alloc_info;
-    CHECK_VK_ERR_THROW(
-        vmaCreateBuffer(*this, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
-
-    return {buf, alloc, alloc_info};
-}
-
-void Allocator::destroyBuffer(Buffer& buffer)
-{
-    vmaDestroyBuffer(*this, buffer.buf_, buffer.alloc_);
-}
-
-Allocator createAllocator(vk::PhysicalDevice physical_device, vk::Device device,
-                          vk::Instance instance)
-{
-    VmaAllocatorCreateInfo create_info = {};
-    create_info.vulkanApiVersion = MYVK_API_VERSION;
-    create_info.physicalDevice = physical_device;
-    create_info.device = device;
-    create_info.instance = instance;
-
-    VmaAllocator allocator;
-    CHECK_VK_ERR_THROW(vmaCreateAllocator(&create_info, &allocator));
-    return allocator;
-}
-
-vk::ShaderModule createShaderModule(vk::Device device, std::filesystem::path const& spv)
-{
-    std::vector<uint8_t> code;
-    CHECK_ERR_THROW(toolkit::readBinaryFile(spv, code));
-    vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
-                                           reinterpret_cast<uint32_t const*>(code.data()));
-    return device.createShaderModule(create_info);
-}
-
-VkBool32 debugMessengerUserCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-                                    vk::DebugUtilsMessageTypeFlagsEXT type,
-                                    vk::DebugUtilsMessengerCallbackDataEXT const* callback_data,
-                                    void* user_data)
+static VkBool32 debugMessengerUserCallback(
+    vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
+    vk::DebugUtilsMessengerCallbackDataEXT const* callback_data, void* user_data)
 {
     switch (severity) {
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
@@ -103,7 +49,7 @@ VkBool32 debugMessengerUserCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT sev
     return VK_FALSE;
 }
 
-vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo()
+vk::DebugUtilsMessengerCreateInfoEXT Context::getDebugMessengerInfo()
 {
     vk::DebugUtilsMessengerCreateInfoEXT create_info;
     create_info.setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
@@ -117,39 +63,159 @@ vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo()
     return create_info;
 }
 
-// NOLINTBEGIN
-
-#define FOR_EACH_INSTANCE_PROC        \
-    X(vkCreateDebugUtilsMessengerEXT) \
-    X(vkDestroyDebugUtilsMessengerEXT)
-
-#define X(_id) static PFN_##_id _id = nullptr;
-FOR_EACH_INSTANCE_PROC
-#undef X
-
-void loadInstanceProcAddr(vk::Instance instance)
+MyErrCode Context::createInstance(char const* name, std::vector<char const*> const& extensions)
 {
-#define X(_id) _id = ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)));
-    FOR_EACH_INSTANCE_PROC
-#undef X
+    VULKAN_HPP_DEFAULT_DISPATCHER.init();
+    vk::ApplicationInfo app_info{name, VK_MAKE_VERSION(0, 1, 0), "No Engine",
+                                 VK_MAKE_VERSION(0, 1, 0), MYVK_API_VERSION};
+    std::vector<char const*> const layers = {};
+    instance_ = CHECK_VKHPP_RET(
+        vk::createInstance({vk::InstanceCreateFlags(), &app_info, layers, extensions}));
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(instance_);
+
+    debug_messenger_ =
+        CHECK_VKHPP_RET(instance_.createDebugUtilsMessengerEXT(getDebugMessengerInfo()));
+
+    return kOk;
 }
 
-void loadDeviceProcAddr(vk::Device device) {}
-
-}  // namespace toolkit::myvk
-
-VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance,
-                                        VkDebugUtilsMessengerCreateInfoEXT const* pCreateInfo,
-                                        VkAllocationCallbacks const* pAllocator,
-                                        VkDebugUtilsMessengerEXT* pMessenger)
+MyErrCode Context ::createPhysicalDevice(
+    std::function<bool(vk::PhysicalDeviceProperties const&)> const& picker)
 {
-    return myvk::vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    auto physical_devices = CHECK_VKHPP_RET(instance_.enumeratePhysicalDevices());
+    for (auto& d: physical_devices) {
+        if (picker(d.getProperties())) {
+            physical_device_ = d;
+            break;
+        }
+    }
+
+    auto device_props = physical_device_.getProperties();
+    auto device_limits = device_props.limits;
+    ILOG("Device Name: {}", device_props.deviceName);
+    ILOG("Vulkan Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
+         VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
+    ILOG("Max Compute Shared Memory Size: {} KB", device_limits.maxComputeSharedMemorySize / 1024);
+
+    return kOk;
 }
 
-void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
-                                     VkAllocationCallbacks const* pAllocator)
+MyErrCode Context::createDevice(
+    std::function<bool(vk::QueueFamilyProperties const&)> const& queue_picker,
+    std::vector<char const*> const& extensions)
 {
-    return myvk::vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    auto queue_props = physical_device_.getQueueFamilyProperties();
+    auto queue_picked = std::find_if(queue_props.begin(), queue_props.end(), queue_picker);
+    queue_family_index_ = std::distance(queue_props.begin(), queue_picked);
+    ILOG("Compute Queue Family Index: {}", queue_family_index_);
+
+    float const queue_priority = 1.0f;
+    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(), queue_family_index_,
+                                                1, &queue_priority);
+    device_ = CHECK_VKHPP_RET(physical_device_.createDevice(
+        {vk::DeviceCreateFlags(), queue_create_info, {}, extensions}));
+
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
+    queue_ = device_.getQueue(queue_family_index_, 0);
+
+    return kOk;
 }
 
-// NOLINTEND
+MyErrCode Context::createAllocator()
+{
+    VmaAllocatorCreateInfo create_info = {};
+    create_info.vulkanApiVersion = MYVK_API_VERSION;
+    create_info.physicalDevice = physical_device_;
+    create_info.device = device_;
+    create_info.instance = instance_;
+    CHECK_VK_RET(vmaCreateAllocator(&create_info, &allocator_));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy()
+{
+    for (auto [_, buf]: buffers_) {
+        vmaDestroyBuffer(allocator_, buf.buf_, buf.alloc_);
+    }
+    for (auto [_, shm]: shader_modules_) {
+        device_.destroyShaderModule(shm);
+    }
+    vmaDestroyAllocator(allocator_);
+    device_.destroy();
+    instance_.destroyDebugUtilsMessengerEXT(debug_messenger_);
+    instance_.destroy();
+    return kOk;
+}
+
+MyErrCode Context::createShaderModule(char const* name, std::filesystem::path const& spv_path)
+{
+    if (shader_modules_.find(name) != shader_modules_.end()) {
+        ELOG("duplicated name: {}", name);
+        return MyErrCode::kFailed;
+    }
+    std::vector<uint8_t> code;
+    CHECK_ERR_RET(toolkit::readBinaryFile(spv_path, code));
+    vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
+                                           reinterpret_cast<uint32_t const*>(code.data()));
+    shader_modules_[name] = CHECK_VKHPP_RET(device.createShaderModule(create_info));
+    return MyErrCode::kOk;
+}
+
+vk::ShaderModule& Context::getShaderModule(char const* name) {}
+
+MyErrCode Context::destroyShaderModule(char const* name) {}
+
+MyErrCode Context::destroyShaderModule(vk::ShaderModule& shader_module) {}
+
+MyErrCode Context::createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
+                                vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
+{
+}
+
+Buffer& Context::getBuffer(char const* name) {}
+
+MyErrCode Context::destroyBuffer(char const* name) {}
+
+MyErrCode Context::destroyBuffer(Buffer& buffer) {}
+
+// void Allocator::destroy() {  }
+//
+//
+//
+// MyErrCode Allocator::createBuffer(uint64_t size, vk::BufferUsageFlags usage,
+//                                   vk::MemoryPropertyFlags properties,
+//                                   VmaAllocationCreateFlags flags, Buffer& buffer)
+// {
+//     vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, size, usage,
+//                                      vk::SharingMode::eExclusive);
+//
+//     VmaAllocationCreateInfo creation_info = {};
+//     creation_info.flags = flags;
+//     creation_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(properties);
+//
+//     VkBuffer buf;
+//     VmaAllocation alloc;
+//     VmaAllocationInfo alloc_info;
+//     CHECK_VK_RET(vmaCreateBuffer(*this, buffer_info, &creation_info, &buf, &alloc, &alloc_info));
+//
+//     buffer = {buf, alloc, alloc_info};
+//     return MyErrCode::kOk;
+// }
+//
+// void Allocator::destroyBuffer(Buffer& buffer)
+// {
+//     vmaDestroyBuffer(*this, buffer.buf_, buffer.alloc_);
+// }
+
+// MyErrCode createAllocator(vk::PhysicalDevice physical_device, vk::Device device,
+//                           vk::Instance instance, Allocator& allocator)
+// {
+// }
+//
+// MyErrCode createShaderModule(vk::Device device, std::filesystem::path const& spv_path,
+//                              vk::ShaderModule& shader_module)
+// {
+// }
+
+}  // namespace myvk

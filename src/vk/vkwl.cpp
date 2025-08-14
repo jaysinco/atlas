@@ -8,23 +8,17 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_vulkan.h>
 
-#define CHECK_VK_ERR_RET(err)                        \
-    do {                                             \
-        if (auto _err = (err); _err != VK_SUCCESS) { \
-            ELOG("failed to call vulkan: {}", _err); \
-            return MyErrCode::kFailed;               \
-        }                                            \
-    } while (0)
+#define GET_VK_EXT_FUNC(_id) ((PFN_##_id)(vkGetInstanceProcAddr(instance, #_id)))
 
-#define CHECK_WL_ERR(expr) \
-    if (!(expr)) ELOG("failed to call wayland")
+#define CHECK_WL(err) \
+    if (!(err)) ELOG("failed to call wl")
 
-#define CHECK_WL_ERR_RET(expr)              \
-    do {                                    \
-        if (!(expr)) {                      \
-            ELOG("failed to call wayland"); \
-            return MyErrCode::kFailed;      \
-        }                                   \
+#define CHECK_WL_RET(err)              \
+    do {                               \
+        if (!(err)) {                  \
+            ELOG("failed to call wl"); \
+            return MyErrCode::kFailed; \
+        }                              \
     } while (0)
 
 wl_display* Application::display = nullptr;
@@ -120,7 +114,7 @@ int Application::new_height = 0;
 uint32_t Application::curr_width = 0;
 uint32_t Application::curr_height = 0;
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -128,7 +122,7 @@ int main(int argc, char** argv)
     profiler::startListen(28077);
     Application::run("vkwl", "vkwl");
     ILOG("end!");
-    return 0;
+    return MyErrCode::kOk;
 }
 
 MyErrCode Application::run(char const* win_title, char const* app_id)
@@ -146,19 +140,19 @@ MyErrCode Application::run(char const* win_title, char const* app_id)
 
 MyErrCode Application::initWayland(char const* win_title, char const* app_id)
 {
-    CHECK_WL_ERR_RET(display = wl_display_connect(nullptr));
+    CHECK_WL_RET(display = wl_display_connect(nullptr));
 
-    CHECK_WL_ERR_RET(registry = wl_display_get_registry(display));
+    CHECK_WL_RET(registry = wl_display_get_registry(display));
     wl_registry_add_listener(registry, &registry_listener, nullptr);
     wl_display_roundtrip(display);
 
-    CHECK_WL_ERR_RET(surface = wl_compositor_create_surface(compositor));
-    CHECK_WL_ERR_RET(cursor_surface = wl_compositor_create_surface(compositor));
+    CHECK_WL_RET(surface = wl_compositor_create_surface(compositor));
+    CHECK_WL_RET(cursor_surface = wl_compositor_create_surface(compositor));
 
-    CHECK_WL_ERR_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell, surface));
+    CHECK_WL_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell, surface));
     xdg_surface_add_listener(shell_surface, &shell_surface_listener, nullptr);
 
-    CHECK_WL_ERR_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
+    CHECK_WL_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, nullptr);
 
     auto [width, height] = scene->getScreenInitSize();
@@ -192,19 +186,18 @@ void Application::handleRegistry(void* data, struct wl_registry* registry, uint3
                                  char const* interface, uint32_t version)
 {
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
-        CHECK_WL_ERR(compositor = (wl_compositor*)wl_registry_bind(registry, name,
-                                                                   &wl_compositor_interface, 1));
+        CHECK_WL(compositor =
+                     (wl_compositor*)wl_registry_bind(registry, name, &wl_compositor_interface, 1));
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        CHECK_WL_ERR(shell =
-                         (xdg_wm_base*)wl_registry_bind(registry, name, &xdg_wm_base_interface, 1));
+        CHECK_WL(shell = (xdg_wm_base*)wl_registry_bind(registry, name, &xdg_wm_base_interface, 1));
         xdg_wm_base_add_listener(shell, &shell_listener, nullptr);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
-        CHECK_WL_ERR(seat = (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, 1));
+        CHECK_WL(seat = (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, 1));
         wl_seat_add_listener(seat, &seat_listener, nullptr);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
-        CHECK_WL_ERR(shm = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, 1));
-        CHECK_WL_ERR(cursor_theme = wl_cursor_theme_load(nullptr, 24, shm));
-        CHECK_WL_ERR(default_cursor = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr"));
+        CHECK_WL(shm = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, 1));
+        CHECK_WL(cursor_theme = wl_cursor_theme_load(nullptr, 24, shm));
+        CHECK_WL(default_cursor = wl_cursor_theme_get_cursor(cursor_theme, "left_ptr"));
     }
 }
 
@@ -376,7 +369,7 @@ MyErrCode Application::initVulkan(char const* app_name)
 
 MyErrCode Application::cleanupVulkan()
 {
-    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+    CHECK_VK_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
     vkDestroyDescriptorPool(device, imgui_descriptor_pool, nullptr);
     ImGui_ImplVulkan_Shutdown();
@@ -403,14 +396,14 @@ MyErrCode Application::cleanupVulkan()
     vmaDestroyAllocator(vma_allocator);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, vulkan_surface, nullptr);
-    vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+    GET_VK_EXT_FUNC(vkDestroyDebugUtilsMessengerEXT)(instance, debug_messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::recreateSwapchain()
 {
-    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+    CHECK_VK_RET(vkDeviceWaitIdle(device));
     CHECK_ERR_RET(cleanupSwapchain());
     CHECK_ERR_RET(createSwapchain());
     CHECK_ERR_RET(createSwapchainImageViews());
@@ -454,10 +447,10 @@ MyErrCode Application::createInstance(char const* app_name)
 
     // check extensions
     uint32_t extension_count = 0;
-    CHECK_VK_ERR_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr));
+    CHECK_VK_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr));
     std::vector<VkExtensionProperties> available_extensions(extension_count);
-    CHECK_VK_ERR_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count,
-                                                            available_extensions.data()));
+    CHECK_VK_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extension_count,
+                                                        available_extensions.data()));
     for (size_t j = 0; j < sizeof(kInstanceExtensions) / sizeof(char const*); j++) {
         bool found = false;
         for (uint32_t i = 0; i < extension_count; i++) {
@@ -475,9 +468,9 @@ MyErrCode Application::createInstance(char const* app_name)
 
     // check layers
     uint32_t layer_count;
-    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
+    CHECK_VK_RET(vkEnumerateInstanceLayerProperties(&layer_count, nullptr));
     std::vector<VkLayerProperties> available_layers(layer_count);
-    CHECK_VK_ERR_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
+    CHECK_VK_RET(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
     for (size_t j = 0; j < sizeof(kInstanceLayers) / sizeof(char const*); j++) {
         bool found = false;
         for (uint32_t i = 0; i < layer_count; i++) {
@@ -493,11 +486,7 @@ MyErrCode Application::createInstance(char const* app_name)
     create_info.enabledLayerCount = sizeof(kInstanceLayers) / sizeof(char const*);
     create_info.ppEnabledLayerNames = kInstanceLayers;
 
-    CHECK_VK_ERR_RET(vkCreateInstance(&create_info, nullptr, &instance));
-
-    // load proc addr
-    myvk::loadInstanceProcAddr(instance);
-
+    CHECK_VK_RET(vkCreateInstance(&create_info, nullptr, &instance));
     return MyErrCode::kOk;
 }
 
@@ -520,8 +509,8 @@ MyErrCode Application::setupDebugMessenger()
 {
     VkDebugUtilsMessengerCreateInfoEXT create_info{};
     CHECK_ERR_RET(populateDebugMessengerInfo(create_info));
-    CHECK_VK_ERR_RET(
-        vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
+    CHECK_VK_RET(GET_VK_EXT_FUNC(vkCreateDebugUtilsMessengerEXT)(instance, &create_info, nullptr,
+                                                                 &debug_messenger));
     return MyErrCode::kOk;
 }
 
@@ -563,8 +552,8 @@ MyErrCode Application::createVkBuffer(VkDeviceSize size, VkBufferUsageFlags usag
     alloc_info.flags = flags;
     alloc_info.requiredFlags = properties;
 
-    CHECK_VK_ERR_RET(vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &buffer.buf,
-                                     &buffer.alloc, &buffer.alloc_info));
+    CHECK_VK_RET(vmaCreateBuffer(vma_allocator, &buffer_info, &alloc_info, &buffer.buf,
+                                 &buffer.alloc, &buffer.alloc_info));
     return MyErrCode::kOk;
 }
 
@@ -593,8 +582,8 @@ MyErrCode Application::createVkImage(uint32_t width, uint32_t height, uint32_t m
     alloc_info.flags = flags;
     alloc_info.requiredFlags = properties;
 
-    CHECK_VK_ERR_RET(vmaCreateImage(vma_allocator, &image_info, &alloc_info, &image.img,
-                                    &image.alloc, &image.alloc_info));
+    CHECK_VK_RET(vmaCreateImage(vma_allocator, &image_info, &alloc_info, &image.img, &image.alloc,
+                                &image.alloc_info));
     return MyErrCode::kOk;
 }
 
@@ -615,7 +604,7 @@ MyErrCode Application::createVkImageView(VkImage image, VkFormat format, uint32_
     view_info.subresourceRange.levelCount = mip_levels;
     view_info.subresourceRange.baseArrayLayer = 0;
     view_info.subresourceRange.layerCount = 1;
-    CHECK_VK_ERR_RET(vkCreateImageView(device, &view_info, nullptr, &image_view));
+    CHECK_VK_RET(vkCreateImageView(device, &view_info, nullptr, &image_view));
     return MyErrCode::kOk;
 }
 
@@ -626,25 +615,25 @@ MyErrCode Application::beginSingleTimeCommands(VkCommandBuffer& cmd_buf)
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandPool = command_pool;
     alloc_info.commandBufferCount = 1;
-    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, &cmd_buf));
+    CHECK_VK_RET(vkAllocateCommandBuffers(device, &alloc_info, &cmd_buf));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    CHECK_VK_ERR_RET(vkBeginCommandBuffer(cmd_buf, &begin_info));
+    CHECK_VK_RET(vkBeginCommandBuffer(cmd_buf, &begin_info));
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::endSingleTimeCommands(VkCommandBuffer cmd_buf)
 {
-    CHECK_VK_ERR_RET(vkEndCommandBuffer(cmd_buf));
+    CHECK_VK_RET(vkEndCommandBuffer(cmd_buf));
 
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &cmd_buf;
-    CHECK_VK_ERR_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-    CHECK_VK_ERR_RET(vkQueueWaitIdle(graphics_queue));
+    CHECK_VK_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+    CHECK_VK_RET(vkQueueWaitIdle(graphics_queue));
 
     vkFreeCommandBuffers(device, command_pool, 1, &cmd_buf);
     return MyErrCode::kOk;
@@ -827,20 +816,20 @@ MyErrCode Application::createVkSurface()
     create_info.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
     create_info.display = display;
     create_info.surface = surface;
-    CHECK_VK_ERR_RET(vkCreateWaylandSurfaceKHR(instance, &create_info, nullptr, &vulkan_surface));
+    CHECK_VK_RET(vkCreateWaylandSurfaceKHR(instance, &create_info, nullptr, &vulkan_surface));
     return MyErrCode::kOk;
 }
 
 MyErrCode Application::pickPhysicalDevice()
 {
     uint32_t device_count = 0;
-    CHECK_VK_ERR_RET(vkEnumeratePhysicalDevices(instance, &device_count, nullptr));
+    CHECK_VK_RET(vkEnumeratePhysicalDevices(instance, &device_count, nullptr));
     if (device_count == 0) {
         ELOG("failed to find gpu with vulkan support");
         return MyErrCode::kFailed;
     }
     std::vector<VkPhysicalDevice> devices(device_count);
-    CHECK_VK_ERR_RET(vkEnumeratePhysicalDevices(instance, &device_count, devices.data()));
+    CHECK_VK_RET(vkEnumeratePhysicalDevices(instance, &device_count, devices.data()));
 
     int best_score = 0;
     for (auto const& device: devices) {
@@ -901,7 +890,7 @@ MyErrCode Application::createLogicalDevice()
 
     for (uint32_t i = 0; i < queue_family_count; i++) {
         VkBool32 supported = 0;
-        CHECK_VK_ERR_RET(
+        CHECK_VK_RET(
             vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, vulkan_surface, &supported));
         if (supported && (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
             graphics_queue_family_index = i;
@@ -925,7 +914,7 @@ MyErrCode Application::createLogicalDevice()
     create_info.pEnabledFeatures = &device_features;
     create_info.enabledExtensionCount = sizeof(kDeviceExtensions) / sizeof(char const*);
     create_info.ppEnabledExtensionNames = kDeviceExtensions;
-    CHECK_VK_ERR_RET(vkCreateDevice(physical_device, &create_info, nullptr, &device));
+    CHECK_VK_RET(vkCreateDevice(physical_device, &create_info, nullptr, &device));
     vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
     return MyErrCode::kOk;
 }
@@ -937,7 +926,7 @@ MyErrCode Application::createVkAllocator()
     create_info.physicalDevice = physical_device;
     create_info.device = device;
     create_info.instance = instance;
-    CHECK_VK_ERR_RET(vmaCreateAllocator(&create_info, &vma_allocator));
+    CHECK_VK_RET(vmaCreateAllocator(&create_info, &vma_allocator));
     return MyErrCode::kOk;
 }
 
@@ -948,7 +937,7 @@ MyErrCode Application::createCommandPool()
     create_info.queueFamilyIndex = graphics_queue_family_index;
     create_info.flags =
         VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-    CHECK_VK_ERR_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
+    CHECK_VK_RET(vkCreateCommandPool(device, &create_info, nullptr, &command_pool));
     return MyErrCode::kOk;
 }
 
@@ -1023,7 +1012,7 @@ MyErrCode Application::createTextureSampler()
     sampler_info.minLod = 0.0f;
     sampler_info.maxLod = texture_mip_levels;
     sampler_info.mipLodBias = 0.0f;
-    CHECK_VK_ERR_RET(vkCreateSampler(device, &sampler_info, nullptr, &texture_sampler));
+    CHECK_VK_RET(vkCreateSampler(device, &sampler_info, nullptr, &texture_sampler));
 
     return MyErrCode::kOk;
 }
@@ -1097,7 +1086,7 @@ MyErrCode Application::createDescriptorPool()
     pool_info.pPoolSizes = pool_sizes.data();
     pool_info.maxSets = kMaxFramesInFight;
 
-    CHECK_VK_ERR_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool));
+    CHECK_VK_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool));
     return MyErrCode::kOk;
 }
 
@@ -1110,7 +1099,7 @@ MyErrCode Application::createDescriptorSets()
     alloc_info.descriptorPool = descriptor_pool;
     alloc_info.descriptorSetCount = kMaxFramesInFight;
     alloc_info.pSetLayouts = layouts.data();
-    CHECK_VK_ERR_RET(vkAllocateDescriptorSets(device, &alloc_info, descriptor_sets.data()));
+    CHECK_VK_RET(vkAllocateDescriptorSets(device, &alloc_info, descriptor_sets.data()));
 
     for (int i = 0; i < kMaxFramesInFight; i++) {
         VkDescriptorBufferInfo buffer_info{};
@@ -1154,7 +1143,7 @@ MyErrCode Application::createCommandBuffers()
     alloc_info.commandPool = command_pool;
     alloc_info.commandBufferCount = command_buffers.size();
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    CHECK_VK_ERR_RET(vkAllocateCommandBuffers(device, &alloc_info, command_buffers.data()));
+    CHECK_VK_RET(vkAllocateCommandBuffers(device, &alloc_info, command_buffers.data()));
     return MyErrCode::kOk;
 }
 
@@ -1167,7 +1156,7 @@ MyErrCode Application::createSyncObjects()
         {
             VkSemaphoreCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            CHECK_VK_ERR_RET(
+            CHECK_VK_RET(
                 vkCreateSemaphore(device, &create_info, nullptr, &render_finished_semaphores[i]));
         }
     }
@@ -1176,7 +1165,7 @@ MyErrCode Application::createSyncObjects()
     for (int i = 0; i < kMaxFramesInFight; i++) {
         VkSemaphoreCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        CHECK_VK_ERR_RET(
+        CHECK_VK_RET(
             vkCreateSemaphore(device, &create_info, nullptr, &image_available_semaphores[i]));
     }
 
@@ -1185,7 +1174,7 @@ MyErrCode Application::createSyncObjects()
         VkFenceCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        CHECK_VK_ERR_RET(vkCreateFence(device, &create_info, nullptr, &in_flight_fences[i]));
+        CHECK_VK_RET(vkCreateFence(device, &create_info, nullptr, &in_flight_fences[i]));
     }
     return MyErrCode::kOk;
 }
@@ -1198,7 +1187,7 @@ MyErrCode Application::createShaderModule(std::filesystem::path const& fp, VkSha
     create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     create_info.codeSize = code.size();
     create_info.pCode = reinterpret_cast<uint32_t const*>(code.data());
-    CHECK_VK_ERR_RET(vkCreateShaderModule(device, &create_info, nullptr, &mod));
+    CHECK_VK_RET(vkCreateShaderModule(device, &create_info, nullptr, &mod));
     return MyErrCode::kOk;
 }
 
@@ -1258,7 +1247,7 @@ MyErrCode Application::createFramebuffers()
         create_info.width = curr_width;
         create_info.height = curr_height;
         create_info.layers = 1;
-        CHECK_VK_ERR_RET(
+        CHECK_VK_RET(
             vkCreateFramebuffer(device, &create_info, nullptr, &swapchain_frame_buffers[i]));
     }
     return MyErrCode::kOk;
@@ -1267,15 +1256,15 @@ MyErrCode Application::createFramebuffers()
 MyErrCode Application::createSwapchain()
 {
     VkSurfaceCapabilitiesKHR capabilities;
-    CHECK_VK_ERR_RET(
+    CHECK_VK_RET(
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, vulkan_surface, &capabilities));
 
     uint32_t format_count;
-    CHECK_VK_ERR_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
-                                                          &format_count, nullptr));
+    CHECK_VK_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
+                                                      &format_count, nullptr));
     std::vector<VkSurfaceFormatKHR> available_formats(format_count);
-    CHECK_VK_ERR_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
-                                                          &format_count, available_formats.data()));
+    CHECK_VK_RET(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vulkan_surface,
+                                                      &format_count, available_formats.data()));
 
     VkSurfaceFormatKHR chosen_format = {};
     for (auto const& available_format: available_formats) {
@@ -1305,13 +1294,12 @@ MyErrCode Application::createSwapchain()
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     create_info.clipped = VK_TRUE;
-    CHECK_VK_ERR_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
+    CHECK_VK_RET(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
 
     uint32_t image_cnt;
-    CHECK_VK_ERR_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, nullptr));
+    CHECK_VK_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, nullptr));
     swapchain_images.resize(image_cnt);
-    CHECK_VK_ERR_RET(
-        vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, swapchain_images.data()));
+    CHECK_VK_RET(vkGetSwapchainImagesKHR(device, swapchain, &image_cnt, swapchain_images.data()));
 
     DLOG("create {} swapchain elements with size={}x{}, format={}", image_cnt, curr_width,
          curr_height, swapchain_image_format);
@@ -1392,7 +1380,7 @@ MyErrCode Application::createRenderPass()
     create_info.dependencyCount = 1;
     create_info.pDependencies = &dependency;
 
-    CHECK_VK_ERR_RET(vkCreateRenderPass(device, &create_info, nullptr, &render_pass));
+    CHECK_VK_RET(vkCreateRenderPass(device, &create_info, nullptr, &render_pass));
 
     return MyErrCode::kOk;
 }
@@ -1419,7 +1407,7 @@ MyErrCode Application::setupImgui()
     pool_info.maxSets = 1000;
     pool_info.poolSizeCount = std::size(pool_sizes);
     pool_info.pPoolSizes = pool_sizes;
-    CHECK_VK_ERR_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &imgui_descriptor_pool));
+    CHECK_VK_RET(vkCreateDescriptorPool(device, &pool_info, nullptr, &imgui_descriptor_pool));
 
     ImGui::CreateContext();
 
@@ -1473,7 +1461,7 @@ MyErrCode Application::createDescriptorSetLayout()
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount = bindings.size();
     layout_info.pBindings = bindings.data();
-    CHECK_VK_ERR_RET(
+    CHECK_VK_RET(
         vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &descriptor_set_layout));
 
     return MyErrCode::kOk;
@@ -1487,7 +1475,7 @@ MyErrCode Application::createPipelineLayout()
     create_info.pSetLayouts = &descriptor_set_layout;
     create_info.pushConstantRangeCount = 0;
     create_info.pPushConstantRanges = nullptr;
-    CHECK_VK_ERR_RET(vkCreatePipelineLayout(device, &create_info, nullptr, &pipeline_layout));
+    CHECK_VK_RET(vkCreatePipelineLayout(device, &create_info, nullptr, &pipeline_layout));
     return MyErrCode::kOk;
 }
 
@@ -1627,8 +1615,8 @@ MyErrCode Application::createGraphicsPipeline()
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
-    CHECK_VK_ERR_RET(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
-                                               &graphics_pipeline));
+    CHECK_VK_RET(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
+                                           &graphics_pipeline));
 
     // cleanup
     vkDestroyShaderModule(device, frag_mod, nullptr);
@@ -1640,7 +1628,7 @@ MyErrCode Application::createGraphicsPipeline()
 MyErrCode Application::recreateGraphicsPipeline()
 {
     DLOG("recreate graphics pipeline");
-    CHECK_VK_ERR_RET(vkDeviceWaitIdle(device));
+    CHECK_VK_RET(vkDeviceWaitIdle(device));
     vkDestroyPipeline(device, graphics_pipeline, nullptr);
     CHECK_ERR_RET(createGraphicsPipeline());
     return MyErrCode::kOk;
@@ -1653,7 +1641,7 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
     VkCommandBufferBeginInfo cmd_begin_info = {};
     cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    CHECK_VK_ERR_RET(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
+    CHECK_VK_RET(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
 
     std::array<VkClearValue, 2> clear_values{};
     clear_values[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -1701,7 +1689,7 @@ MyErrCode Application::recordCommandBuffer(int curr_frame, int image_index)
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
 
     vkCmdEndRenderPass(command_buffer);
-    CHECK_VK_ERR_RET(vkEndCommandBuffer(command_buffer));
+    CHECK_VK_RET(vkEndCommandBuffer(command_buffer));
     return MyErrCode::kOk;
 }
 
@@ -1721,7 +1709,7 @@ MyErrCode Application::mainLoop()
         }
 
         EASY_BLOCK("wait fence", profiler::colors::Blue100);
-        CHECK_VK_ERR_RET(
+        CHECK_VK_RET(
             vkWaitForFences(device, 1, &in_flight_fences[curr_frame], VK_TRUE, UINT64_MAX));
         EASY_END_BLOCK;
 
@@ -1736,9 +1724,9 @@ MyErrCode Application::mainLoop()
             CHECK_ERR_RET(recreateSwapchain());
             continue;
         } else {
-            CHECK_VK_ERR_RET(result);
+            CHECK_VK_RET(result);
         }
-        CHECK_VK_ERR_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
+        CHECK_VK_RET(vkResetFences(device, 1, &in_flight_fences[curr_frame]));
 
         EASY_VALUE("image index", image_index);
 
@@ -1757,7 +1745,7 @@ MyErrCode Application::mainLoop()
         ImGui::Render();
         EASY_END_BLOCK;
 
-        CHECK_VK_ERR_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
+        CHECK_VK_RET(vkResetCommandBuffer(command_buffers[curr_frame], 0));
         CHECK_ERR_RET(recordCommandBuffer(curr_frame, image_index));
 
         VkSubmitInfo submit_info = {};
@@ -1770,8 +1758,7 @@ MyErrCode Application::mainLoop()
         submit_info.pCommandBuffers = &command_buffers[curr_frame];
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &render_finished_semaphores[image_index];
-        CHECK_VK_ERR_RET(
-            vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
+        CHECK_VK_RET(vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[curr_frame]));
 
         VkPresentInfoKHR present_info = {};
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1786,7 +1773,7 @@ MyErrCode Application::mainLoop()
             CHECK_ERR_RET(recreateSwapchain());
             continue;
         } else {
-            CHECK_VK_ERR_RET(result);
+            CHECK_VK_RET(result);
         }
 
         curr_frame = (curr_frame + 1) % kMaxFramesInFight;

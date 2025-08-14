@@ -2,13 +2,14 @@
 #include "toolkit/logging.h"
 #include "fwd.h"
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::installCrashHook();
     MY_TRY
-    // CHECK_ERR_RTI(linearRegression(argc, argv));
-    // CHECK_ERR_RTI(fashionMnist(argc, argv));
-    // CHECK_ERR_RTI(poemWriter(argc, argv));
-    CHECK_ERR_RTI(essayWriter(argc, argv));
-    MY_CATCH_RTI return 0;
+    // CHECK_ERR_RET(linearRegression(argc, argv));
+    // CHECK_ERR_RET(fashionMnist(argc, argv));
+    // CHECK_ERR_RET(poemWriter(argc, argv));
+    CHECK_ERR_RET(essayWriter(argc, argv));
+    return MyErrCode::kOk;
+    MY_CATCH_RET
 }

@@ -66,7 +66,7 @@ void runBenchmark(std::string const& setup1, std::string const& setup2, int roun
     benchmark(*player1, *player2, round, false);
 }
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     MY_TRY;
     toolkit::Args args(argc, argv);
@@ -114,5 +114,6 @@ int main(int argc, char** argv)
         auto round = mark_args.get<int>("round");
         runBenchmark(player1, player2, round);
     }
-    MY_CATCH_RTI;
+    MY_CATCH_RET;
+    return MyErrCode::kOk;
 }

@@ -3,7 +3,7 @@
 #include <gnuplot-iostream.h>
 #include <thread>
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -32,5 +32,5 @@ int main(int argc, char** argv)
     gp.send1d(std::make_tuple(pts_b_x, pts_b_y, pts_b_dx, pts_b_dy));
     std::cin.get();
 
-    return 0;
+    return MyErrCode::kOk;
 }

@@ -3,16 +3,14 @@ set(TARGET_NAME ${CURRENT_DIR_NAME})
 
 set(MYVK_API_VERSION_MAJOR 1)
 set(MYVK_API_VERSION_MINOR 0)
-set(MYVK_ENABLE_VALIDATION_LAYER ON)
 
 add_compile_options(-Wno-deprecated)
-add_definitions(
-    -DMYVK_API_VERSION_MAJOR=${MYVK_API_VERSION_MAJOR}
-    -DMYVK_API_VERSION_MINOR=${MYVK_API_VERSION_MINOR}
+
+set_source_files_properties(vulkan-helper.cpp 
+    PROPERTIES COMPILE_DEFINITIONS 
+    "MYVK_API_VERSION_MAJOR=\"${MYVK_API_VERSION_MAJOR}\""
+    "MYVK_API_VERSION_MINOR=\"${MYVK_API_VERSION_MINOR}\""
 )
-if(MYVK_ENABLE_VALIDATION_LAYER)
-   add_definitions(-DMYVK_ENABLE_VALIDATION_LAYER=)
-endif()
 
 ###############################################################################
 # vkwl

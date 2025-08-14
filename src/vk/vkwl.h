@@ -148,11 +148,7 @@ private:
     static VkInstance instance;
     static constexpr char const* const kInstanceExtensions[] = {
         "VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"};
-    static constexpr char const* const kInstanceLayers[] = {
-#ifdef MYVK_ENABLE_VALIDATION_LAYER
-        "VK_LAYER_KHRONOS_validation",
-#endif
-    };
+    static constexpr char const* const kInstanceLayers[] = {};
     static VkDebugUtilsMessengerEXT debug_messenger;
     static VkSurfaceKHR vulkan_surface;
     static VkPhysicalDevice physical_device;

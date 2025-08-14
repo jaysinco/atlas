@@ -93,9 +93,10 @@ MyErrCode parsing()
     return MyErrCode::kOk;
 }
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
     parsing();
+    return MyErrCode::kOk;
 }

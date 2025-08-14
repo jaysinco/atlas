@@ -95,9 +95,10 @@ bool checkEqual(int const* c1, int const* c2, int const n)
     return true;
 }
 
+// NOLINTNEXTLINE
 XXD_DECLARE_RES(DATA_HELLO_CL)
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     int const count = 10;
     int const narr = 1 << 25;
@@ -144,5 +145,5 @@ int main(int argc, char** argv)
               << " ms." << std::endl;
     std::cout << "Performance gain: " << (100 * (time1 - time2) / time2) << "%\n";
 
-    return 0;
+    return MyErrCode::kOk;
 }

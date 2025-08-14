@@ -3,7 +3,7 @@
 #include "toolkit/toolkit.h"
 #include "decl.h"
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::installCrashHook();
     toolkit::Args args(argc, argv);
@@ -16,5 +16,5 @@ int main(int argc, char** argv)
     asmPrintf();
     ILOG("===========");
     ILOG("END");
-    return 0;
+    return MyErrCode::kOk;
 }

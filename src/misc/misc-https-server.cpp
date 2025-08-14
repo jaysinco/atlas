@@ -3,7 +3,7 @@
 #include "toolkit/toolkit.h"
 #include <uwebsockets/App.h>
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     toolkit::Args args(argc, argv);
     args.parse();
@@ -29,4 +29,5 @@ int main(int argc, char** argv)
                     }
                 })
         .run();
+    return MyErrCode::kOk;
 }

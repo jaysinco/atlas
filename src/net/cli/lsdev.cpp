@@ -3,7 +3,7 @@
 #include "toolkit/logging.h"
 #include "toolkit/variant.h"
 
-int main(int argc, char** argv)
+MY_MAIN
 {
     MY_TRY
     toolkit::Args args(argc, argv);
@@ -13,5 +13,6 @@ int main(int argc, char** argv)
         j.push_back(apt.toVariant());
     }
     ILOG(toolkit::Variant(j).toJsonStr(3));
-    MY_CATCH_RTI
+    MY_CATCH_RET
+    return MyErrCode::kOk;
 }
