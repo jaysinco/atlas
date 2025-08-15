@@ -48,10 +48,10 @@ static VkBool32 debugMessengerUserCallback(
             TLOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
-            DLOG("[vk] {}", callback_data->pMessage);
+            TLOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
-            WLOG("[vk] {}", callback_data->pMessage);
+            ILOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
             ELOG("[vk] {}", callback_data->pMessage);
@@ -92,6 +92,72 @@ MyErrCode Context::createInstance(char const* name, std::vector<char const*> con
     return MyErrCode::kOk;
 }
 
+MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
+{
+    auto device_props = physical_device.getProperties();
+    auto device_limits = device_props.limits;
+    auto memory_props = physical_device.getMemoryProperties();
+    auto queue_families = physical_device.getQueueFamilyProperties();
+    auto device_features = physical_device.getFeatures();
+    auto extensions = CHECK_VKHPP_VAL(physical_device.enumerateDeviceExtensionProperties());
+
+    // basic device
+    DLOG("====== Vulkan Device Information ======");
+    ILOG("Device Name: {}", device_props.deviceName);
+    DLOG("Device ID: 0x{:x}", device_props.deviceID);
+    DLOG("Vendor ID: 0x{:x}", device_props.vendorID);
+    ILOG("Device Type: {}", vk::to_string(device_props.deviceType));
+    DLOG("Driver Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.driverVersion),
+         VK_VERSION_MINOR(device_props.driverVersion),
+         VK_VERSION_PATCH(device_props.driverVersion));
+    ILOG("Vulkan API Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
+         VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
+
+    // pipeline
+    DLOG("====== Pipeline Limits ======");
+    DLOG("Max Compute Shared Memory Size: {} KB", device_limits.maxComputeSharedMemorySize / 1024);
+    DLOG("Max Bound Descriptor Sets: {}", device_limits.maxBoundDescriptorSets);
+    DLOG("Max Push Constants Size: {} bytes", device_limits.maxPushConstantsSize);
+    DLOG("Max Uniform Buffer Range: {} bytes", device_limits.maxUniformBufferRange);
+    DLOG("Max Storage Buffer Range: {} bytes", device_limits.maxStorageBufferRange);
+    DLOG("Max Per Stage Descriptor Samplers: {}", device_limits.maxPerStageDescriptorSamplers);
+    DLOG("Max Per Stage Descriptor Uniform Buffers: {}",
+         device_limits.maxPerStageDescriptorUniformBuffers);
+    DLOG("Max Per Stage Descriptor Storage Buffers: {}",
+         device_limits.maxPerStageDescriptorStorageBuffers);
+
+    // memory
+    DLOG("====== Memory Properties ======");
+    DLOG("Memory Heaps: {}", memory_props.memoryHeapCount);
+    for (uint32_t i = 0; i < memory_props.memoryHeapCount; ++i) {
+        auto const& heap = memory_props.memoryHeaps[i];
+        DLOG("  Heap {}: Size = {} MB, Flags = {}", i, heap.size / (1024 * 1024),
+             vk::to_string(heap.flags));
+    }
+
+    DLOG("Memory Types:");
+    for (uint32_t i = 0; i < memory_props.memoryTypeCount; ++i) {
+        auto const& type = memory_props.memoryTypes[i];
+        DLOG("  Type {}: Heap Index = {}, Flags = {}", i, type.heapIndex,
+             vk::to_string(type.propertyFlags));
+    }
+
+    // queue
+    DLOG("====== Queue Families ======");
+    for (uint32_t i = 0; i < queue_families.size(); ++i) {
+        auto const& queue = queue_families[i];
+        DLOG("Queue Family {}:", i);
+        DLOG("  Queue Count: {}", queue.queueCount);
+        DLOG("  Queue Flags: {}", vk::to_string(queue.queueFlags));
+        DLOG("  Timestamp Valid Bits: {}", queue.timestampValidBits);
+        DLOG("  Min Image Transfer Granularity: {}x{}x{}", queue.minImageTransferGranularity.width,
+             queue.minImageTransferGranularity.height, queue.minImageTransferGranularity.depth);
+    }
+
+    DLOG("============================");
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
 {
     auto physical_devices = CHECK_VKHPP_VAL(instance_.enumeratePhysicalDevices());
@@ -107,14 +173,7 @@ MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
         ELOG("no proper device found");
         return MyErrCode::kFailed;
     }
-
-    auto device_props = physical_device_.getProperties();
-    auto device_limits = device_props.limits;
-    ILOG("Device Name: {}", device_props.deviceName);
-    ILOG("Vulkan Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
-         VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
-    ILOG("Max Compute Shared Memory Size: {} KB", device_limits.maxComputeSharedMemorySize / 1024);
-
+    CHECK_ERR_RET(logDeviceInfo(physical_device_));
     return MyErrCode::kOk;
 }
 

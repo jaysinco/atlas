@@ -111,9 +111,9 @@ public:
     MyErrCode destroyDescriptorSet(char const* name);
     MyErrCode destroy();
 
-public:
 protected:
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
+    static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
 
 private:
     vk::Instance instance_;
