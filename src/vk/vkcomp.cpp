@@ -14,15 +14,15 @@ MY_MAIN
                                  VK_MAKE_VERSION(0, 1, 0), MYVK_API_VERSION};
     std::vector<char const*> const instance_layers = {};
     std::vector<char const*> instance_extensions = {"VK_EXT_debug_utils"};
-    auto instance = CHECK_VKHPP_RET(vk::createInstance(
+    auto instance = CHECK_VKHPP_VAL(vk::createInstance(
         {vk::InstanceCreateFlags(), &app_info, instance_layers, instance_extensions}));
     VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
 
     auto debug_messenger =
-        CHECK_VKHPP_RET(instance.createDebugUtilsMessengerEXT(myvk::getDebugMessengerInfo()));
+        CHECK_VKHPP_VAL(instance.createDebugUtilsMessengerEXT(myvk::getDebugMessengerInfo()));
 
     // physical device
-    auto physical_devices = CHECK_VKHPP_RET(instance.enumeratePhysicalDevices());
+    auto physical_devices = CHECK_VKHPP_VAL(instance.enumeratePhysicalDevices());
     auto physical_device = physical_devices.front();
     auto device_props = physical_device.getProperties();
     auto device_limits = device_props.limits;
@@ -46,7 +46,7 @@ MY_MAIN
                                                 &queue_priority);
 
     auto device =
-        CHECK_VKHPP_RET(physical_device.createDevice({vk::DeviceCreateFlags(), queue_create_info}));
+        CHECK_VKHPP_VAL(physical_device.createDevice({vk::DeviceCreateFlags(), queue_create_info}));
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device);
     auto queue = device.getQueue(queue_family_index, 0);
 
@@ -85,10 +85,10 @@ MY_MAIN
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer, 1,
                                        vk::ShaderStageFlagBits::eCompute}};
 
-    auto descriptor_set_layout = CHECK_VKHPP_RET(device.createDescriptorSetLayout(
+    auto descriptor_set_layout = CHECK_VKHPP_VAL(device.createDescriptorSetLayout(
         {vk::DescriptorSetLayoutCreateFlags(), descriptor_set_layout_bindings}));
 
-    auto pipeline_layout = CHECK_VKHPP_RET(
+    auto pipeline_layout = CHECK_VKHPP_VAL(
         device.createPipelineLayout({vk::PipelineLayoutCreateFlags(), descriptor_set_layout}));
 
     vk::PipelineShaderStageCreateInfo pipeline_shader(vk::PipelineShaderStageCreateFlags(),
@@ -98,14 +98,14 @@ MY_MAIN
     vk::ComputePipelineCreateInfo pipeline_create_info(vk::PipelineCreateFlags(), pipeline_shader,
                                                        pipeline_layout);
 
-    auto pipeline = CHECK_VKHPP_RET(device.createComputePipeline({}, pipeline_create_info));
+    auto pipeline = CHECK_VKHPP_VAL(device.createComputePipeline({}, pipeline_create_info));
 
     // descriptor
     vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 2);
-    auto descriptor_pool = CHECK_VKHPP_RET(
+    auto descriptor_pool = CHECK_VKHPP_VAL(
         device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size}));
 
-    auto descriptor_sets = CHECK_VKHPP_RET(
+    auto descriptor_sets = CHECK_VKHPP_VAL(
         device.allocateDescriptorSets({descriptor_pool, 1, &descriptor_set_layout}));
     auto descriptor_set = descriptor_sets.front();
 
@@ -122,9 +122,9 @@ MY_MAIN
     device.updateDescriptorSets(write_descriptor_sets, {});
 
     // command buffer
-    auto command_pool = CHECK_VKHPP_RET(
+    auto command_pool = CHECK_VKHPP_VAL(
         device.createCommandPool({vk::CommandPoolCreateFlags(), queue_family_index}));
-    auto command_buffers = CHECK_VKHPP_RET(
+    auto command_buffers = CHECK_VKHPP_VAL(
         device.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1}));
     auto command_buffer = command_buffers.front();
 
@@ -136,7 +136,7 @@ MY_MAIN
     command_buffer.dispatch(num_elements, 1, 1);
     command_buffer.end();
 
-    auto fence = CHECK_VKHPP_RET(device.createFence({}));
+    auto fence = CHECK_VKHPP_VAL(device.createFence({}));
     vk::SubmitInfo submit_info(0, nullptr, nullptr, 1, &command_buffer);
     queue.submit({submit_info}, fence);
     auto result = device.waitForFences(fence, true, -1);
