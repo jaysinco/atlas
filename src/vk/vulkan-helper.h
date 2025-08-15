@@ -40,7 +40,6 @@ public:
     Buffer();
     Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc_info);
     void* getMappedData() const;
-    operator VkBuffer() const;
     operator vk::Buffer() const;
     operator bool() const;
 
@@ -51,13 +50,48 @@ private:
     VmaAllocationInfo alloc_info_;
 };
 
+class Image
+{
+public:
+    Image();
+    Image(VkFormat format, VkImage img, VkImageView img_view, VmaAllocation alloc,
+          VmaAllocationInfo const& alloc_info);
+    operator vk::Image() const;
+    operator vk::ImageView() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    VkFormat format_;
+    VkImage img_;
+    VkImageView img_view_;
+    VmaAllocation alloc_;
+    VmaAllocationInfo alloc_info_;
+};
+
+class Swapchain
+{
+public:
+    Swapchain();
+    Swapchain(VkFormat format, VkSwapchainKHR swapchain, std::vector<VkImage> const& images,
+              std::vector<VkImageView> const& image_views);
+    operator vk::SwapchainKHR() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    VkFormat format_;
+    VkSwapchainKHR swapchain_;
+    std::vector<VkImage> images_;
+    std::vector<VkImageView> image_views_;
+};
+
 class Queue
 {
 public:
     Queue();
     Queue(VkQueue queue, uint32_t family_index);
     uint32_t getFamilyIndex() const;
-    operator VkQueue() const;
     operator vk::Queue() const;
     operator bool() const;
 

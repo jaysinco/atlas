@@ -21,8 +21,6 @@ Buffer::Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc
 
 void* Buffer::getMappedData() const { return alloc_info_.pMappedData; }
 
-Buffer::operator VkBuffer() const { return buf_; }
-
 Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
@@ -32,8 +30,6 @@ Queue::Queue(): queue_(VK_NULL_HANDLE), family_index_(-1) {}
 Queue::Queue(VkQueue queue, uint32_t family_index): queue_(queue), family_index_(family_index) {}
 
 uint32_t Queue::getFamilyIndex() const { return family_index_; }
-
-Queue::operator VkQueue() const { return queue_; }
 
 Queue::operator vk::Queue() const { return queue_; }
 

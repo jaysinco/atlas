@@ -98,7 +98,7 @@ MY_MAIN
     }
     std::cout << std::endl;
 
-    ctx.destroy();
+    CHECK_ERR_RET(ctx.destroy());
 
     return MyErrCode::kOk;
     MY_CATCH_RET
