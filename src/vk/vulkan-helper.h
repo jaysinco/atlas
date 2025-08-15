@@ -77,9 +77,9 @@ public:
 
     MyErrCode createInstance(char const* name, std::vector<char const*> const& extensions);
     MyErrCode createPhysicalDevice(DevicePicker const& device_picker);
-    MyErrCode createDevice(std::vector<QueuePicker> const& queue_pickers,
-                           std::vector<char const*> const& extensions);
-    MyErrCode createCommandPools(std::vector<vk::CommandPoolCreateFlags> const& flags);
+    MyErrCode createDevice(std::vector<char const*> const& extensions,
+                           std::map<std::string, QueuePicker> const& queue_pickers);
+    MyErrCode createCommandPools(std::map<std::string, vk::CommandPoolCreateFlags> const& flags);
     MyErrCode createDescriptorPool(vk::DescriptorPoolCreateInfo const& info);
     MyErrCode createAllocator();
     MyErrCode createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
@@ -91,8 +91,8 @@ public:
     MyErrCode createComputePipeline(char const* name, vk::ComputePipelineCreateInfo const& info);
     MyErrCode createDescriptorSet(char const* name, char const* set_layout_name);
 
-    Queue& getQueue(int i);
-    vk::CommandPool& getCommandPool(int i);
+    Queue& getQueue(char const* name);
+    vk::CommandPool& getCommandPool(char const* name);
     Buffer& getBuffer(char const* name);
     vk::ShaderModule& getShaderModule(char const* name);
     vk::DescriptorSetLayout& getDescriptorSetLayout(char const* name);
@@ -101,7 +101,7 @@ public:
     vk::DescriptorSet& getDescriptorSet(char const* name);
 
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
-    MyErrCode oneTimeSubmit(int queue_index, TaskSubmitter const& submitter);
+    MyErrCode oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter);
 
     MyErrCode destroyBuffer(char const* name);
     MyErrCode destroyShaderModule(char const* name);
@@ -120,11 +120,11 @@ private:
     vk::DebugUtilsMessengerEXT debug_messenger_;
     vk::PhysicalDevice physical_device_;
     vk::Device device_;
-    std::vector<Queue> queues_;
-    std::vector<vk::CommandPool> command_pools_;
     vk::DescriptorPool descriptor_pool_;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
 
+    std::map<std::string, Queue> queues_;
+    std::map<std::string, vk::CommandPool> command_pools_;
     std::map<std::string, Buffer> buffers_;
     std::map<std::string, vk::ShaderModule> shader_modules_;
     std::map<std::string, vk::DescriptorSetLayout> descriptor_set_layouts_;

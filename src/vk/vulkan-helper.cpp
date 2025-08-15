@@ -3,6 +3,7 @@
 #include "vulkan-helper.h"
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
+#include <set>
 
 #define MYVK_API_VERSION VK_MAKE_API_VERSION(0, MYVK_API_VERSION_MAJOR, MYVK_API_VERSION_MINOR, 0)
 
@@ -44,16 +45,16 @@ static VkBool32 debugMessengerUserCallback(
 {
     switch (severity) {
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
-            TLOG("{}", callback_data->pMessage);
+            TLOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
-            DLOG("{}", callback_data->pMessage);
+            DLOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
-            WLOG("{}", callback_data->pMessage);
+            WLOG("[vk] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
-            ELOG("{}", callback_data->pMessage);
+            ELOG("[vk] {}", callback_data->pMessage);
             break;
         default:
             break;
@@ -117,17 +118,26 @@ MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createDevice(std::vector<QueuePicker> const& queue_pickers,
-                                std::vector<char const*> const& extensions)
+MyErrCode Context::createDevice(std::vector<char const*> const& extensions,
+                                std::map<std::string, QueuePicker> const& queue_pickers)
 {
+    std::vector<vk::DeviceQueueCreateInfo> queue_infos;
+    std::map<std::string, uint32_t> queue_indices;
+    std::set<uint32_t> queue_indices_dup;
     auto queue_props = physical_device_.getQueueFamilyProperties();
     float const queue_priority = 1.0f;
-    std::vector<vk::DeviceQueueCreateInfo> queue_infos;
-    for (auto& picker: queue_pickers) {
+
+    for (auto& [name, picker]: queue_pickers) {
         bool found = false;
         for (uint32_t i = 0; i < queue_props.size(); ++i) {
             if (picker(queue_props[i])) {
+                if (queue_indices_dup.find(i) != queue_indices_dup.end()) {
+                    ELOG("duplicated queue family index: {}", i);
+                    return MyErrCode::kFailed;
+                }
+                queue_indices_dup.insert(i);
                 queue_infos.emplace_back(vk::DeviceQueueCreateFlags(), i, 1, &queue_priority);
+                queue_indices[name] = i;
                 found = true;
                 break;
             }
@@ -143,24 +153,24 @@ MyErrCode Context::createDevice(std::vector<QueuePicker> const& queue_pickers,
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
 
-    for (auto& info: queue_infos) {
-        auto family_index = info.queueFamilyIndex;
+    for (auto& [name, family_index]: queue_indices) {
         auto queue = device_.getQueue(family_index, 0);
-        queues_.emplace_back(queue, family_index);
+        queues_[name] = {queue, family_index};
     }
 
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createCommandPools(std::vector<vk::CommandPoolCreateFlags> const& flags)
+MyErrCode Context::createCommandPools(
+    std::map<std::string, vk::CommandPoolCreateFlags> const& flags)
 {
     if (flags.size() != queues_.size()) {
         ELOG("flags size must be {}", queues_.size());
         return MyErrCode::kFailed;
     }
-    for (int i = 0; i < flags.size(); ++i) {
-        command_pools_.push_back(
-            CHECK_VKHPP_VAL(device_.createCommandPool({flags[i], getQueue(i).getFamilyIndex()})));
+    for (auto& [name, flag]: flags) {
+        command_pools_[name] = CHECK_VKHPP_VAL(
+            device_.createCommandPool({flag, getQueue(name.c_str()).getFamilyIndex()}));
     }
     return MyErrCode::kOk;
 }
@@ -182,9 +192,21 @@ MyErrCode Context::createAllocator()
     return MyErrCode::kOk;
 }
 
-Queue& Context::getQueue(int i) { return queues_.at(i); }
+Queue& Context::getQueue(char const* name)
+{
+    if (queues_.find(name) == queues_.end()) {
+        MY_THROW("queue not exist: {}", name);
+    }
+    return queues_.at(name);
+}
 
-vk::CommandPool& Context::getCommandPool(int i) { return command_pools_.at(i); };
+vk::CommandPool& Context::getCommandPool(char const* name)
+{
+    if (command_pools_.find(name) == command_pools_.end()) {
+        MY_THROW("command pool not exist: {}", name);
+    }
+    return command_pools_.at(name);
+};
 
 MyErrCode Context::createShaderModule(char const* name, std::filesystem::path const& file_path)
 {
@@ -199,7 +221,13 @@ MyErrCode Context::createShaderModule(char const* name, std::filesystem::path co
     return MyErrCode::kOk;
 }
 
-vk::ShaderModule& Context::getShaderModule(char const* name) { return shader_modules_.at(name); }
+vk::ShaderModule& Context::getShaderModule(char const* name)
+{
+    if (shader_modules_.find(name) == shader_modules_.end()) {
+        MY_THROW("shader module not exist: {}", name);
+    }
+    return shader_modules_.at(name);
+}
 
 MyErrCode Context::destroyShaderModule(char const* name)
 {
@@ -208,7 +236,7 @@ MyErrCode Context::destroyShaderModule(char const* name)
         shader_modules_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("shader module not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -237,7 +265,13 @@ MyErrCode Context::createBuffer(char const* name, uint64_t size, vk::BufferUsage
     return MyErrCode::kOk;
 }
 
-Buffer& Context::getBuffer(char const* name) { return buffers_.at(name); }
+Buffer& Context::getBuffer(char const* name)
+{
+    if (buffers_.find(name) == buffers_.end()) {
+        MY_THROW("buffer not exist: {}", name);
+    }
+    return buffers_.at(name);
+}
 
 MyErrCode Context::destroyBuffer(char const* name)
 {
@@ -246,7 +280,7 @@ MyErrCode Context::destroyBuffer(char const* name)
         buffers_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("buffer not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -263,6 +297,9 @@ MyErrCode Context::createDescriptorSetLayout(char const* name,
 
 vk::DescriptorSetLayout& Context::getDescriptorSetLayout(char const* name)
 {
+    if (descriptor_set_layouts_.find(name) == descriptor_set_layouts_.end()) {
+        MY_THROW("descriptor set layout not exist: {}", name);
+    }
     return descriptor_set_layouts_.at(name);
 }
 
@@ -273,7 +310,7 @@ MyErrCode Context::destroyDescriptorSetLayout(char const* name)
         descriptor_set_layouts_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("descriptor set layout not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -289,6 +326,9 @@ MyErrCode Context::createPipelineLayout(char const* name, vk::PipelineLayoutCrea
 
 vk::PipelineLayout& Context::getPipelineLayout(char const* name)
 {
+    if (pipeline_layouts_.find(name) == pipeline_layouts_.end()) {
+        MY_THROW("pipeline layout not exist: {}", name);
+    }
     return pipeline_layouts_.at(name);
 }
 
@@ -299,7 +339,7 @@ MyErrCode Context::destroyPipelineLayout(char const* name)
         pipeline_layouts_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("pipeline layout not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -314,7 +354,13 @@ MyErrCode Context::createComputePipeline(char const* name,
     return MyErrCode::kOk;
 }
 
-vk::Pipeline& Context::getPipeline(char const* name) { return pipelines_.at(name); }
+vk::Pipeline& Context::getPipeline(char const* name)
+{
+    if (pipelines_.find(name) == pipelines_.end()) {
+        MY_THROW("pipeline not exist: {}", name);
+    }
+    return pipelines_.at(name);
+}
 
 MyErrCode Context::destroyPipeline(char const* name)
 {
@@ -323,7 +369,7 @@ MyErrCode Context::destroyPipeline(char const* name)
         pipelines_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("pipeline not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -339,7 +385,13 @@ MyErrCode Context::createDescriptorSet(char const* name, char const* set_layout_
     return MyErrCode::kOk;
 }
 
-vk::DescriptorSet& Context::getDescriptorSet(char const* name) { return descriptor_sets_.at(name); }
+vk::DescriptorSet& Context::getDescriptorSet(char const* name)
+{
+    if (descriptor_sets_.find(name) == descriptor_sets_.end()) {
+        MY_THROW("descriptor set not exist: {}", name);
+    }
+    return descriptor_sets_.at(name);
+}
 
 MyErrCode Context::updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes)
 {
@@ -354,25 +406,27 @@ MyErrCode Context::destroyDescriptorSet(char const* name)
         descriptor_sets_.erase(it);
         return MyErrCode::kOk;
     } else {
-        ELOG("name not exist: {}", name);
+        ELOG("descriptor set not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
 
-MyErrCode Context::oneTimeSubmit(int queue_index, TaskSubmitter const& submitter)
+MyErrCode Context::oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter)
 {
-    auto command_buffers = CHECK_VKHPP_VAL(device_.allocateCommandBuffers(
-        {getCommandPool(queue_index), vk::CommandBufferLevel::ePrimary, 1}));
-    auto& command_buffer = command_buffers.front();
+    auto& command_pool = getCommandPool(queue_name);
+    auto command_buffers = CHECK_VKHPP_VAL(
+        device_.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1}));
 
+    auto& command_buffer = command_buffers.front();
     CHECK_VKHPP_RET(command_buffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}));
     CHECK_ERR_RET(submitter(command_buffer));
     CHECK_VKHPP_RET(command_buffer.end());
 
-    vk::Queue queue = getQueue(queue_index);
+    vk::Queue queue = getQueue(queue_name);
     CHECK_VKHPP_RET(queue.submit(vk::SubmitInfo{0, nullptr, nullptr, 1, &command_buffer}, nullptr));
     CHECK_VKHPP_RET(queue.waitIdle());
 
+    device_.freeCommandBuffers(command_pool, command_buffer);
     return MyErrCode::kOk;
 }
 
@@ -396,7 +450,7 @@ MyErrCode Context::destroy()
     if (descriptor_pool_) {
         device_.destroy(descriptor_pool_);
     }
-    for (auto& i: command_pools_) {
+    for (auto& [_, i]: command_pools_) {
         device_.destroy(i);
     }
     if (allocator_) {

@@ -34,7 +34,7 @@
 #define TLOG(...) (LOG_FUNC(toolkit::LogLevel::kTRACE, __VA_ARGS__))
 #define DLOG(...) (LOG_FUNC(toolkit::LogLevel::kDEBUG, __VA_ARGS__))
 #define ILOG(...) (LOG_FUNC(toolkit::LogLevel::kINFO, __VA_ARGS__))
-#define WLOG(...) (LOG_FUNC_DETAILED(toolkit::LogLevel::kWARN, __VA_ARGS__))
+#define WLOG(...) (LOG_FUNC(toolkit::LogLevel::kWARN, __VA_ARGS__))
 #define ELOG(...) (LOG_FUNC_DETAILED(toolkit::LogLevel::kERROR, __VA_ARGS__))
 
 namespace toolkit
