@@ -101,48 +101,82 @@ private:
     uint32_t family_index_;
 };
 
+class DescriptorSet
+{
+public:
+    DescriptorSet();
+    DescriptorSet(VkDescriptorSet set, VkDescriptorPool pool);
+    operator vk::DescriptorSet() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    VkDescriptorSet set_;
+    VkDescriptorPool pool_;
+};
+
 class Context
 {
 public:
     using DevicePicker =
         std::function<bool(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
-    using QueuePicker = std::function<bool(vk::QueueFamilyProperties const&)>;
+    using QueuePicker =
+        std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
     using TaskSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
 
     MyErrCode createInstance(char const* name, std::vector<char const*> const& extensions);
+    MyErrCode createSurface(char const* name, vk::SurfaceKHR surface);
     MyErrCode createPhysicalDevice(DevicePicker const& device_picker);
-    MyErrCode createDevice(std::vector<char const*> const& extensions,
-                           std::map<std::string, QueuePicker> const& queue_pickers);
-    MyErrCode createCommandPools(std::map<std::string, vk::CommandPoolCreateFlags> const& flags);
-    MyErrCode createDescriptorPool(vk::DescriptorPoolCreateInfo const& info);
+    MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
+                                    std::map<std::string, QueuePicker> const& queue_pickers);
+    MyErrCode createCommandPool(char const* queue_name, vk::CommandPoolCreateFlags flags);
+    MyErrCode createDescriptorPool(char const* name, vk::DescriptorPoolCreateInfo const& info);
     MyErrCode createAllocator();
     MyErrCode createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
+    MyErrCode createImage(char const* name, vk::Format format, vk::Extent2D const& extent,
+                          vk::ImageTiling tiling, vk::ImageLayout initial_layout,
+                          uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
+                          vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
+                          vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
     MyErrCode createShaderModule(char const* name, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(char const* name,
                                         vk::DescriptorSetLayoutCreateInfo const& info);
     MyErrCode createPipelineLayout(char const* name, vk::PipelineLayoutCreateInfo const& info);
     MyErrCode createComputePipeline(char const* name, vk::ComputePipelineCreateInfo const& info);
-    MyErrCode createDescriptorSet(char const* name, char const* set_layout_name);
+    MyErrCode createDescriptorSet(char const* name, char const* layout_name, char const* pool_name);
+    MyErrCode createSwapchain(char const* surface_name, vk::Extent2D const& extent,
+                              vk::ImageUsageFlags usage);
 
+    vk::Instance getInstance();
+    vk::Instance getSurface(char const* name);
+    vk::Instance getPhysicalDevice();
+    vk::Instance getDevice();
     Queue& getQueue(char const* name);
     vk::CommandPool& getCommandPool(char const* name);
+    vk::DescriptorPool& getDescriptorPool(char const* name);
     Buffer& getBuffer(char const* name);
+    Image& getImage(char const* name);
     vk::ShaderModule& getShaderModule(char const* name);
     vk::DescriptorSetLayout& getDescriptorSetLayout(char const* name);
     vk::PipelineLayout& getPipelineLayout(char const* name);
     vk::Pipeline& getPipeline(char const* name);
-    vk::DescriptorSet& getDescriptorSet(char const* name);
+    DescriptorSet& getDescriptorSet(char const* name);
+    vk::SwapchainKHR& getSwapchain(char const* name);
 
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
     MyErrCode oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter);
 
+    MyErrCode destroyCommandPool(char const* name);
+    MyErrCode destroyDescriptorPool(char const* name);
     MyErrCode destroyBuffer(char const* name);
+    MyErrCode destroyImage(char const* name);
     MyErrCode destroyShaderModule(char const* name);
     MyErrCode destroyDescriptorSetLayout(char const* name);
     MyErrCode destroyPipelineLayout(char const* name);
     MyErrCode destroyPipeline(char const* name);
     MyErrCode destroyDescriptorSet(char const* name);
+    MyErrCode destroySwapchain(char const* name);
     MyErrCode destroy();
 
 protected:
@@ -154,17 +188,20 @@ private:
     vk::DebugUtilsMessengerEXT debug_messenger_;
     vk::PhysicalDevice physical_device_;
     vk::Device device_;
-    vk::DescriptorPool descriptor_pool_;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
 
+    std::map<std::string, vk::SurfaceKHR> surfaces_;
     std::map<std::string, Queue> queues_;
     std::map<std::string, vk::CommandPool> command_pools_;
+    std::map<std::string, vk::DescriptorPool> descriptor_pools_;
     std::map<std::string, Buffer> buffers_;
+    std::map<std::string, Image> images_;
     std::map<std::string, vk::ShaderModule> shader_modules_;
     std::map<std::string, vk::DescriptorSetLayout> descriptor_set_layouts_;
     std::map<std::string, vk::PipelineLayout> pipeline_layouts_;
     std::map<std::string, vk::Pipeline> pipelines_;
-    std::map<std::string, vk::DescriptorSet> descriptor_sets_;
+    std::map<std::string, DescriptorSet> descriptor_sets_;
+    std::map<std::string, vk::SwapchainKHR> swapchains_;
 };
 
 }  // namespace myvk

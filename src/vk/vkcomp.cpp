@@ -17,15 +17,16 @@ MY_MAIN
         return prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu ||
                prop.deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
     }));
-    auto compute_queue_picker = [](vk::QueueFamilyProperties const& prop) -> bool {
+    auto compute_queue_picker = [](uint32_t family_index,
+                                   vk::QueueFamilyProperties const& prop) -> bool {
         return static_cast<bool>(prop.queueFlags & vk::QueueFlagBits::eCompute);
     };
-    CHECK_ERR_RET(ctx.createDevice({}, {{"0", compute_queue_picker}}));
-    CHECK_ERR_RET(ctx.createCommandPools({{"0", vk::CommandPoolCreateFlags()}}));
+    CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{"0", compute_queue_picker}}));
+    CHECK_ERR_RET(ctx.createCommandPool("0", vk::CommandPoolCreateFlags()));
 
     vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 2);
     CHECK_ERR_RET(
-        ctx.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size}));
+        ctx.createDescriptorPool("0", {vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size}));
     CHECK_ERR_RET(ctx.createAllocator());
 
     uint32_t const num_elements = 10;
@@ -66,7 +67,7 @@ MY_MAIN
         vk::PipelineCreateFlags(), pipeline_shader_info, ctx.getPipelineLayout("0"));
     CHECK_ERR_RET(ctx.createComputePipeline("0", pipeline_create_info));
 
-    CHECK_ERR_RET(ctx.createDescriptorSet("0", "0"));
+    CHECK_ERR_RET(ctx.createDescriptorSet("0", "0", "0"));
 
     vk::DescriptorBufferInfo in_buffer_info(ctx.getBuffer("in"), 0, buffer_size);
     vk::DescriptorBufferInfo out_buffer_info(ctx.getBuffer("out"), 0, buffer_size);
@@ -81,8 +82,8 @@ MY_MAIN
     CHECK_ERR_RET(ctx.oneTimeSubmit("0", [&](vk::CommandBuffer& command_buffer) -> MyErrCode {
         command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline("0"));
         command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                          ctx.getPipelineLayout("0"), 0, ctx.getDescriptorSet("0"),
-                                          {});
+                                          ctx.getPipelineLayout("0"), 0,
+                                          {ctx.getDescriptorSet("0")}, {});
         command_buffer.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     }));

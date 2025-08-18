@@ -25,6 +25,38 @@ Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
 
+Image::Image()
+    : format_(VK_FORMAT_UNDEFINED),
+      img_(VK_NULL_HANDLE),
+      img_view_(VK_NULL_HANDLE),
+      alloc_(VK_NULL_HANDLE)
+{
+}
+
+Image::Image(VkFormat format, VkImage img, VkImageView img_view, VmaAllocation alloc,
+             VmaAllocationInfo const& alloc_info)
+    : format_(format), img_(img), img_view_(img_view), alloc_(alloc), alloc_info_(alloc_info)
+{
+}
+
+Image::operator vk::Image() const { return img_; }
+
+Image::operator vk::ImageView() const { return img_view_; }
+
+Image::operator bool() const { return img_ != VK_NULL_HANDLE; }
+
+Swapchain::Swapchain(): format_(VK_FORMAT_UNDEFINED), swapchain_(VK_NULL_HANDLE) {}
+
+Swapchain::Swapchain(VkFormat format, VkSwapchainKHR swapchain, std::vector<VkImage> const& images,
+                     std::vector<VkImageView> const& image_views)
+    : format_(format), swapchain_(swapchain), images_(images), image_views_(image_views)
+{
+}
+
+Swapchain::operator vk::SwapchainKHR() const { return swapchain_; }
+
+Swapchain::operator bool() const { return swapchain_ != VK_NULL_HANDLE; }
+
 Queue::Queue(): queue_(VK_NULL_HANDLE), family_index_(-1) {}
 
 Queue::Queue(VkQueue queue, uint32_t family_index): queue_(queue), family_index_(family_index) {}
@@ -34,6 +66,14 @@ uint32_t Queue::getFamilyIndex() const { return family_index_; }
 Queue::operator vk::Queue() const { return queue_; }
 
 Queue::operator bool() const { return queue_ != VK_NULL_HANDLE; }
+
+DescriptorSet::DescriptorSet(): set_(VK_NULL_HANDLE), pool_(VK_NULL_HANDLE) {}
+
+DescriptorSet::DescriptorSet(VkDescriptorSet set, VkDescriptorPool pool): set_(set), pool_(pool) {}
+
+DescriptorSet::operator vk::DescriptorSet() const { return set_; }
+
+DescriptorSet::operator bool() const { return set_ != VK_NULL_HANDLE; }
 
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
@@ -173,8 +213,8 @@ MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createDevice(std::vector<char const*> const& extensions,
-                                std::map<std::string, QueuePicker> const& queue_pickers)
+MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensions,
+                                         std::map<std::string, QueuePicker> const& queue_pickers)
 {
     std::vector<vk::DeviceQueueCreateInfo> queue_infos;
     std::map<std::string, uint32_t> queue_indices;
@@ -185,7 +225,7 @@ MyErrCode Context::createDevice(std::vector<char const*> const& extensions,
     for (auto& [name, picker]: queue_pickers) {
         bool found = false;
         for (uint32_t i = 0; i < queue_props.size(); ++i) {
-            if (picker(queue_props[i])) {
+            if (picker(i, queue_props[i])) {
                 if (queue_indices_dup.find(i) != queue_indices_dup.end()) {
                     ELOG("duplicated queue family index: {}", i);
                     return MyErrCode::kFailed;
@@ -216,24 +256,69 @@ MyErrCode Context::createDevice(std::vector<char const*> const& extensions,
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createCommandPools(
-    std::map<std::string, vk::CommandPoolCreateFlags> const& flags)
+Queue& Context::getQueue(char const* name)
 {
-    if (flags.size() != queues_.size()) {
-        ELOG("flags size must be {}", queues_.size());
-        return MyErrCode::kFailed;
+    if (queues_.find(name) == queues_.end()) {
+        MY_THROW("queue not exist: {}", name);
     }
-    for (auto& [name, flag]: flags) {
-        command_pools_[name] = CHECK_VKHPP_VAL(
-            device_.createCommandPool({flag, getQueue(name.c_str()).getFamilyIndex()}));
+    return queues_.at(name);
+}
+
+MyErrCode Context::createCommandPool(char const* queue_name, vk::CommandPoolCreateFlags flags)
+{
+    if (command_pools_.find(queue_name) != command_pools_.end()) {
+        CHECK_ERR_RET(destroyCommandPool(queue_name));
     }
+    command_pools_[queue_name] =
+        CHECK_VKHPP_VAL(device_.createCommandPool({flags, getQueue(queue_name).getFamilyIndex()}));
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createDescriptorPool(vk::DescriptorPoolCreateInfo const& info)
+vk::CommandPool& Context::getCommandPool(char const* name)
 {
-    descriptor_pool_ = CHECK_VKHPP_VAL(device_.createDescriptorPool(info));
+    if (command_pools_.find(name) == command_pools_.end()) {
+        MY_THROW("command pool not exist: {}", name);
+    }
+    return command_pools_.at(name);
+}
+
+MyErrCode Context::destroyCommandPool(char const* name)
+{
+    if (auto it = command_pools_.find(name); it != command_pools_.end()) {
+        device_.destroy(it->second);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("command pool not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createDescriptorPool(char const* name, vk::DescriptorPoolCreateInfo const& info)
+{
+    if (descriptor_pools_.find(name) != descriptor_pools_.end()) {
+        CHECK_ERR_RET(destroyDescriptorPool(name));
+    }
+    descriptor_pools_[name] = CHECK_VKHPP_VAL(device_.createDescriptorPool(info));
     return MyErrCode::kOk;
+}
+
+vk::DescriptorPool& Context::getDescriptorPool(char const* name)
+{
+    if (descriptor_pools_.find(name) == descriptor_pools_.end()) {
+        MY_THROW("descriptor pool not exist: {}", name);
+    }
+    return descriptor_pools_.at(name);
+}
+
+MyErrCode Context::destroyDescriptorPool(char const* name)
+{
+    if (auto it = descriptor_pools_.find(name); it != descriptor_pools_.end()) {
+        device_.destroy(it->second);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("descriptor pool not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
 }
 
 MyErrCode Context::createAllocator()
@@ -246,22 +331,6 @@ MyErrCode Context::createAllocator()
     CHECK_VK_RET(vmaCreateAllocator(&create_info, &allocator_));
     return MyErrCode::kOk;
 }
-
-Queue& Context::getQueue(char const* name)
-{
-    if (queues_.find(name) == queues_.end()) {
-        MY_THROW("queue not exist: {}", name);
-    }
-    return queues_.at(name);
-}
-
-vk::CommandPool& Context::getCommandPool(char const* name)
-{
-    if (command_pools_.find(name) == command_pools_.end()) {
-        MY_THROW("command pool not exist: {}", name);
-    }
-    return command_pools_.at(name);
-};
 
 MyErrCode Context::createShaderModule(char const* name, std::filesystem::path const& file_path)
 {
@@ -336,6 +405,59 @@ MyErrCode Context::destroyBuffer(char const* name)
         return MyErrCode::kOk;
     } else {
         ELOG("buffer not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createImage(char const* name, vk::Format format, vk::Extent2D const& extent,
+                               vk::ImageTiling tiling, vk::ImageLayout initial_layout,
+                               uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
+                               vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
+                               vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
+{
+    if (images_.find(name) != images_.end()) {
+        CHECK_ERR_RET(destroyImage(name));
+    }
+
+    vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), vk::ImageType::e2D, format,
+                                   vk::Extent3D(extent, 1), mip_levels, 1, num_samples, tiling,
+                                   usage, vk::SharingMode::eExclusive, {}, initial_layout);
+
+    VmaAllocationCreateInfo vma_info = {};
+    vma_info.flags = flags;
+    vma_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(properties);
+
+    VkImage img;
+    VmaAllocation alloc;
+    VmaAllocationInfo alloc_info;
+    CHECK_VK_RET(vmaCreateImage(allocator_, image_info, &vma_info, &img, &alloc, &alloc_info));
+
+    vk::ImageViewCreateInfo view_info({}, img, vk::ImageViewType::e2D, format, {},
+                                      {aspect_mask, 0, mip_levels, 0, 1});
+    vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
+
+    images_[name] = Image{static_cast<VkFormat>(format), img, static_cast<VkImageView>(img_view),
+                          alloc, alloc_info};
+    return MyErrCode::kOk;
+}
+
+Image& Context::getImage(char const* name)
+{
+    if (images_.find(name) == images_.end()) {
+        MY_THROW("image not exist: {}", name);
+    }
+    return images_.at(name);
+}
+
+MyErrCode Context::destroyImage(char const* name)
+{
+    if (auto it = images_.find(name); it != images_.end()) {
+        device_.destroy(it->second.img_view_);
+        vmaDestroyImage(allocator_, it->second.img_, it->second.alloc_);
+        images_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("image not exist: {}", name);
         return MyErrCode::kFailed;
     }
 }
@@ -429,18 +551,20 @@ MyErrCode Context::destroyPipeline(char const* name)
     }
 }
 
-MyErrCode Context::createDescriptorSet(char const* name, char const* set_layout_name)
+MyErrCode Context::createDescriptorSet(char const* name, char const* layout_name,
+                                       char const* pool_name)
 {
     if (descriptor_sets_.find(name) != descriptor_sets_.end()) {
         CHECK_ERR_RET(destroyDescriptorSet(name));
     }
-    auto descriptor_sets = CHECK_VKHPP_VAL(device_.allocateDescriptorSets(
-        {descriptor_pool_, 1, &getDescriptorSetLayout(set_layout_name)}));
-    descriptor_sets_[name] = descriptor_sets.front();
+    auto& pool = getDescriptorPool(pool_name);
+    auto sets = CHECK_VKHPP_VAL(
+        device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(layout_name)}));
+    descriptor_sets_[name] = {sets.front(), pool};
     return MyErrCode::kOk;
 }
 
-vk::DescriptorSet& Context::getDescriptorSet(char const* name)
+DescriptorSet& Context::getDescriptorSet(char const* name)
 {
     if (descriptor_sets_.find(name) == descriptor_sets_.end()) {
         MY_THROW("descriptor set not exist: {}", name);
@@ -457,7 +581,7 @@ MyErrCode Context::updateDescriptorSets(std::vector<vk::WriteDescriptorSet> cons
 MyErrCode Context::destroyDescriptorSet(char const* name)
 {
     if (auto it = descriptor_sets_.find(name); it != descriptor_sets_.end()) {
-        device_.freeDescriptorSets(descriptor_pool_, it->second);
+        device_.freeDescriptorSets(it->second.pool_, {it->second.set_});
         descriptor_sets_.erase(it);
         return MyErrCode::kOk;
     } else {
@@ -496,14 +620,18 @@ MyErrCode Context::destroy()
     for (auto& [_, i]: descriptor_set_layouts_) {
         device_.destroy(i);
     }
+    for (auto& [_, i]: images_) {
+        device_.destroy(i.img_view_);
+        vmaDestroyImage(allocator_, i.img_, i.alloc_);
+    }
     for (auto& [_, i]: buffers_) {
         vmaDestroyBuffer(allocator_, i.buf_, i.alloc_);
     }
     for (auto& [_, i]: shader_modules_) {
         device_.destroy(i);
     }
-    if (descriptor_pool_) {
-        device_.destroy(descriptor_pool_);
+    for (auto& [_, i]: descriptor_pools_) {
+        device_.destroy(i);
     }
     for (auto& [_, i]: command_pools_) {
         device_.destroy(i);
