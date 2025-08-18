@@ -134,7 +134,7 @@ public:
     MyErrCode createAllocator();
     MyErrCode createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
-    MyErrCode createImage(char const* name, vk::Format format, vk::Extent2D const& extent,
+    MyErrCode createImage(char const* name, vk::Format format, vk::Extent2D extent,
                           vk::ImageTiling tiling, vk::ImageLayout initial_layout,
                           uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
                           vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
@@ -145,13 +145,14 @@ public:
     MyErrCode createPipelineLayout(char const* name, vk::PipelineLayoutCreateInfo const& info);
     MyErrCode createComputePipeline(char const* name, vk::ComputePipelineCreateInfo const& info);
     MyErrCode createDescriptorSet(char const* name, char const* layout_name, char const* pool_name);
-    MyErrCode createSwapchain(char const* surface_name, vk::Extent2D const& extent,
-                              vk::ImageUsageFlags usage);
+    MyErrCode createSwapchain(char const* name, char const* surface_name,
+                              vk::SurfaceFormatKHR surface_format, vk::Extent2D extent,
+                              vk::PresentModeKHR mode, vk::ImageUsageFlags usage);
 
-    vk::Instance getInstance();
-    vk::Instance getSurface(char const* name);
-    vk::Instance getPhysicalDevice();
-    vk::Instance getDevice();
+    vk::Instance& getInstance();
+    vk::SurfaceKHR& getSurface(char const* name);
+    vk::PhysicalDevice& getPhysicalDevice();
+    vk::Device& getDevice();
     Queue& getQueue(char const* name);
     vk::CommandPool& getCommandPool(char const* name);
     vk::DescriptorPool& getDescriptorPool(char const* name);
@@ -162,11 +163,12 @@ public:
     vk::PipelineLayout& getPipelineLayout(char const* name);
     vk::Pipeline& getPipeline(char const* name);
     DescriptorSet& getDescriptorSet(char const* name);
-    vk::SwapchainKHR& getSwapchain(char const* name);
+    Swapchain& getSwapchain(char const* name);
 
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
     MyErrCode oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter);
 
+    MyErrCode destroySurface(char const* name);
     MyErrCode destroyCommandPool(char const* name);
     MyErrCode destroyDescriptorPool(char const* name);
     MyErrCode destroyBuffer(char const* name);
@@ -201,7 +203,7 @@ private:
     std::map<std::string, vk::PipelineLayout> pipeline_layouts_;
     std::map<std::string, vk::Pipeline> pipelines_;
     std::map<std::string, DescriptorSet> descriptor_sets_;
-    std::map<std::string, vk::SwapchainKHR> swapchains_;
+    std::map<std::string, Swapchain> swapchains_;
 };
 
 }  // namespace myvk

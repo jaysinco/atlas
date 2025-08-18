@@ -128,6 +128,37 @@ MyErrCode Context::createInstance(char const* name, std::vector<char const*> con
     return MyErrCode::kOk;
 }
 
+vk::Instance& Context::getInstance() { return instance_; }
+
+MyErrCode Context::createSurface(char const* name, vk::SurfaceKHR surface)
+{
+    if (surfaces_.find(name) != surfaces_.end()) {
+        vkDestroySurfaceKHR(instance_, surfaces_[name], nullptr);
+    }
+    surfaces_[name] = surface;
+    return MyErrCode::kOk;
+}
+
+vk::SurfaceKHR& Context::getSurface(char const* name)
+{
+    if (surfaces_.find(name) == surfaces_.end()) {
+        MY_THROW("surface not exist: {}", name);
+    }
+    return surfaces_.at(name);
+}
+
+MyErrCode Context::destroySurface(char const* name)
+{
+    if (auto it = surfaces_.find(name); it != surfaces_.end()) {
+        instance_.destroy(it->second);
+        surfaces_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("surface not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
+
 MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
 {
     auto device_props = physical_device.getProperties();
@@ -213,6 +244,8 @@ MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
     return MyErrCode::kOk;
 }
 
+vk::PhysicalDevice& Context::getPhysicalDevice() { return physical_device_; }
+
 MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensions,
                                          std::map<std::string, QueuePicker> const& queue_pickers)
 {
@@ -256,6 +289,8 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     return MyErrCode::kOk;
 }
 
+vk::Device& Context::getDevice() { return device_; }
+
 Queue& Context::getQueue(char const* name)
 {
     if (queues_.find(name) == queues_.end()) {
@@ -286,6 +321,7 @@ MyErrCode Context::destroyCommandPool(char const* name)
 {
     if (auto it = command_pools_.find(name); it != command_pools_.end()) {
         device_.destroy(it->second);
+        command_pools_.erase(it);
         return MyErrCode::kOk;
     } else {
         ELOG("command pool not exist: {}", name);
@@ -314,6 +350,7 @@ MyErrCode Context::destroyDescriptorPool(char const* name)
 {
     if (auto it = descriptor_pools_.find(name); it != descriptor_pools_.end()) {
         device_.destroy(it->second);
+        descriptor_pools_.erase(it);
         return MyErrCode::kOk;
     } else {
         ELOG("descriptor pool not exist: {}", name);
@@ -409,7 +446,7 @@ MyErrCode Context::destroyBuffer(char const* name)
     }
 }
 
-MyErrCode Context::createImage(char const* name, vk::Format format, vk::Extent2D const& extent,
+MyErrCode Context::createImage(char const* name, vk::Format format, vk::Extent2D extent,
                                vk::ImageTiling tiling, vk::ImageLayout initial_layout,
                                uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
                                vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
@@ -590,6 +627,104 @@ MyErrCode Context::destroyDescriptorSet(char const* name)
     }
 }
 
+MyErrCode Context::createSwapchain(char const* name, char const* surface_name,
+                                   vk::SurfaceFormatKHR surface_format, vk::Extent2D extent,
+                                   vk::PresentModeKHR mode, vk::ImageUsageFlags usage)
+{
+    if (swapchains_.find(name) != swapchains_.end()) {
+        CHECK_ERR_RET(destroySwapchain(name));
+    }
+
+    auto& surface = getSurface(surface_name);
+
+    bool format_found = false;
+    for (auto format: CHECK_VKHPP_VAL(physical_device_.getSurfaceFormatsKHR(surface))) {
+        if (format == surface_format) {
+            format_found = true;
+        }
+    }
+    if (!format_found) {
+        ELOG("surface format not found: {} {}", vk::to_string(surface_format.format),
+             vk::to_string(surface_format.colorSpace));
+        return MyErrCode::kFailed;
+    }
+
+    vk::SurfaceCapabilitiesKHR surface_caps =
+        CHECK_VKHPP_VAL(physical_device_.getSurfaceCapabilitiesKHR(surface));
+
+    if (surface_caps.currentExtent.width == std::numeric_limits<uint32_t>::max()) {
+        extent.width = std::clamp(extent.width, surface_caps.minImageExtent.width,
+                                  surface_caps.maxImageExtent.width);
+        extent.height = std::clamp(extent.height, surface_caps.minImageExtent.height,
+                                   surface_caps.maxImageExtent.height);
+    } else {
+        extent = surface_caps.currentExtent;
+    }
+
+    vk::SurfaceTransformFlagBitsKHR pre_transform =
+        (surface_caps.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity)
+            ? vk::SurfaceTransformFlagBitsKHR::eIdentity
+            : surface_caps.currentTransform;
+
+    vk::CompositeAlphaFlagBitsKHR composite_alpha =
+        (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied)
+            ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied
+        : (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied)
+            ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied
+        : (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eInherit)
+            ? vk::CompositeAlphaFlagBitsKHR::eInherit
+            : vk::CompositeAlphaFlagBitsKHR::eOpaque;
+
+    uint32_t image_count = surface_caps.minImageCount + 1;
+    if (surface_caps.maxImageCount > 0) {
+        image_count = std::min(image_count, surface_caps.maxImageCount);
+    }
+
+    vk::SwapchainCreateInfoKHR swapchain_info(
+        {}, surface, image_count, surface_format.format, surface_format.colorSpace, extent, 1,
+        usage, vk::SharingMode::eExclusive, {}, pre_transform, composite_alpha, mode, true);
+
+    Swapchain swapchain;
+    swapchain.swapchain_ = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
+
+    for (auto& image: CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swapchain))) {
+        swapchain.images_.push_back(image);
+    }
+
+    vk::ImageViewCreateInfo view_info({}, {}, vk::ImageViewType::e2D, surface_format.format, {},
+                                      {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+    for (auto image: swapchain.images_) {
+        view_info.image = image;
+        swapchain.image_views_.push_back(CHECK_VKHPP_VAL(device_.createImageView(view_info)));
+    }
+
+    swapchains_[name] = swapchain;
+    return MyErrCode::kOk;
+}
+
+Swapchain& Context::getSwapchain(char const* name)
+{
+    if (swapchains_.find(name) == swapchains_.end()) {
+        MY_THROW("swapchain not exist: {}", name);
+    }
+    return swapchains_.at(name);
+}
+
+MyErrCode Context::destroySwapchain(char const* name)
+{
+    if (auto it = swapchains_.find(name); it != swapchains_.end()) {
+        for (auto& view: it->second.image_views_) {
+            device_.destroy(view);
+        }
+        device_.destroy(it->second.swapchain_);
+        swapchains_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("swapchain not exist: {}", name);
+        return MyErrCode::kFailed;
+    }
+}
+
 MyErrCode Context::oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter)
 {
     auto& command_pool = getCommandPool(queue_name);
@@ -611,30 +746,32 @@ MyErrCode Context::oneTimeSubmit(char const* queue_name, TaskSubmitter const& su
 
 MyErrCode Context::destroy()
 {
-    for (auto& [_, i]: pipelines_) {
-        device_.destroy(i);
+    while (!swapchains_.empty()) {
+        CHECK_ERR_RET(destroySwapchain(swapchains_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: pipeline_layouts_) {
-        device_.destroy(i);
+    while (!pipelines_.empty()) {
+        CHECK_ERR_RET(destroyPipeline(pipelines_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: descriptor_set_layouts_) {
-        device_.destroy(i);
+    while (!pipeline_layouts_.empty()) {
+        CHECK_ERR_RET(destroyPipelineLayout(pipeline_layouts_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: images_) {
-        device_.destroy(i.img_view_);
-        vmaDestroyImage(allocator_, i.img_, i.alloc_);
+    while (!descriptor_set_layouts_.empty()) {
+        CHECK_ERR_RET(destroyDescriptorSetLayout(descriptor_set_layouts_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: buffers_) {
-        vmaDestroyBuffer(allocator_, i.buf_, i.alloc_);
+    while (!images_.empty()) {
+        CHECK_ERR_RET(destroyImage(images_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: shader_modules_) {
-        device_.destroy(i);
+    while (!buffers_.empty()) {
+        CHECK_ERR_RET(destroyBuffer(buffers_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: descriptor_pools_) {
-        device_.destroy(i);
+    while (!shader_modules_.empty()) {
+        CHECK_ERR_RET(destroyShaderModule(shader_modules_.begin()->first.c_str()));
     }
-    for (auto& [_, i]: command_pools_) {
-        device_.destroy(i);
+    while (!descriptor_pools_.empty()) {
+        CHECK_ERR_RET(destroyDescriptorPool(descriptor_pools_.begin()->first.c_str()));
+    }
+    while (!command_pools_.empty()) {
+        CHECK_ERR_RET(destroyCommandPool(command_pools_.begin()->first.c_str()));
     }
     if (allocator_) {
         vmaDestroyAllocator(allocator_);
@@ -644,6 +781,9 @@ MyErrCode Context::destroy()
     }
     if (debug_messenger_) {
         instance_.destroy(debug_messenger_);
+    }
+    while (!surfaces_.empty()) {
+        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first.c_str()));
     }
     if (instance_) {
         instance_.destroy();
