@@ -38,24 +38,25 @@ class Buffer
 {
 public:
     Buffer();
-    Buffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo const& alloc_info);
-    void* getMappedData() const;
+    Buffer(uint64_t size, VkBuffer buf, VmaAllocation alloc, VmaAllocator allocator);
+    VmaAllocationInfo getAllocInfo() const;
     operator vk::Buffer() const;
     operator bool() const;
 
 private:
     friend class Context;
+    uint64_t size_;
     VkBuffer buf_;
     VmaAllocation alloc_;
-    VmaAllocationInfo alloc_info_;
+    VmaAllocator allocator_;
 };
 
 class Image
 {
 public:
     Image();
-    Image(VkFormat format, VkImage img, VkImageView img_view, VmaAllocation alloc,
-          VmaAllocationInfo const& alloc_info);
+    Image(VkFormat format, VkExtent2D extent, VkImage img, VkImageView img_view,
+          VmaAllocation alloc, VmaAllocator allocator);
     operator vk::Image() const;
     operator vk::ImageView() const;
     operator bool() const;
@@ -63,24 +64,26 @@ public:
 private:
     friend class Context;
     VkFormat format_;
+    VkExtent2D extent_;
     VkImage img_;
     VkImageView img_view_;
     VmaAllocation alloc_;
-    VmaAllocationInfo alloc_info_;
+    VmaAllocator allocator_;
 };
 
 class Swapchain
 {
 public:
     Swapchain();
-    Swapchain(VkFormat format, VkSwapchainKHR swapchain, std::vector<VkImage> const& images,
-              std::vector<VkImageView> const& image_views);
+    Swapchain(VkFormat format, VkExtent2D extent, VkSwapchainKHR swapchain,
+              std::vector<VkImage> const& images, std::vector<VkImageView> const& image_views);
     operator vk::SwapchainKHR() const;
     operator bool() const;
 
 private:
     friend class Context;
     VkFormat format_;
+    VkExtent2D extent_;
     VkSwapchainKHR swapchain_;
     std::vector<VkImage> images_;
     std::vector<VkImageView> image_views_;
@@ -118,67 +121,70 @@ private:
 class Context
 {
 public:
+    using Uid = int;
+
     using DevicePicker =
         std::function<bool(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
+
     using QueuePicker =
         std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
-    using TaskSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
 
-    MyErrCode createInstance(char const* name, std::vector<char const*> const& extensions);
-    MyErrCode createSurface(char const* name, vk::SurfaceKHR surface);
+    using CmdSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
+
+    MyErrCode createInstance(char const* app_name, std::vector<char const*> const& extensions);
+    MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
     MyErrCode createPhysicalDevice(DevicePicker const& device_picker);
     MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
-                                    std::map<std::string, QueuePicker> const& queue_pickers);
-    MyErrCode createCommandPool(char const* queue_name, vk::CommandPoolCreateFlags flags);
-    MyErrCode createDescriptorPool(char const* name, vk::DescriptorPoolCreateInfo const& info);
+                                    std::map<Uid, QueuePicker> const& queue_pickers);
+    MyErrCode createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags);
+    MyErrCode createDescriptorPool(Uid id, vk::DescriptorPoolCreateInfo const& info);
     MyErrCode createAllocator();
-    MyErrCode createBuffer(char const* name, uint64_t size, vk::BufferUsageFlags usage,
+    MyErrCode createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
-    MyErrCode createImage(char const* name, vk::Format format, vk::Extent2D extent,
-                          vk::ImageTiling tiling, vk::ImageLayout initial_layout,
-                          uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
-                          vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
-                          vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
-    MyErrCode createShaderModule(char const* name, std::filesystem::path const& file_path);
-    MyErrCode createDescriptorSetLayout(char const* name,
-                                        vk::DescriptorSetLayoutCreateInfo const& info);
-    MyErrCode createPipelineLayout(char const* name, vk::PipelineLayoutCreateInfo const& info);
-    MyErrCode createComputePipeline(char const* name, vk::ComputePipelineCreateInfo const& info);
-    MyErrCode createDescriptorSet(char const* name, char const* layout_name, char const* pool_name);
-    MyErrCode createSwapchain(char const* name, char const* surface_name,
-                              vk::SurfaceFormatKHR surface_format, vk::Extent2D extent,
-                              vk::PresentModeKHR mode, vk::ImageUsageFlags usage);
+    MyErrCode createImage(Uid id, vk::Format format, vk::Extent2D extent, vk::ImageTiling tiling,
+                          vk::ImageLayout initial_layout, uint32_t mip_levels,
+                          vk::SampleCountFlagBits num_samples, vk::ImageAspectFlags aspect_mask,
+                          vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
+                          VmaAllocationCreateFlags flags);
+    MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
+    MyErrCode createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info);
+    MyErrCode createPipelineLayout(Uid id, vk::PipelineLayoutCreateInfo const& info);
+    MyErrCode createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info);
+    MyErrCode createDescriptorSet(Uid id, Uid layout_id, Uid pool_id);
+    MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
+                              vk::Extent2D extent, vk::PresentModeKHR mode,
+                              vk::ImageUsageFlags usage);
 
     vk::Instance& getInstance();
-    vk::SurfaceKHR& getSurface(char const* name);
+    vk::SurfaceKHR& getSurface(Uid id);
     vk::PhysicalDevice& getPhysicalDevice();
     vk::Device& getDevice();
-    Queue& getQueue(char const* name);
-    vk::CommandPool& getCommandPool(char const* name);
-    vk::DescriptorPool& getDescriptorPool(char const* name);
-    Buffer& getBuffer(char const* name);
-    Image& getImage(char const* name);
-    vk::ShaderModule& getShaderModule(char const* name);
-    vk::DescriptorSetLayout& getDescriptorSetLayout(char const* name);
-    vk::PipelineLayout& getPipelineLayout(char const* name);
-    vk::Pipeline& getPipeline(char const* name);
-    DescriptorSet& getDescriptorSet(char const* name);
-    Swapchain& getSwapchain(char const* name);
+    Queue& getQueue(Uid id);
+    vk::CommandPool& getCommandPool(Uid id);
+    vk::DescriptorPool& getDescriptorPool(Uid id);
+    Buffer& getBuffer(Uid id);
+    Image& getImage(Uid id);
+    vk::ShaderModule& getShaderModule(Uid id);
+    vk::DescriptorSetLayout& getDescriptorSetLayout(Uid id);
+    vk::PipelineLayout& getPipelineLayout(Uid id);
+    vk::Pipeline& getPipeline(Uid id);
+    DescriptorSet& getDescriptorSet(Uid id);
+    Swapchain& getSwapchain(Uid id);
 
+    MyErrCode oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter);
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
-    MyErrCode oneTimeSubmit(char const* queue_name, TaskSubmitter const& submitter);
 
-    MyErrCode destroySurface(char const* name);
-    MyErrCode destroyCommandPool(char const* name);
-    MyErrCode destroyDescriptorPool(char const* name);
-    MyErrCode destroyBuffer(char const* name);
-    MyErrCode destroyImage(char const* name);
-    MyErrCode destroyShaderModule(char const* name);
-    MyErrCode destroyDescriptorSetLayout(char const* name);
-    MyErrCode destroyPipelineLayout(char const* name);
-    MyErrCode destroyPipeline(char const* name);
-    MyErrCode destroyDescriptorSet(char const* name);
-    MyErrCode destroySwapchain(char const* name);
+    MyErrCode destroySurface(Uid id);
+    MyErrCode destroyCommandPool(Uid id);
+    MyErrCode destroyDescriptorPool(Uid id);
+    MyErrCode destroyBuffer(Uid id);
+    MyErrCode destroyImage(Uid id);
+    MyErrCode destroyShaderModule(Uid id);
+    MyErrCode destroyDescriptorSetLayout(Uid id);
+    MyErrCode destroyPipelineLayout(Uid id);
+    MyErrCode destroyPipeline(Uid id);
+    MyErrCode destroyDescriptorSet(Uid id);
+    MyErrCode destroySwapchain(Uid id);
     MyErrCode destroy();
 
 protected:
@@ -192,18 +198,18 @@ private:
     vk::Device device_;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
 
-    std::map<std::string, vk::SurfaceKHR> surfaces_;
-    std::map<std::string, Queue> queues_;
-    std::map<std::string, vk::CommandPool> command_pools_;
-    std::map<std::string, vk::DescriptorPool> descriptor_pools_;
-    std::map<std::string, Buffer> buffers_;
-    std::map<std::string, Image> images_;
-    std::map<std::string, vk::ShaderModule> shader_modules_;
-    std::map<std::string, vk::DescriptorSetLayout> descriptor_set_layouts_;
-    std::map<std::string, vk::PipelineLayout> pipeline_layouts_;
-    std::map<std::string, vk::Pipeline> pipelines_;
-    std::map<std::string, DescriptorSet> descriptor_sets_;
-    std::map<std::string, Swapchain> swapchains_;
+    std::map<Uid, vk::SurfaceKHR> surfaces_;
+    std::map<Uid, Queue> queues_;
+    std::map<Uid, vk::CommandPool> command_pools_;
+    std::map<Uid, vk::DescriptorPool> descriptor_pools_;
+    std::map<Uid, Buffer> buffers_;
+    std::map<Uid, Image> images_;
+    std::map<Uid, vk::ShaderModule> shader_modules_;
+    std::map<Uid, vk::DescriptorSetLayout> descriptor_set_layouts_;
+    std::map<Uid, vk::PipelineLayout> pipeline_layouts_;
+    std::map<Uid, vk::Pipeline> pipelines_;
+    std::map<Uid, DescriptorSet> descriptor_sets_;
+    std::map<Uid, Swapchain> swapchains_;
 };
 
 }  // namespace myvk
