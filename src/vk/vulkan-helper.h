@@ -163,11 +163,11 @@ public:
                           VmaAllocationCreateFlags flags);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info);
-    MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
-    MyErrCode createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info);
     MyErrCode createDescriptorSet(Uid id, Uid layout_id, Uid pool_id);
     MyErrCode createDescriptorSetAndLayout(Uid id, Uid pool_id,
                                            std::vector<DescriptorSetBinding> const& bindings);
+    MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
+    MyErrCode createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info);
     MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
                               vk::Extent2D extent, vk::PresentModeKHR mode,
                               vk::ImageUsageFlags usage);
@@ -187,11 +187,11 @@ public:
     vk::Pipeline& getPipeline(Uid id);
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
-    DescriptorSetBinding getSetBindingBuffer(vk::DescriptorType type, vk::ShaderStageFlags stage,
-                                             Uid buffer_id);
 
     MyErrCode oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter);
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
+    DescriptorSetBinding bindBufferDescriptor(vk::DescriptorType type, vk::ShaderStageFlags stage,
+                                              Uid buffer_id);
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);
@@ -224,9 +224,9 @@ private:
     std::map<Uid, Buffer> buffers_;
     std::map<Uid, Image> images_;
     std::map<Uid, vk::ShaderModule> shader_modules_;
-    std::map<Uid, vk::DescriptorSetLayout> descriptor_set_layouts_;
     std::map<Uid, vk::PipelineLayout> pipeline_layouts_;
     std::map<Uid, vk::Pipeline> pipelines_;
+    std::map<Uid, vk::DescriptorSetLayout> descriptor_set_layouts_;
     std::map<Uid, DescriptorSet> descriptor_sets_;
     std::map<Uid, Swapchain> swapchains_;
 };

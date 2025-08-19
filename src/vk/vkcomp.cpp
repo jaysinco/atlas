@@ -68,10 +68,10 @@ MY_MAIN
     CHECK_ERR_RET(ctx.createDescriptorSetAndLayout(
         UID_vkDescriptorSet_compute, UID_vkDescriptorPool_main,
         {
-            ctx.getSetBindingBuffer(vk::DescriptorType::eStorageBuffer,
-                                    vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_in),
-            ctx.getSetBindingBuffer(vk::DescriptorType::eStorageBuffer,
-                                    vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_out),
+            ctx.bindBufferDescriptor(vk::DescriptorType::eStorageBuffer,
+                                     vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_in),
+            ctx.bindBufferDescriptor(vk::DescriptorType::eStorageBuffer,
+                                     vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_out),
         }));
 
     CHECK_ERR_RET(

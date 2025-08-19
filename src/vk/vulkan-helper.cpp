@@ -514,35 +514,6 @@ MyErrCode Context::destroyImage(Uid id)
     }
 }
 
-MyErrCode Context::createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info)
-{
-    if (descriptor_set_layouts_.find(id) != descriptor_set_layouts_.end()) {
-        CHECK_ERR_RET(destroyDescriptorSetLayout(id));
-    }
-    descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(device_.createDescriptorSetLayout(info));
-    return MyErrCode::kOk;
-}
-
-vk::DescriptorSetLayout& Context::getDescriptorSetLayout(Uid id)
-{
-    if (descriptor_set_layouts_.find(id) == descriptor_set_layouts_.end()) {
-        MY_THROW("descriptor set layout not exist: {}", id);
-    }
-    return descriptor_set_layouts_.at(id);
-}
-
-MyErrCode Context::destroyDescriptorSetLayout(Uid id)
-{
-    if (auto it = descriptor_set_layouts_.find(id); it != descriptor_set_layouts_.end()) {
-        device_.destroy(it->second);
-        descriptor_set_layouts_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("descriptor set layout not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
-
 MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids)
 {
     if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
@@ -605,6 +576,35 @@ MyErrCode Context::destroyPipeline(Uid id)
     }
 }
 
+MyErrCode Context::createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info)
+{
+    if (descriptor_set_layouts_.find(id) != descriptor_set_layouts_.end()) {
+        CHECK_ERR_RET(destroyDescriptorSetLayout(id));
+    }
+    descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(device_.createDescriptorSetLayout(info));
+    return MyErrCode::kOk;
+}
+
+vk::DescriptorSetLayout& Context::getDescriptorSetLayout(Uid id)
+{
+    if (descriptor_set_layouts_.find(id) == descriptor_set_layouts_.end()) {
+        MY_THROW("descriptor set layout not exist: {}", id);
+    }
+    return descriptor_set_layouts_.at(id);
+}
+
+MyErrCode Context::destroyDescriptorSetLayout(Uid id)
+{
+    if (auto it = descriptor_set_layouts_.find(id); it != descriptor_set_layouts_.end()) {
+        device_.destroy(it->second);
+        descriptor_set_layouts_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("descriptor set layout not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
 MyErrCode Context::createDescriptorSet(Uid id, Uid layout_id, Uid pool_id)
 {
     if (descriptor_sets_.find(id) != descriptor_sets_.end()) {
@@ -643,8 +643,8 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
-DescriptorSetBinding Context::getSetBindingBuffer(vk::DescriptorType type,
-                                                  vk::ShaderStageFlags stage, Uid buffer_id)
+DescriptorSetBinding Context::bindBufferDescriptor(vk::DescriptorType type,
+                                                   vk::ShaderStageFlags stage, Uid buffer_id)
 {
     DescriptorSetBinding b;
     Buffer& buffer = getBuffer(buffer_id);

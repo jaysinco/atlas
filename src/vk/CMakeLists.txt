@@ -4,12 +4,27 @@ set(TARGET_NAME ${CURRENT_DIR_NAME})
 set(MYVK_API_VERSION_MAJOR 1)
 set(MYVK_API_VERSION_MINOR 0)
 
-add_compile_options(-Wno-deprecated)
+###############################################################################
+# library
+###############################################################################
+
+add_library(${TARGET_NAME}
+   vulkan-helper.cpp 
+)
 
 set_source_files_properties(vulkan-helper.cpp 
     PROPERTIES COMPILE_DEFINITIONS 
     "MYVK_API_VERSION_MAJOR=${MYVK_API_VERSION_MAJOR};MYVK_API_VERSION_MINOR=${MYVK_API_VERSION_MINOR}"
 )
+
+target_link_libraries(${TARGET_NAME} PUBLIC
+    toolkit
+    vulkan
+    dl
+)
+
+target_compile_options(${TARGET_NAME} PRIVATE -Wno-deprecated)
+
 
 ###############################################################################
 # vkwl
@@ -22,7 +37,6 @@ set_source_files_properties(vulkan-helper.cpp
 #
 # add_executable(vkwl
 #     ${WAYLAND_PROTO_SRC}
-#     vulkan-helper.cpp
 #     scene.cpp
 #     keycode.cpp
 #     vkwl.cpp
@@ -39,8 +53,7 @@ set_source_files_properties(vulkan-helper.cpp
 # target_include_directories(vkwl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 #
 # target_link_libraries(vkwl
-#     toolkit
-#     vulkan
+#     ${TARGET_NAME} 
 #     wayland-client
 #     wayland-cursor
 #     opencv
@@ -54,13 +67,11 @@ set_source_files_properties(vulkan-helper.cpp
 ###############################################################################
 
 add_executable(vkcomp
-    vulkan-helper.cpp
     vkcomp.cpp
 )
 
 target_link_libraries(vkcomp
-    toolkit
-    vulkan
+   ${TARGET_NAME} 
 )
 
 target_glsl_shaders(vkcomp
