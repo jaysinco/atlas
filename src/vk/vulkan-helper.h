@@ -152,7 +152,8 @@ public:
     MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
                                     std::map<Uid, QueuePicker> const& queue_pickers);
     MyErrCode createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags);
-    MyErrCode createDescriptorPool(Uid id, vk::DescriptorPoolCreateInfo const& info);
+    MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
+                                   std::map<vk::DescriptorType, uint32_t> const& size);
     MyErrCode createAllocator();
     MyErrCode createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);

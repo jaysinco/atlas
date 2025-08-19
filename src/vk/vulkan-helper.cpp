@@ -347,12 +347,18 @@ MyErrCode Context::destroyCommandPool(Uid id)
     }
 }
 
-MyErrCode Context::createDescriptorPool(Uid id, vk::DescriptorPoolCreateInfo const& info)
+MyErrCode Context::createDescriptorPool(Uid id, uint32_t max_sets,
+                                        std::map<vk::DescriptorType, uint32_t> const& size)
 {
     if (descriptor_pools_.find(id) != descriptor_pools_.end()) {
         CHECK_ERR_RET(destroyDescriptorPool(id));
     }
-    descriptor_pools_[id] = CHECK_VKHPP_VAL(device_.createDescriptorPool(info));
+    std::vector<vk::DescriptorPoolSize> pool_size;
+    for (auto [type, count]: size) {
+        pool_size.emplace_back(type, count);
+    }
+    descriptor_pools_[id] = CHECK_VKHPP_VAL(
+        device_.createDescriptorPool({vk::DescriptorPoolCreateFlags(), max_sets, pool_size}));
     return MyErrCode::kOk;
 }
 

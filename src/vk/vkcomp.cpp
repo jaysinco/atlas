@@ -40,10 +40,8 @@ MY_MAIN
     };
     CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{UID_vkQueue_compute, queue_picker}}));
     CHECK_ERR_RET(ctx.createCommandPool(UID_vkQueue_compute, vk::CommandPoolCreateFlags()));
-
-    vk::DescriptorPoolSize descriptor_pool_size(vk::DescriptorType::eStorageBuffer, 2);
-    CHECK_ERR_RET(ctx.createDescriptorPool(
-        UID_vkDescriptorPool_main, {vk::DescriptorPoolCreateFlags(), 1, descriptor_pool_size}));
+    CHECK_ERR_RET(ctx.createDescriptorPool(UID_vkDescriptorPool_main, 1,
+                                           {{vk::DescriptorType::eStorageBuffer, 2}}));
     CHECK_ERR_RET(ctx.createAllocator());
 
     uint32_t const num_elements = 10;
