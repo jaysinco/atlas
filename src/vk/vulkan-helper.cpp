@@ -12,9 +12,9 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace myvk
 {
 
-Buffer::Buffer(): buf_(VK_NULL_HANDLE), alloc_(VK_NULL_HANDLE), allocator_(VK_NULL_HANDLE) {}
+Buffer::Buffer() = default;
 
-Buffer::Buffer(uint64_t size, VkBuffer buf, VmaAllocation alloc, VmaAllocator allocator)
+Buffer::Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator)
     : size_(size), buf_(buf), alloc_(alloc), allocator_(allocator)
 {
 }
@@ -26,20 +26,15 @@ VmaAllocationInfo Buffer::getAllocInfo() const
     return alloc_info;
 }
 
+uint64_t Buffer::getSize() const { return size_; }
+
 Buffer::operator vk::Buffer() const { return buf_; }
 
-Buffer::operator bool() const { return buf_ != VK_NULL_HANDLE; }
+Buffer::operator bool() const { return buf_; }
 
-Image::Image()
-    : format_(VK_FORMAT_UNDEFINED),
-      img_(VK_NULL_HANDLE),
-      img_view_(VK_NULL_HANDLE),
-      alloc_(VK_NULL_HANDLE),
-      allocator_(VK_NULL_HANDLE)
-{
-}
+Image::Image() = default;
 
-Image::Image(VkFormat format, VkExtent2D extent, VkImage img, VkImageView img_view,
+Image::Image(vk::Format format, vk::Extent2D extent, vk::Image img, vk::ImageView img_view,
              VmaAllocation alloc, VmaAllocator allocator)
     : format_(format),
       extent_(extent),
@@ -54,13 +49,13 @@ Image::operator vk::Image() const { return img_; }
 
 Image::operator vk::ImageView() const { return img_view_; }
 
-Image::operator bool() const { return img_ != VK_NULL_HANDLE; }
+Image::operator bool() const { return img_; }
 
-Swapchain::Swapchain(): format_(VK_FORMAT_UNDEFINED), swapchain_(VK_NULL_HANDLE) {}
+Swapchain::Swapchain() = default;
 
-Swapchain::Swapchain(VkFormat format, VkExtent2D extent, VkSwapchainKHR swapchain,
-                     std::vector<VkImage> const& images,
-                     std::vector<VkImageView> const& image_views)
+Swapchain::Swapchain(vk::Format format, vk::Extent2D extent, vk::SwapchainKHR swapchain,
+                     std::vector<vk::Image> const& images,
+                     std::vector<vk::ImageView> const& image_views)
     : format_(format),
       extent_(extent),
       swapchain_(swapchain),
@@ -71,25 +66,29 @@ Swapchain::Swapchain(VkFormat format, VkExtent2D extent, VkSwapchainKHR swapchai
 
 Swapchain::operator vk::SwapchainKHR() const { return swapchain_; }
 
-Swapchain::operator bool() const { return swapchain_ != VK_NULL_HANDLE; }
+Swapchain::operator bool() const { return swapchain_; }
 
-Queue::Queue(): queue_(VK_NULL_HANDLE), family_index_(-1) {}
+Queue::Queue() = default;
 
-Queue::Queue(VkQueue queue, uint32_t family_index): queue_(queue), family_index_(family_index) {}
+Queue::Queue(vk::Queue queue, uint32_t family_index): queue_(queue), family_index_(family_index) {}
 
 uint32_t Queue::getFamilyIndex() const { return family_index_; }
 
 Queue::operator vk::Queue() const { return queue_; }
 
-Queue::operator bool() const { return queue_ != VK_NULL_HANDLE; }
+Queue::operator bool() const { return queue_; }
 
-DescriptorSet::DescriptorSet(): set_(VK_NULL_HANDLE), pool_(VK_NULL_HANDLE) {}
+DescriptorSet::DescriptorSet() = default;
 
-DescriptorSet::DescriptorSet(VkDescriptorSet set, VkDescriptorPool pool): set_(set), pool_(pool) {}
+DescriptorSet::DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool): set_(set), pool_(pool)
+{
+}
 
 DescriptorSet::operator vk::DescriptorSet() const { return set_; }
 
-DescriptorSet::operator bool() const { return set_ != VK_NULL_HANDLE; }
+DescriptorSet::operator bool() const { return set_; }
+
+DescriptorSetBinding::DescriptorSetBinding() = default;
 
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
@@ -490,12 +489,7 @@ MyErrCode Context::createImage(Uid id, vk::Format format, vk::Extent2D extent,
                                       {aspect_mask, 0, mip_levels, 0, 1});
     vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
 
-    images_[id] = Image{static_cast<VkFormat>(format),
-                        static_cast<VkExtent2D>(extent),
-                        img,
-                        static_cast<VkImageView>(img_view),
-                        alloc,
-                        allocator_};
+    images_[id] = Image{format, extent, img, img_view, alloc, allocator_};
     return MyErrCode::kOk;
 }
 
@@ -549,12 +543,16 @@ MyErrCode Context::destroyDescriptorSetLayout(Uid id)
     }
 }
 
-MyErrCode Context::createPipelineLayout(Uid id, vk::PipelineLayoutCreateInfo const& info)
+MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids)
 {
     if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
         CHECK_ERR_RET(destroyPipelineLayout(id));
     }
-    pipeline_layouts_[id] = CHECK_VKHPP_VAL(device_.createPipelineLayout(info));
+    std::vector<vk::DescriptorSetLayout> set_layouts;
+    for (auto id: set_layout_ids) {
+        set_layouts.push_back(getDescriptorSetLayout(id));
+    }
+    pipeline_layouts_[id] = CHECK_VKHPP_VAL(device_.createPipelineLayout({{}, set_layouts}));
     return MyErrCode::kOk;
 }
 
@@ -645,6 +643,40 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
+DescriptorSetBinding Context::getSetBindingBuffer(vk::DescriptorType type,
+                                                  vk::ShaderStageFlags stage, Uid buffer_id)
+{
+    DescriptorSetBinding b;
+    Buffer& buffer = getBuffer(buffer_id);
+    b.layout_ = vk::DescriptorSetLayoutBinding(0, type, 1, stage);
+    b.buffers_.emplace_back(buffer, 0, buffer.getSize());
+    b.write_ = vk::WriteDescriptorSet({}, 0, 0, 1, type, nullptr, &b.buffers_.back());
+    return b;
+}
+
+MyErrCode Context::createDescriptorSetAndLayout(Uid id, Uid pool_id,
+                                                std::vector<DescriptorSetBinding> const& bindings)
+{
+    std::vector<vk::DescriptorSetLayoutBinding> layouts;
+    for (int i = 0; i < bindings.size(); ++i) {
+        auto l = bindings[i].layout_;
+        l.setBinding(i);
+        layouts.push_back(l);
+    }
+    CHECK_ERR_RET(createDescriptorSetLayout(id, {vk::DescriptorSetLayoutCreateFlags(), layouts}));
+    CHECK_ERR_RET(createDescriptorSet(id, id, pool_id));
+
+    std::vector<vk::WriteDescriptorSet> writes;
+    for (int i = 0; i < bindings.size(); ++i) {
+        auto w = bindings[i].write_;
+        w.setDstSet(getDescriptorSet(id));
+        w.setDstBinding(i);
+        writes.push_back(w);
+    }
+    CHECK_ERR_RET(updateDescriptorSets(writes));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
                                    vk::Extent2D extent, vk::PresentModeKHR mode,
                                    vk::ImageUsageFlags usage)
@@ -703,8 +735,8 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
         usage, vk::SharingMode::eExclusive, {}, pre_transform, composite_alpha, mode, true);
 
     Swapchain swapchain;
-    swapchain.format_ = static_cast<VkFormat>(surface_format.format);
-    swapchain.extent_ = static_cast<VkExtent2D>(extent);
+    swapchain.format_ = surface_format.format;
+    swapchain.extent_ = extent;
     swapchain.swapchain_ = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
 
     for (auto& image: CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swapchain))) {

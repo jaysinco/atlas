@@ -38,15 +38,16 @@ class Buffer
 {
 public:
     Buffer();
-    Buffer(uint64_t size, VkBuffer buf, VmaAllocation alloc, VmaAllocator allocator);
+    Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator);
     VmaAllocationInfo getAllocInfo() const;
+    uint64_t getSize() const;
     operator vk::Buffer() const;
     operator bool() const;
 
 private:
     friend class Context;
     uint64_t size_;
-    VkBuffer buf_;
+    vk::Buffer buf_;
     VmaAllocation alloc_;
     VmaAllocator allocator_;
 };
@@ -55,7 +56,7 @@ class Image
 {
 public:
     Image();
-    Image(VkFormat format, VkExtent2D extent, VkImage img, VkImageView img_view,
+    Image(vk::Format format, vk::Extent2D extent, vk::Image img, vk::ImageView img_view,
           VmaAllocation alloc, VmaAllocator allocator);
     operator vk::Image() const;
     operator vk::ImageView() const;
@@ -63,10 +64,10 @@ public:
 
 private:
     friend class Context;
-    VkFormat format_;
-    VkExtent2D extent_;
-    VkImage img_;
-    VkImageView img_view_;
+    vk::Format format_;
+    vk::Extent2D extent_;
+    vk::Image img_;
+    vk::ImageView img_view_;
     VmaAllocation alloc_;
     VmaAllocator allocator_;
 };
@@ -75,32 +76,32 @@ class Swapchain
 {
 public:
     Swapchain();
-    Swapchain(VkFormat format, VkExtent2D extent, VkSwapchainKHR swapchain,
-              std::vector<VkImage> const& images, std::vector<VkImageView> const& image_views);
+    Swapchain(vk::Format format, vk::Extent2D extent, vk::SwapchainKHR swapchain,
+              std::vector<vk::Image> const& images, std::vector<vk::ImageView> const& image_views);
     operator vk::SwapchainKHR() const;
     operator bool() const;
 
 private:
     friend class Context;
-    VkFormat format_;
-    VkExtent2D extent_;
-    VkSwapchainKHR swapchain_;
-    std::vector<VkImage> images_;
-    std::vector<VkImageView> image_views_;
+    vk::Format format_;
+    vk::Extent2D extent_;
+    vk::SwapchainKHR swapchain_;
+    std::vector<vk::Image> images_;
+    std::vector<vk::ImageView> image_views_;
 };
 
 class Queue
 {
 public:
     Queue();
-    Queue(VkQueue queue, uint32_t family_index);
+    Queue(vk::Queue queue, uint32_t family_index);
     uint32_t getFamilyIndex() const;
     operator vk::Queue() const;
     operator bool() const;
 
 private:
     friend class Context;
-    VkQueue queue_;
+    vk::Queue queue_;
     uint32_t family_index_;
 };
 
@@ -108,17 +109,31 @@ class DescriptorSet
 {
 public:
     DescriptorSet();
-    DescriptorSet(VkDescriptorSet set, VkDescriptorPool pool);
+    DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool);
     operator vk::DescriptorSet() const;
     operator bool() const;
 
 private:
     friend class Context;
-    VkDescriptorSet set_;
-    VkDescriptorPool pool_;
+    vk::DescriptorSet set_;
+    vk::DescriptorPool pool_;
+};
+
+class DescriptorSetBinding
+{
+public:
+    DescriptorSetBinding();
+
+private:
+    friend class Context;
+    vk::DescriptorSetLayoutBinding layout_;
+    vk::WriteDescriptorSet write_;
+    std::vector<vk::DescriptorImageInfo> images_;
+    std::vector<vk::DescriptorBufferInfo> buffers_;
 };
 
 class Context
+
 {
 public:
     using Uid = int;
@@ -148,9 +163,11 @@ public:
                           VmaAllocationCreateFlags flags);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info);
-    MyErrCode createPipelineLayout(Uid id, vk::PipelineLayoutCreateInfo const& info);
+    MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
     MyErrCode createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info);
     MyErrCode createDescriptorSet(Uid id, Uid layout_id, Uid pool_id);
+    MyErrCode createDescriptorSetAndLayout(Uid id, Uid pool_id,
+                                           std::vector<DescriptorSetBinding> const& bindings);
     MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
                               vk::Extent2D extent, vk::PresentModeKHR mode,
                               vk::ImageUsageFlags usage);
@@ -170,6 +187,8 @@ public:
     vk::Pipeline& getPipeline(Uid id);
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
+    DescriptorSetBinding getSetBindingBuffer(vk::DescriptorType type, vk::ShaderStageFlags stage,
+                                             Uid buffer_id);
 
     MyErrCode oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter);
     MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
