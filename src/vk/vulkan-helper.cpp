@@ -111,16 +111,16 @@ static VkBool32 debugMessengerUserCallback(
 {
     switch (severity) {
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
-            TLOG("[vk] {}", callback_data->pMessage);
+            TLOG("[vkdbg] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
-            TLOG("[vk] {}", callback_data->pMessage);
+            TLOG("[vkdbg] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
-            ILOG("[vk] {}", callback_data->pMessage);
+            ILOG("[vkdbg] {}", callback_data->pMessage);
             break;
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
-            ELOG("[vk] {}", callback_data->pMessage);
+            ELOG("[vkdbg] {}", callback_data->pMessage);
             break;
         default:
             break;
@@ -743,20 +743,6 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
         extent = surface_caps.currentExtent;
     }
 
-    vk::SurfaceTransformFlagBitsKHR pre_transform =
-        (surface_caps.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity)
-            ? vk::SurfaceTransformFlagBitsKHR::eIdentity
-            : surface_caps.currentTransform;
-
-    vk::CompositeAlphaFlagBitsKHR composite_alpha =
-        (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied)
-            ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied
-        : (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied)
-            ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied
-        : (surface_caps.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eInherit)
-            ? vk::CompositeAlphaFlagBitsKHR::eInherit
-            : vk::CompositeAlphaFlagBitsKHR::eOpaque;
-
     uint32_t image_count = surface_caps.minImageCount + 1;
     if (surface_caps.maxImageCount > 0) {
         image_count = std::min(image_count, surface_caps.maxImageCount);
@@ -764,7 +750,11 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
 
     vk::SwapchainCreateInfoKHR swapchain_info(
         {}, surface, image_count, surface_format.format, surface_format.colorSpace, extent, 1,
-        usage, vk::SharingMode::eExclusive, {}, pre_transform, composite_alpha, mode, true);
+        usage, vk::SharingMode::eExclusive, {}, surface_caps.currentTransform,
+        vk::CompositeAlphaFlagBitsKHR::eOpaque, mode, true);
+
+    ILOG("create {} swapchain images with size={}x{}, format={}", image_count, extent.width,
+         extent.height, vk::to_string(surface_format.format));
 
     Swapchain swapchain;
     swapchain.format_ = surface_format.format;
