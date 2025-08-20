@@ -160,12 +160,23 @@ MyErrCode Context::createInstance(char const* app_name, std::vector<char const*>
 
 vk::Instance& Context::getInstance() { return instance_; }
 
+template <typename T, typename>
+MyErrCode Context::setDebugObjectId(T obj, Uid id)
+{
+    std::string name = FSTR("UID #{}", id);
+    CHECK_VKHPP_RET(device_.setDebugUtilsObjectNameEXT(vk::DebugUtilsObjectNameInfoEXT(
+        T::objectType, reinterpret_cast<uint64_t>(static_cast<typename T::CType>(obj)),
+        name.c_str())));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::createSurface(Uid id, vk::SurfaceKHR surface)
 {
     if (surfaces_.find(id) != surfaces_.end()) {
         CHECK_ERR_RET(destroySurface(id));
     }
     surfaces_[id] = surface;
+    CHECK_ERR_RET(setDebugObjectId(surface, id));
     return MyErrCode::kOk;
 }
 
@@ -343,6 +354,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         ILOG("Queue[{}] Flags: {}", id, vk::to_string(family_props[family_index].queueFlags));
         auto queue = device_.getQueue(family_index, 0);
         queues_[id] = {queue, family_index};
+        CHECK_ERR_RET(setDebugObjectId(queue, id));
     }
 
     return MyErrCode::kOk;
@@ -365,6 +377,7 @@ MyErrCode Context::createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags fl
     }
     command_pools_[queue_id] =
         CHECK_VKHPP_VAL(device_.createCommandPool({flags, getQueue(queue_id).getFamilyIndex()}));
+    CHECK_ERR_RET(setDebugObjectId(command_pools_[queue_id], queue_id));
     return MyErrCode::kOk;
 }
 
@@ -400,6 +413,7 @@ MyErrCode Context::createDescriptorPool(Uid id, uint32_t max_sets,
     }
     descriptor_pools_[id] = CHECK_VKHPP_VAL(
         device_.createDescriptorPool({vk::DescriptorPoolCreateFlags(), max_sets, pool_size}));
+    CHECK_ERR_RET(setDebugObjectId(descriptor_pools_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -444,6 +458,7 @@ MyErrCode Context::createShaderModule(Uid id, std::filesystem::path const& file_
     vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
                                            reinterpret_cast<uint32_t const*>(code.data()));
     shader_modules_[id] = CHECK_VKHPP_VAL(device_.createShaderModule(create_info));
+    CHECK_ERR_RET(setDebugObjectId(shader_modules_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -486,6 +501,7 @@ MyErrCode Context::createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usag
     CHECK_VK_RET(vmaCreateBuffer(allocator_, buffer_info, &creation_info, &buf, &alloc, nullptr));
 
     buffers_[id] = {size, buf, alloc, allocator_};
+    CHECK_ERR_RET(setDebugObjectId(buffers_[id].buf_, id));
     return MyErrCode::kOk;
 }
 
@@ -537,6 +553,8 @@ MyErrCode Context::createImage(Uid id, vk::Format format, vk::Extent2D extent,
     vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
 
     images_[id] = Image{format, extent, img, img_view, alloc, allocator_};
+    CHECK_ERR_RET(setDebugObjectId(images_[id].img_, id));
+    CHECK_ERR_RET(setDebugObjectId(images_[id].img_view_, id));
     return MyErrCode::kOk;
 }
 
@@ -571,6 +589,7 @@ MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layo
         set_layouts.push_back(getDescriptorSetLayout(id));
     }
     pipeline_layouts_[id] = CHECK_VKHPP_VAL(device_.createPipelineLayout({{}, set_layouts}));
+    CHECK_ERR_RET(setDebugObjectId(pipeline_layouts_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -605,6 +624,7 @@ MyErrCode Context::createComputePipeline(Uid id, Uid pipeline_layout_id, Uid sha
     vk::ComputePipelineCreateInfo create_info(vk::PipelineCreateFlags(), shader_info,
                                               getPipelineLayout(pipeline_layout_id));
     pipelines_[id] = CHECK_VKHPP_VAL(device_.createComputePipeline({}, create_info));
+    CHECK_ERR_RET(setDebugObjectId(pipelines_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -642,6 +662,7 @@ MyErrCode Context::createDescriptorSetLayout(
     }
     descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(
         device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layout_bindings}));
+    CHECK_ERR_RET(setDebugObjectId(descriptor_set_layouts_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -674,6 +695,7 @@ MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid pool_id)
     auto sets = CHECK_VKHPP_VAL(
         device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(set_layout_id)}));
     descriptor_sets_[id] = {sets.front(), pool};
+    CHECK_ERR_RET(setDebugObjectId(descriptor_sets_[id].set_, id));
     return MyErrCode::kOk;
 }
 
@@ -773,6 +795,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
     }
 
     swapchains_[id] = std::move(swapchain);
+    CHECK_ERR_RET(setDebugObjectId(swapchains_[id].swapchain_, id));
     return MyErrCode::kOk;
 }
 
@@ -847,6 +870,9 @@ MyErrCode Context::destroy()
     while (!command_pools_.empty()) {
         CHECK_ERR_RET(destroyCommandPool(command_pools_.begin()->first));
     }
+    while (!surfaces_.empty()) {
+        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first));
+    }
     if (allocator_) {
         vmaDestroyAllocator(allocator_);
     }
@@ -855,9 +881,6 @@ MyErrCode Context::destroy()
     }
     if (debug_messenger_) {
         instance_.destroy(debug_messenger_);
-    }
-    while (!surfaces_.empty()) {
-        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first));
     }
     if (instance_) {
         instance_.destroy();

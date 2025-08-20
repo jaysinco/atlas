@@ -220,6 +220,9 @@ public:
                                   vk::PhysicalDeviceFeatures const& feat);
 
 protected:
+    template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
+    MyErrCode setDebugObjectId(T obj, Uid id);
+
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
     static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
 
