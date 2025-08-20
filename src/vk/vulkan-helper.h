@@ -105,6 +105,18 @@ private:
     uint32_t family_index_;
 };
 
+class DescriptorSetLayoutBinding
+{
+public:
+    DescriptorSetLayoutBinding(vk::DescriptorType type, vk::ShaderStageFlags stages,
+                               uint32_t count = 1);
+    operator vk::DescriptorSetLayoutBinding() const;
+
+private:
+    friend class Context;
+    vk::DescriptorSetLayoutBinding layout_;
+};
+
 class DescriptorSet
 {
 public:
@@ -119,14 +131,14 @@ private:
     vk::DescriptorPool pool_;
 };
 
-class DescriptorSetBinding
+class WriteDescriptorSet
 {
 public:
-    DescriptorSetBinding();
+    WriteDescriptorSet(uint32_t binding, vk::DescriptorType type, Buffer& buffer);
+    operator vk::WriteDescriptorSet() const;
 
 private:
     friend class Context;
-    vk::DescriptorSetLayoutBinding layout_;
     vk::WriteDescriptorSet write_;
     std::vector<vk::DescriptorImageInfo> images_;
     std::vector<vk::DescriptorBufferInfo> buffers_;
@@ -164,12 +176,10 @@ public:
                           VmaAllocationCreateFlags flags);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id,
-                                        std::vector<vk::DescriptorSetLayoutBinding> const& layouts);
-    MyErrCode createDescriptorSet(Uid id, Uid layout_id, Uid pool_id);
-    MyErrCode createDescriptorSetAndLayout(Uid id, Uid pool_id,
-                                           std::vector<DescriptorSetBinding> const& bindings);
+                                        std::vector<DescriptorSetLayoutBinding> const& bindings);
+    MyErrCode createDescriptorSet(Uid id, Uid set_layout_id, Uid pool_id);
     MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
-    MyErrCode createComputePipeline(Uid id, Uid layout_id, Uid shader_id);
+    MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
     MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
                               vk::Extent2D extent, vk::PresentModeKHR mode,
                               vk::ImageUsageFlags usage);
@@ -190,10 +200,8 @@ public:
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
 
+    MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
     MyErrCode oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter);
-    MyErrCode updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes);
-    DescriptorSetBinding bindBufferDescriptor(vk::DescriptorType type, vk::ShaderStageFlags stage,
-                                              Uid buffer_id);
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);

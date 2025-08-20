@@ -13,8 +13,8 @@ enum AppUid : int
     UID_vkShader_square,
     UID_vkShader_mul2,
     UID_vkDescriptorPool_main,
+    UID_vkDescriptorSetLayout_compute,
     UID_vkDescriptorSet_compute,
-    UID_vkDescriptorSetLayout_compute = UID_vkDescriptorSet_compute,
     UID_vkPipelineLayout_compute,
     UID_vkPipeline_square,
     UID_vkPipeline_mul2,
@@ -62,29 +62,38 @@ MY_MAIN
     for (int32_t i = 0; i < num_elements; ++i) {
         a_buffer_data[i] = i;
     }
-    ILOG("a = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
 
-    CHECK_ERR_RET(ctx.createDescriptorSetAndLayout(
-        UID_vkDescriptorSet_compute, UID_vkDescriptorPool_main,
+    CHECK_ERR_RET(ctx.createDescriptorSetLayout(
+        UID_vkDescriptorSetLayout_compute,
         {
-            ctx.bindBufferDescriptor(vk::DescriptorType::eStorageBuffer,
-                                     vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_a),
-            ctx.bindBufferDescriptor(vk::DescriptorType::eStorageBuffer,
-                                     vk::ShaderStageFlagBits::eCompute, UID_vkBuffer_b),
+            {vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute},
+            {vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute},
+        }));
+
+    CHECK_ERR_RET(ctx.createDescriptorSet(
+        UID_vkDescriptorSet_compute, UID_vkDescriptorSetLayout_compute, UID_vkDescriptorPool_main));
+
+    CHECK_ERR_RET(ctx.updateDescriptorSet(
+        UID_vkDescriptorSet_compute,
+        {
+            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
+            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
         }));
 
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_square, toolkit::getDataDir() / "square.glsl.spv"));
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_mul2, toolkit::getDataDir() / "mul2.glsl.spv"));
+
     CHECK_ERR_RET(ctx.createPipelineLayout(UID_vkPipelineLayout_compute,
                                            {UID_vkDescriptorSetLayout_compute}));
+
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_square, UID_vkPipelineLayout_compute,
                                             UID_vkShader_square));
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_mul2, UID_vkPipelineLayout_compute,
                                             UID_vkShader_mul2));
 
-    auto compute_submitter = [&](vk::CommandBuffer& cmd) -> MyErrCode {
+    auto submit_square = [&](vk::CommandBuffer& cmd) -> MyErrCode {
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
@@ -92,9 +101,30 @@ MY_MAIN
         cmd.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     };
-    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, compute_submitter));
+    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, submit_square));
 
-    ILOG("b = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
+    ILOG("a1 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
+    ILOG("b1 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
+
+    CHECK_ERR_RET(ctx.updateDescriptorSet(
+        UID_vkDescriptorSet_compute,
+        {
+            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
+            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
+        }));
+
+    auto submit_mul2 = [&](vk::CommandBuffer& cmd) -> MyErrCode {
+        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
+                               {ctx.getDescriptorSet(UID_vkDescriptorSet_compute)}, {});
+        cmd.dispatch(num_elements, 1, 1);
+        return MyErrCode::kOk;
+    };
+    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, submit_mul2));
+
+    ILOG("b2 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
+    ILOG("a2 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
 
     CHECK_ERR_RET(ctx.destroy());
     return MyErrCode::kOk;

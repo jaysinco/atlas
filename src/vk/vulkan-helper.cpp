@@ -88,7 +88,22 @@ DescriptorSet::operator vk::DescriptorSet() const { return set_; }
 
 DescriptorSet::operator bool() const { return set_; }
 
-DescriptorSetBinding::DescriptorSetBinding() = default;
+DescriptorSetLayoutBinding::DescriptorSetLayoutBinding(vk::DescriptorType type,
+                                                       vk::ShaderStageFlags stages, uint32_t count)
+    : layout_(0, type, count, stages)
+{
+}
+
+DescriptorSetLayoutBinding::operator vk::DescriptorSetLayoutBinding() const { return layout_; }
+
+WriteDescriptorSet::WriteDescriptorSet(uint32_t binding, vk::DescriptorType type, Buffer& buffer)
+{
+    vk::DescriptorBufferInfo buf_info(buffer, 0, buffer.getSize());
+    buffers_.emplace_back(buf_info);
+    write_ = vk::WriteDescriptorSet({}, binding, 0, 1, type, nullptr, &buffers_.back());
+}
+
+WriteDescriptorSet::operator vk::WriteDescriptorSet() const { return write_; }
 
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
@@ -579,7 +594,7 @@ MyErrCode Context::destroyPipelineLayout(Uid id)
     }
 }
 
-MyErrCode Context::createComputePipeline(Uid id, Uid layout_id, Uid shader_id)
+MyErrCode Context::createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id)
 {
     if (pipelines_.find(id) != pipelines_.end()) {
         CHECK_ERR_RET(destroyPipeline(id));
@@ -588,7 +603,7 @@ MyErrCode Context::createComputePipeline(Uid id, Uid layout_id, Uid shader_id)
                                                   vk::ShaderStageFlagBits::eCompute,
                                                   getShaderModule(shader_id), "main");
     vk::ComputePipelineCreateInfo create_info(vk::PipelineCreateFlags(), shader_info,
-                                              getPipelineLayout(layout_id));
+                                              getPipelineLayout(pipeline_layout_id));
     pipelines_[id] = CHECK_VKHPP_VAL(device_.createComputePipeline({}, create_info));
     return MyErrCode::kOk;
 }
@@ -614,13 +629,19 @@ MyErrCode Context::destroyPipeline(Uid id)
 }
 
 MyErrCode Context::createDescriptorSetLayout(
-    Uid id, std::vector<vk::DescriptorSetLayoutBinding> const& layouts)
+    Uid id, std::vector<DescriptorSetLayoutBinding> const& bindings)
 {
     if (descriptor_set_layouts_.find(id) != descriptor_set_layouts_.end()) {
         CHECK_ERR_RET(destroyDescriptorSetLayout(id));
     }
+    std::vector<vk::DescriptorSetLayoutBinding> layout_bindings;
+    for (int i = 0; i < bindings.size(); ++i) {
+        vk::DescriptorSetLayoutBinding b = bindings[i];
+        b.setBinding(i);
+        layout_bindings.push_back(b);
+    }
     descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(
-        device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layouts}));
+        device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layout_bindings}));
     return MyErrCode::kOk;
 }
 
@@ -644,14 +665,14 @@ MyErrCode Context::destroyDescriptorSetLayout(Uid id)
     }
 }
 
-MyErrCode Context::createDescriptorSet(Uid id, Uid layout_id, Uid pool_id)
+MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid pool_id)
 {
     if (descriptor_sets_.find(id) != descriptor_sets_.end()) {
         CHECK_ERR_RET(destroyDescriptorSet(id));
     }
     auto& pool = getDescriptorPool(pool_id);
     auto sets = CHECK_VKHPP_VAL(
-        device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(layout_id)}));
+        device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(set_layout_id)}));
     descriptor_sets_[id] = {sets.front(), pool};
     return MyErrCode::kOk;
 }
@@ -662,12 +683,6 @@ DescriptorSet& Context::getDescriptorSet(Uid id)
         MY_THROW("descriptor set not exist: {}", id);
     }
     return descriptor_sets_.at(id);
-}
-
-MyErrCode Context::updateDescriptorSets(std::vector<vk::WriteDescriptorSet> const& writes)
-{
-    device_.updateDescriptorSets(writes, {});
-    return MyErrCode::kOk;
 }
 
 MyErrCode Context::destroyDescriptorSet(Uid id)
@@ -682,37 +697,15 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
-DescriptorSetBinding Context::bindBufferDescriptor(vk::DescriptorType type,
-                                                   vk::ShaderStageFlags stage, Uid buffer_id)
+MyErrCode Context::updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes)
 {
-    DescriptorSetBinding b;
-    Buffer& buffer = getBuffer(buffer_id);
-    b.layout_ = vk::DescriptorSetLayoutBinding(0, type, 1, stage);
-    b.buffers_.emplace_back(buffer, 0, buffer.getSize());
-    b.write_ = vk::WriteDescriptorSet({}, 0, 0, 1, type, nullptr, &b.buffers_.back());
-    return b;
-}
-
-MyErrCode Context::createDescriptorSetAndLayout(Uid id, Uid pool_id,
-                                                std::vector<DescriptorSetBinding> const& bindings)
-{
-    std::vector<vk::DescriptorSetLayoutBinding> layouts;
-    for (int i = 0; i < bindings.size(); ++i) {
-        auto l = bindings[i].layout_;
-        l.setBinding(i);
-        layouts.push_back(l);
+    auto& set = getDescriptorSet(set_id);
+    std::vector<vk::WriteDescriptorSet> write_set;
+    for (vk::WriteDescriptorSet w: writes) {
+        w.setDstSet(set);
+        write_set.push_back(w);
     }
-    CHECK_ERR_RET(createDescriptorSetLayout(id, layouts));
-    CHECK_ERR_RET(createDescriptorSet(id, id, pool_id));
-
-    std::vector<vk::WriteDescriptorSet> writes;
-    for (int i = 0; i < bindings.size(); ++i) {
-        auto w = bindings[i].write_;
-        w.setDstSet(getDescriptorSet(id));
-        w.setDstBinding(i);
-        writes.push_back(w);
-    }
-    CHECK_ERR_RET(updateDescriptorSets(writes));
+    device_.updateDescriptorSets(write_set, {});
     return MyErrCode::kOk;
 }
 
