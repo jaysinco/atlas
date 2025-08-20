@@ -7,7 +7,7 @@
 enum AppUid : int
 {
     UID_vkQueue_compute,
-    UID_vkCommandPool_compute = UID_vkQueue_compute,
+    UID_vkCommandPool_compute,
     UID_vkBuffer_a,
     UID_vkBuffer_b,
     UID_vkShader_square,
@@ -35,7 +35,7 @@ MY_MAIN
         return static_cast<bool>(prop.queueFlags & vk::QueueFlagBits::eCompute);
     };
     CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{UID_vkQueue_compute, queue_picker}}));
-    CHECK_ERR_RET(ctx.createCommandPool(UID_vkQueue_compute));
+    CHECK_ERR_RET(ctx.createCommandPool(UID_vkCommandPool_compute, UID_vkQueue_compute));
     CHECK_ERR_RET(ctx.createDescriptorPool(UID_vkDescriptorPool_main, 1,
                                            {{vk::DescriptorType::eStorageBuffer, 2}}));
     CHECK_ERR_RET(ctx.createAllocator());
@@ -101,7 +101,7 @@ MY_MAIN
         cmd.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     };
-    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, submit_square));
+    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_square));
 
     ILOG("a1 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
     ILOG("b1 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
@@ -121,7 +121,7 @@ MY_MAIN
         cmd.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     };
-    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, submit_mul2));
+    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_mul2));
 
     ILOG("b2 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
     ILOG("a2 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));

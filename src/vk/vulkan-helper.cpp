@@ -370,14 +370,14 @@ Queue& Context::getQueue(Uid id)
     return queues_.at(id);
 }
 
-MyErrCode Context::createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags)
+MyErrCode Context::createCommandPool(Uid id, Uid queue_id, vk::CommandPoolCreateFlags flags)
 {
-    if (command_pools_.find(queue_id) != command_pools_.end()) {
-        CHECK_ERR_RET(destroyCommandPool(queue_id));
+    if (command_pools_.find(id) != command_pools_.end()) {
+        CHECK_ERR_RET(destroyCommandPool(id));
     }
-    command_pools_[queue_id] =
+    command_pools_[id] =
         CHECK_VKHPP_VAL(device_.createCommandPool({flags, getQueue(queue_id).getFamilyIndex()}));
-    CHECK_ERR_RET(setDebugObjectId(command_pools_[queue_id], queue_id));
+    CHECK_ERR_RET(setDebugObjectId(command_pools_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -686,12 +686,12 @@ MyErrCode Context::destroyDescriptorSetLayout(Uid id)
     }
 }
 
-MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid pool_id)
+MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid descriptor_pool_id)
 {
     if (descriptor_sets_.find(id) != descriptor_sets_.end()) {
         CHECK_ERR_RET(destroyDescriptorSet(id));
     }
-    auto& pool = getDescriptorPool(pool_id);
+    auto& pool = getDescriptorPool(descriptor_pool_id);
     auto sets = CHECK_VKHPP_VAL(
         device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(set_layout_id)}));
     descriptor_sets_[id] = {sets.front(), pool};
@@ -822,9 +822,9 @@ MyErrCode Context::destroySwapchain(Uid id)
     }
 }
 
-MyErrCode Context::oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter)
+MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter)
 {
-    auto& command_pool = getCommandPool(queue_id);
+    auto& command_pool = getCommandPool(command_pool_id);
     auto command_buffers = CHECK_VKHPP_VAL(
         device_.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1}));
 

@@ -159,14 +159,14 @@ public:
     using CmdSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
 
     MyErrCode createInstance(char const* app_name, std::vector<char const*> const& extensions);
-    MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
     MyErrCode createPhysicalDevice(DeviceRater const& device_rater = defaultDeviceRater);
     MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
                                     std::map<Uid, QueuePicker> const& queue_pickers);
-    MyErrCode createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags = {});
+    MyErrCode createAllocator();
+    MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
+    MyErrCode createCommandPool(Uid id, Uid queue_id, vk::CommandPoolCreateFlags flags = {});
     MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
                                    std::map<vk::DescriptorType, uint32_t> const& size);
-    MyErrCode createAllocator();
     MyErrCode createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usage,
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
     MyErrCode createImage(Uid id, vk::Format format, vk::Extent2D extent, vk::ImageTiling tiling,
@@ -177,7 +177,7 @@ public:
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id,
                                         std::vector<DescriptorSetLayoutBinding> const& bindings);
-    MyErrCode createDescriptorSet(Uid id, Uid set_layout_id, Uid pool_id);
+    MyErrCode createDescriptorSet(Uid id, Uid set_layout_id, Uid descriptor_pool_id);
     MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
     MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
     MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
@@ -201,7 +201,7 @@ public:
     Swapchain& getSwapchain(Uid id);
 
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
-    MyErrCode oneTimeSubmit(Uid queue_id, CmdSubmitter const& submitter);
+    MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);
@@ -233,8 +233,8 @@ private:
     vk::Device device_;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
 
-    std::map<Uid, vk::SurfaceKHR> surfaces_;
     std::map<Uid, Queue> queues_;
+    std::map<Uid, vk::SurfaceKHR> surfaces_;
     std::map<Uid, vk::CommandPool> command_pools_;
     std::map<Uid, vk::DescriptorPool> descriptor_pools_;
     std::map<Uid, Buffer> buffers_;
