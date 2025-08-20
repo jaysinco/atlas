@@ -242,18 +242,44 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createPhysicalDevice(DevicePicker const& device_picker)
+int Context::defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
+                                vk::PhysicalDeviceFeatures const& feat)
+{
+    int score = 0;
+    switch (prop.deviceType) {
+        case vk::PhysicalDeviceType::eOther:
+            score += 1;
+            break;
+        case vk::PhysicalDeviceType::eIntegratedGpu:
+            score += 4;
+            break;
+        case vk::PhysicalDeviceType::eDiscreteGpu:
+            score += 5;
+            break;
+        case vk::PhysicalDeviceType::eVirtualGpu:
+            score += 3;
+            break;
+        case vk::PhysicalDeviceType::eCpu:
+            score += 2;
+            break;
+        default:
+            break;
+    }
+    return score;
+}
+
+MyErrCode Context::createPhysicalDevice(DeviceRater const& device_rater)
 {
     auto physical_devices = CHECK_VKHPP_VAL(instance_.enumeratePhysicalDevices());
-    bool found = false;
+    int best_score = 0;
     for (auto& d: physical_devices) {
-        if (device_picker(d.getProperties(), d.getFeatures())) {
+        int score = device_rater(d.getProperties(), d.getFeatures());
+        if (score > best_score) {
             physical_device_ = d;
-            found = true;
-            break;
+            best_score = score;
         }
     }
-    if (!found) {
+    if (best_score <= 0) {
         ELOG("no proper device found");
         return MyErrCode::kFailed;
     }
@@ -553,12 +579,17 @@ MyErrCode Context::destroyPipelineLayout(Uid id)
     }
 }
 
-MyErrCode Context::createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info)
+MyErrCode Context::createComputePipeline(Uid id, Uid layout_id, Uid shader_id)
 {
     if (pipelines_.find(id) != pipelines_.end()) {
         CHECK_ERR_RET(destroyPipeline(id));
     }
-    pipelines_[id] = CHECK_VKHPP_VAL(device_.createComputePipeline({}, info));
+    vk::PipelineShaderStageCreateInfo shader_info(vk::PipelineShaderStageCreateFlags(),
+                                                  vk::ShaderStageFlagBits::eCompute,
+                                                  getShaderModule(shader_id), "main");
+    vk::ComputePipelineCreateInfo create_info(vk::PipelineCreateFlags(), shader_info,
+                                              getPipelineLayout(layout_id));
+    pipelines_[id] = CHECK_VKHPP_VAL(device_.createComputePipeline({}, create_info));
     return MyErrCode::kOk;
 }
 
@@ -582,12 +613,14 @@ MyErrCode Context::destroyPipeline(Uid id)
     }
 }
 
-MyErrCode Context::createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info)
+MyErrCode Context::createDescriptorSetLayout(
+    Uid id, std::vector<vk::DescriptorSetLayoutBinding> const& layouts)
 {
     if (descriptor_set_layouts_.find(id) != descriptor_set_layouts_.end()) {
         CHECK_ERR_RET(destroyDescriptorSetLayout(id));
     }
-    descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(device_.createDescriptorSetLayout(info));
+    descriptor_set_layouts_[id] = CHECK_VKHPP_VAL(
+        device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layouts}));
     return MyErrCode::kOk;
 }
 
@@ -669,7 +702,7 @@ MyErrCode Context::createDescriptorSetAndLayout(Uid id, Uid pool_id,
         l.setBinding(i);
         layouts.push_back(l);
     }
-    CHECK_ERR_RET(createDescriptorSetLayout(id, {vk::DescriptorSetLayoutCreateFlags(), layouts}));
+    CHECK_ERR_RET(createDescriptorSetLayout(id, layouts));
     CHECK_ERR_RET(createDescriptorSet(id, id, pool_id));
 
     std::vector<vk::WriteDescriptorSet> writes;

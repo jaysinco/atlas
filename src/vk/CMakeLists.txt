@@ -76,7 +76,8 @@ target_link_libraries(vkcomp
 
 target_glsl_shaders(vkcomp
     PRIVATE
-        data/vkcomp.glsl
+        data/square.glsl
+        data/mul2.glsl
     COMPILE_OPTIONS
         --target-env=vulkan${MYVK_API_VERSION_MAJOR}.${MYVK_API_VERSION_MINOR}
         -fshader-stage=compute

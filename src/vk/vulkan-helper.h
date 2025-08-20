@@ -138,8 +138,8 @@ class Context
 public:
     using Uid = int;
 
-    using DevicePicker =
-        std::function<bool(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
+    using DeviceRater =
+        std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
 
     using QueuePicker =
         std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
@@ -148,10 +148,10 @@ public:
 
     MyErrCode createInstance(char const* app_name, std::vector<char const*> const& extensions);
     MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
-    MyErrCode createPhysicalDevice(DevicePicker const& device_picker);
+    MyErrCode createPhysicalDevice(DeviceRater const& device_rater = defaultDeviceRater);
     MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
                                     std::map<Uid, QueuePicker> const& queue_pickers);
-    MyErrCode createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags);
+    MyErrCode createCommandPool(Uid queue_id, vk::CommandPoolCreateFlags flags = {});
     MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
                                    std::map<vk::DescriptorType, uint32_t> const& size);
     MyErrCode createAllocator();
@@ -163,12 +163,13 @@ public:
                           vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
-    MyErrCode createDescriptorSetLayout(Uid id, vk::DescriptorSetLayoutCreateInfo const& info);
+    MyErrCode createDescriptorSetLayout(Uid id,
+                                        std::vector<vk::DescriptorSetLayoutBinding> const& layouts);
     MyErrCode createDescriptorSet(Uid id, Uid layout_id, Uid pool_id);
     MyErrCode createDescriptorSetAndLayout(Uid id, Uid pool_id,
                                            std::vector<DescriptorSetBinding> const& bindings);
     MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids);
-    MyErrCode createComputePipeline(Uid id, vk::ComputePipelineCreateInfo const& info);
+    MyErrCode createComputePipeline(Uid id, Uid layout_id, Uid shader_id);
     MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
                               vk::Extent2D extent, vk::PresentModeKHR mode,
                               vk::ImageUsageFlags usage);
@@ -206,6 +207,9 @@ public:
     MyErrCode destroyDescriptorSet(Uid id);
     MyErrCode destroySwapchain(Uid id);
     MyErrCode destroy();
+
+    static int defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
+                                  vk::PhysicalDeviceFeatures const& feat);
 
 protected:
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
