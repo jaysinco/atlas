@@ -81,6 +81,20 @@ private:
     VmaAllocator allocator_;
 };
 
+class CommandBuffer
+{
+public:
+    CommandBuffer();
+    CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool);
+    operator vk::CommandBuffer() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    vk::CommandBuffer buf_;
+    vk::CommandPool pool_;
+};
+
 class Semaphore
 {
 public:
@@ -104,6 +118,7 @@ public:
     WaitSemaphore(Uid id, uint64_t wait_val);
 
 private:
+    friend class Context;
     Uid id_;
     vk::PipelineStageFlags stages_;
     uint64_t wait_val_;
@@ -113,11 +128,12 @@ class SignalSemaphore
 {
 public:
     explicit SignalSemaphore(Uid id);
-    SignalSemaphore(Uid id, uint64_t wait_val);
+    SignalSemaphore(Uid id, uint64_t signal_val);
 
 private:
+    friend class Context;
     Uid id_;
-    uint64_t wait_val_;
+    uint64_t signal_val_;
 };
 
 class Swapchain
@@ -213,8 +229,8 @@ public:
                           vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
-    MyErrCode createBinarySemaphore(Uid);
-    MyErrCode createTimelineSemaphore(Uid, uint64_t init_val = 0);
+    MyErrCode createBinarySemaphore(Uid id);
+    MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val = 0);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id,
                                         std::vector<DescriptorSetLayoutBinding> const& bindings);
@@ -234,7 +250,7 @@ public:
     vk::DescriptorPool& getDescriptorPool(Uid id);
     Buffer& getBuffer(Uid id);
     Image& getImage(Uid id);
-    vk::CommandBuffer& getCommandBuffer(Uid id);
+    CommandBuffer& getCommandBuffer(Uid id);
     Semaphore& getSemaphore(Uid id);
     vk::ShaderModule& getShaderModule(Uid id);
     vk::DescriptorSetLayout& getDescriptorSetLayout(Uid id);
@@ -244,11 +260,12 @@ public:
     Swapchain& getSwapchain(Uid id);
 
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
-    MyErrCode waitTimelineSemaphores(std::vector<WaitSemaphore> const& semaphores);
+    MyErrCode waitTimelineSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+                                     uint64_t timeout = UINT64_MAX);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
-                     std::vector<WaitSemaphore> const& wait_semaphores,
-                     std::vector<SignalSemaphore> const& signal_semaphores);
+                     std::vector<WaitSemaphore> const& wait_semaphores = {},
+                     std::vector<SignalSemaphore> const& signal_semaphores = {});
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);
@@ -280,7 +297,7 @@ private:
     vk::DebugUtilsMessengerEXT debug_messenger_;
     vk::PhysicalDevice physical_device_;
     vk::Device device_;
-    VmaAllocator allocator_ = VK_NULL_HANDLE;
+    VmaAllocator allocator_;
 
     std::map<Uid, Queue> queues_;
     std::map<Uid, vk::SurfaceKHR> surfaces_;
@@ -288,7 +305,7 @@ private:
     std::map<Uid, vk::DescriptorPool> descriptor_pools_;
     std::map<Uid, Buffer> buffers_;
     std::map<Uid, Image> images_;
-    std::map<Uid, vk::CommandBuffer> command_buffers_;
+    std::map<Uid, CommandBuffer> command_buffers_;
     std::map<Uid, Semaphore> semaphores_;
     std::map<Uid, vk::ShaderModule> shader_modules_;
     std::map<Uid, vk::PipelineLayout> pipeline_layouts_;

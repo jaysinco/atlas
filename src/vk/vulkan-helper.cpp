@@ -51,6 +51,37 @@ Image::operator vk::ImageView() const { return img_view_; }
 
 Image::operator bool() const { return img_; }
 
+CommandBuffer::CommandBuffer() = default;
+
+CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool): buf_(buf), pool_(pool) {}
+
+CommandBuffer::operator vk::CommandBuffer() const { return buf_; }
+
+CommandBuffer::operator bool() const { return buf_; }
+
+Semaphore::Semaphore() = default;
+
+Semaphore::Semaphore(vk::SemaphoreType type, vk::Semaphore sem): type_(type), sem_(sem) {}
+
+bool Semaphore::isTimeline() const { return type_ == vk::SemaphoreType::eTimeline; }
+
+Semaphore::operator vk::Semaphore() const { return sem_; }
+
+Semaphore::operator bool() const { return sem_; }
+
+WaitSemaphore::WaitSemaphore(Uid id, vk::PipelineStageFlags stages): id_(id), stages_(stages) {}
+
+WaitSemaphore::WaitSemaphore(Uid id, vk::PipelineStageFlags stages, uint64_t wait_val)
+    : id_(id), stages_(stages), wait_val_(wait_val)
+{
+}
+
+WaitSemaphore::WaitSemaphore(Uid id, uint64_t wait_val): id_(id), wait_val_(wait_val) {}
+
+SignalSemaphore::SignalSemaphore(Uid id): id_(id) {}
+
+SignalSemaphore::SignalSemaphore(Uid id, uint64_t signal_val): id_(id), signal_val_(signal_val) {}
+
 Swapchain::Swapchain() = default;
 
 Swapchain::Swapchain(vk::Format format, vk::Extent2D extent, vk::SwapchainKHR swapchain,
@@ -579,6 +610,85 @@ MyErrCode Context::destroyImage(Uid id)
     }
 }
 
+MyErrCode Context::createCommandBuffer(Uid id, Uid command_pool_id)
+{
+    if (command_buffers_.find(id) != command_buffers_.end()) {
+        CHECK_ERR_RET(destroyDescriptorSet(id));
+    }
+    auto& pool = getCommandPool(command_pool_id);
+    auto bufs = CHECK_VKHPP_VAL(
+        device_.allocateCommandBuffers({pool, vk::CommandBufferLevel::ePrimary, 1}));
+    command_buffers_[id] = {bufs.front(), pool};
+    CHECK_ERR_RET(setDebugObjectId(command_buffers_[id].buf_, id));
+    return MyErrCode::kOk;
+}
+
+CommandBuffer& Context::getCommandBuffer(Uid id)
+{
+    if (command_buffers_.find(id) == command_buffers_.end()) {
+        MY_THROW("command buffer not exist: {}", id);
+    }
+    return command_buffers_.at(id);
+}
+
+MyErrCode Context::destroyCommandBuffer(Uid id)
+{
+    if (auto it = command_buffers_.find(id); it != command_buffers_.end()) {
+        device_.freeCommandBuffers(it->second.pool_, it->second.buf_);
+        command_buffers_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("command buffer not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createBinarySemaphore(Uid id)
+{
+    if (semaphores_.find(id) != semaphores_.end()) {
+        CHECK_ERR_RET(destroySemaphore(id));
+    }
+    auto sem = CHECK_VKHPP_VAL(device_.createSemaphore({}));
+    semaphores_[id] = {vk::SemaphoreType::eBinary, sem};
+    CHECK_ERR_RET(setDebugObjectId(semaphores_[id].sem_, id));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::createTimelineSemaphore(Uid id, uint64_t init_val)
+{
+    if (semaphores_.find(id) != semaphores_.end()) {
+        CHECK_ERR_RET(destroySemaphore(id));
+    }
+    vk::StructureChain<vk::SemaphoreCreateInfo, vk::SemaphoreTypeCreateInfo> c{
+        vk::SemaphoreCreateInfo{},
+        vk::SemaphoreTypeCreateInfo{vk::SemaphoreType::eTimeline, init_val},
+    };
+    auto sem = CHECK_VKHPP_VAL(device_.createSemaphore(c.get<vk::SemaphoreCreateInfo>()));
+    semaphores_[id] = {vk::SemaphoreType::eTimeline, sem};
+    CHECK_ERR_RET(setDebugObjectId(semaphores_[id].sem_, id));
+    return MyErrCode::kOk;
+}
+
+Semaphore& Context::getSemaphore(Uid id)
+{
+    if (semaphores_.find(id) == semaphores_.end()) {
+        MY_THROW("semaphore not exist: {}", id);
+    }
+    return semaphores_.at(id);
+}
+
+MyErrCode Context::destroySemaphore(Uid id)
+{
+    if (auto it = semaphores_.find(id); it != semaphores_.end()) {
+        device_.destroy(it->second.sem_);
+        semaphores_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("semaphore not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
 MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids)
 {
     if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
@@ -822,11 +932,31 @@ MyErrCode Context::destroySwapchain(Uid id)
     }
 }
 
+MyErrCode Context::waitTimelineSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+                                          uint64_t timeout)
+{
+    std::vector<vk::Semaphore> sems;
+    std::vector<uint64_t> vals;
+    for (auto& ws: wait_semaphores) {
+        auto& sem = getSemaphore(ws.id_);
+        if (!sem.isTimeline()) {
+            ELOG("semaphore not timeline: {}", ws.id_);
+            return MyErrCode::kFailed;
+        }
+        sems.push_back(sem.sem_);
+        vals.push_back(ws.wait_val_);
+    }
+    CHECK_VKHPP_RET(device_.waitSemaphores({{}, sems, vals}, timeout));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter)
 {
     auto& command_pool = getCommandPool(command_pool_id);
     auto command_buffers = CHECK_VKHPP_VAL(
         device_.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1}));
+    auto command_buffers_guard =
+        toolkit::scopeExit([&] { device_.freeCommandBuffers(command_pool, command_buffers); });
 
     auto& command_buffer = command_buffers.front();
     CHECK_VKHPP_RET(command_buffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}));
@@ -836,8 +966,13 @@ MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter
     vk::Queue queue = getQueue(queue_id);
     CHECK_VKHPP_RET(queue.submit(vk::SubmitInfo{0, nullptr, nullptr, 1, &command_buffer}, nullptr));
     CHECK_VKHPP_RET(queue.waitIdle());
+    return MyErrCode::kOk;
+}
 
-    device_.freeCommandBuffers(command_pool, command_buffer);
+MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
+                          std::vector<WaitSemaphore> const& wait_semaphores,
+                          std::vector<SignalSemaphore> const& signal_semaphores)
+{
     return MyErrCode::kOk;
 }
 
@@ -854,6 +989,15 @@ MyErrCode Context::destroy()
     }
     while (!descriptor_set_layouts_.empty()) {
         CHECK_ERR_RET(destroyDescriptorSetLayout(descriptor_set_layouts_.begin()->first));
+    }
+    while (!semaphores_.empty()) {
+        CHECK_ERR_RET(destroySemaphore(semaphores_.begin()->first));
+    }
+    while (!command_buffers_.empty()) {
+        CHECK_ERR_RET(destroyCommandBuffer(command_buffers_.begin()->first));
+    }
+    while (!images_.empty()) {
+        CHECK_ERR_RET(destroyImage(images_.begin()->first));
     }
     while (!images_.empty()) {
         CHECK_ERR_RET(destroyImage(images_.begin()->first));
