@@ -14,7 +14,8 @@ enum AppUid : int
     UID_vkShader_mul2,
     UID_vkDescriptorPool_main,
     UID_vkDescriptorSetLayout_compute,
-    UID_vkDescriptorSet_compute,
+    UID_vkDescriptorSet_square,
+    UID_vkDescriptorSet_mul2,
     UID_vkPipelineLayout_compute,
     UID_vkPipeline_square,
     UID_vkPipeline_mul2,
@@ -35,9 +36,11 @@ MY_MAIN
         return static_cast<bool>(prop.queueFlags & vk::QueueFlagBits::eCompute);
     };
     CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{UID_vkQueue_compute, queue_picker}}));
-    CHECK_ERR_RET(ctx.createCommandPool(UID_vkCommandPool_compute, UID_vkQueue_compute));
-    CHECK_ERR_RET(ctx.createDescriptorPool(UID_vkDescriptorPool_main, 1,
-                                           {{vk::DescriptorType::eStorageBuffer, 2}}));
+    CHECK_ERR_RET(ctx.createCommandPool(UID_vkCommandPool_compute, UID_vkQueue_compute,
+                                        vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
+                                            vk::CommandPoolCreateFlagBits::eTransient));
+    CHECK_ERR_RET(ctx.createDescriptorPool(UID_vkDescriptorPool_main, 2,
+                                           {{vk::DescriptorType::eStorageBuffer, 4}}));
     CHECK_ERR_RET(ctx.createAllocator());
 
     uint32_t const num_elements = 10;
@@ -71,13 +74,23 @@ MY_MAIN
         }));
 
     CHECK_ERR_RET(ctx.createDescriptorSet(
-        UID_vkDescriptorSet_compute, UID_vkDescriptorSetLayout_compute, UID_vkDescriptorPool_main));
+        UID_vkDescriptorSet_square, UID_vkDescriptorSetLayout_compute, UID_vkDescriptorPool_main));
+
+    CHECK_ERR_RET(ctx.createDescriptorSet(
+        UID_vkDescriptorSet_mul2, UID_vkDescriptorSetLayout_compute, UID_vkDescriptorPool_main));
 
     CHECK_ERR_RET(ctx.updateDescriptorSet(
-        UID_vkDescriptorSet_compute,
+        UID_vkDescriptorSet_square,
         {
             {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
             {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
+        }));
+
+    CHECK_ERR_RET(ctx.updateDescriptorSet(
+        UID_vkDescriptorSet_mul2,
+        {
+            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
+            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
         }));
 
     CHECK_ERR_RET(
@@ -93,38 +106,31 @@ MY_MAIN
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_mul2, UID_vkPipelineLayout_compute,
                                             UID_vkShader_mul2));
 
-    auto submit_square = [&](vk::CommandBuffer& cmd) -> MyErrCode {
+    auto submit_compute = [&ctx](vk::CommandBuffer& cmd) -> MyErrCode {
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_compute)}, {});
+                               {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
         cmd.dispatch(num_elements, 1, 1);
-        return MyErrCode::kOk;
-    };
-    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_square));
 
-    ILOG("a1 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
-    ILOG("b1 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
+        vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite,
+                                  vk::AccessFlagBits::eMemoryRead);
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                            vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{},
+                            barrier, {}, {});
 
-    CHECK_ERR_RET(ctx.updateDescriptorSet(
-        UID_vkDescriptorSet_compute,
-        {
-            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
-            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
-        }));
-
-    auto submit_mul2 = [&](vk::CommandBuffer& cmd) -> MyErrCode {
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_compute)}, {});
+                               {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
         cmd.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     };
-    CHECK_ERR_RET(ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_mul2));
+    CHECK_ERR_RET(
+        ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_compute));
 
-    ILOG("b2 = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
-    ILOG("a2 = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
+    ILOG("a = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
+    ILOG("b = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));
 
     CHECK_ERR_RET(ctx.destroy());
     return MyErrCode::kOk;
