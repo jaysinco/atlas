@@ -932,8 +932,8 @@ MyErrCode Context::destroySwapchain(Uid id)
     }
 }
 
-MyErrCode Context::waitTimelineSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
-                                          uint64_t timeout)
+MyErrCode Context::waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+                                  uint64_t timeout)
 {
     std::vector<vk::Semaphore> sems;
     std::vector<uint64_t> vals;

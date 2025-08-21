@@ -260,8 +260,8 @@ public:
     Swapchain& getSwapchain(Uid id);
 
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
-    MyErrCode waitTimelineSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
-                                     uint64_t timeout = UINT64_MAX);
+    MyErrCode waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+                             uint64_t timeout = UINT64_MAX);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
                      std::vector<WaitSemaphore> const& wait_semaphores = {},
