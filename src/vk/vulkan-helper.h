@@ -111,30 +111,18 @@ private:
     vk::Semaphore sem_;
 };
 
-class WaitSemaphore
+class SemaphoreSubmitInfo
 {
 public:
-    WaitSemaphore(Uid id, vk::PipelineStageFlags stages);
-    WaitSemaphore(Uid id, vk::PipelineStageFlags stages, uint64_t wait_val);
-    WaitSemaphore(Uid id, uint64_t wait_val);
+    SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages);
+    SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages, uint64_t val);
+    SemaphoreSubmitInfo(Uid id, uint64_t val);
 
 private:
     friend class Context;
     Uid id_;
-    vk::PipelineStageFlags stages_;
-    uint64_t wait_val_;
-};
-
-class SignalSemaphore
-{
-public:
-    explicit SignalSemaphore(Uid id);
-    SignalSemaphore(Uid id, uint64_t signal_val);
-
-private:
-    friend class Context;
-    Uid id_;
-    uint64_t signal_val_;
+    vk::PipelineStageFlags2 stages_;
+    uint64_t val_;
 };
 
 class Swapchain
@@ -265,15 +253,15 @@ public:
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
     MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,
                          uint64_t timeout = UINT64_MAX);
-    MyErrCode waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+    MyErrCode waitSemaphores(std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
                              uint64_t timeout = UINT64_MAX);
-    MyErrCode signalSemaphore(SignalSemaphore const& signal_semaphore);
+    MyErrCode signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore);
     MyErrCode recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
                             CmdSubmitter const& submitter);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
-                     std::vector<WaitSemaphore> const& wait_semaphores = {},
-                     std::vector<SignalSemaphore> const& signal_semaphores = {},
+                     std::vector<SemaphoreSubmitInfo> const& wait_semaphores = {},
+                     std::vector<SemaphoreSubmitInfo> const& signal_semaphores = {},
                      Uid fence_id = kUidNull);
 
     MyErrCode destroySurface(Uid id);

@@ -118,11 +118,10 @@ MY_MAIN
                                {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
         cmd.dispatch(num_elements, 1, 1);
 
-        vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite,
-                                  vk::AccessFlagBits::eMemoryRead);
-        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                            vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{},
-                            barrier, {}, {});
+        vk::MemoryBarrier2 barrier(
+            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
+            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderRead);
+        cmd.pipelineBarrier2(vk::DependencyInfo{{}, barrier});
 
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
@@ -136,7 +135,7 @@ MY_MAIN
         UID_vkCommandBuffer_0, vk::CommandBufferUsageFlagBits::eOneTimeSubmit, record_compute));
 
     CHECK_ERR_RET(ctx.submit(UID_vkQueue_compute, UID_vkCommandBuffer_0,
-                             {{UID_vkSemaphore_0, vk::PipelineStageFlagBits::eComputeShader, 1}},
+                             {{UID_vkSemaphore_0, vk::PipelineStageFlagBits2::eComputeShader, 1}},
                              {{UID_vkSemaphore_0, 2}}));
 
     std::this_thread::sleep_for(std::chrono::seconds(1));

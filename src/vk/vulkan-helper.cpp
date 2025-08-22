@@ -69,18 +69,20 @@ Semaphore::operator vk::Semaphore() const { return sem_; }
 
 Semaphore::operator bool() const { return sem_; }
 
-WaitSemaphore::WaitSemaphore(Uid id, vk::PipelineStageFlags stages): id_(id), stages_(stages) {}
-
-WaitSemaphore::WaitSemaphore(Uid id, vk::PipelineStageFlags stages, uint64_t wait_val)
-    : id_(id), stages_(stages), wait_val_(wait_val)
+SemaphoreSubmitInfo::SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages)
+    : id_(id), stages_(stages), val_(0)
 {
 }
 
-WaitSemaphore::WaitSemaphore(Uid id, uint64_t wait_val): id_(id), wait_val_(wait_val) {}
+SemaphoreSubmitInfo::SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages, uint64_t val)
+    : id_(id), stages_(stages), val_(val)
+{
+}
 
-SignalSemaphore::SignalSemaphore(Uid id): id_(id) {}
-
-SignalSemaphore::SignalSemaphore(Uid id, uint64_t signal_val): id_(id), signal_val_(signal_val) {}
+SemaphoreSubmitInfo::SemaphoreSubmitInfo(Uid id, uint64_t val)
+    : id_(id), stages_(vk::PipelineStageFlagBits2::eNone), val_(val)
+{
+}
 
 Swapchain::Swapchain() = default;
 
@@ -376,10 +378,18 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         }
     }
 
-    vk::StructureChain<vk::DeviceCreateInfo, vk::PhysicalDeviceTimelineSemaphoreFeatures> c{
-        vk::DeviceCreateInfo{vk::DeviceCreateFlags(), queue_infos, {}, extensions},
-        vk::PhysicalDeviceTimelineSemaphoreFeatures{true},
-    };
+    vk::PhysicalDeviceVulkan11Features feat_11;
+    vk::PhysicalDeviceVulkan12Features feat_12;
+    vk::PhysicalDeviceVulkan13Features feat_13;
+
+    feat_12.timelineSemaphore = true;
+    feat_13.synchronization2 = true;
+
+    vk::StructureChain<vk::DeviceCreateInfo, vk::PhysicalDeviceVulkan11Features,
+                       vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features>
+        c = {vk::DeviceCreateInfo{vk::DeviceCreateFlags(), queue_infos, {}, extensions}, feat_11,
+             feat_12, feat_13};
+
     device_ = CHECK_VKHPP_VAL(physical_device_.createDevice(c.get<vk::DeviceCreateInfo>()));
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
@@ -977,7 +987,7 @@ MyErrCode Context::waitFences(std::vector<Uid> const& fence_ids, bool wait_all, 
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
+MyErrCode Context::waitSemaphores(std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
                                   uint64_t timeout)
 {
     std::vector<vk::Semaphore> sems;
@@ -989,21 +999,20 @@ MyErrCode Context::waitSemaphores(std::vector<WaitSemaphore> const& wait_semapho
             return MyErrCode::kFailed;
         }
         sems.push_back(sem.sem_);
-        vals.push_back(s.wait_val_);
+        vals.push_back(s.val_);
     }
     CHECK_VKHPP_RET(device_.waitSemaphores({{}, sems, vals}, timeout));
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::signalSemaphore(SignalSemaphore const& signal_semaphore)
+MyErrCode Context::signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore)
 {
     auto& sem = getSemaphore(signal_semaphore.id_);
     if (!sem.isTimeline()) {
         ELOG("semaphore not timeline: {}", signal_semaphore.id_);
         return MyErrCode::kFailed;
     }
-    CHECK_VKHPP_RET(
-        device_.signalSemaphore(vk::SemaphoreSignalInfo{sem, signal_semaphore.signal_val_}));
+    CHECK_VKHPP_RET(device_.signalSemaphore(vk::SemaphoreSignalInfo{sem, signal_semaphore.val_}));
     return MyErrCode::kOk;
 }
 
@@ -1037,34 +1046,23 @@ MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter
 }
 
 MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
-                          std::vector<WaitSemaphore> const& wait_semaphores,
-                          std::vector<SignalSemaphore> const& signal_semaphores, Uid fence_id)
+                          std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
+                          std::vector<SemaphoreSubmitInfo> const& signal_semaphores, Uid fence_id)
 {
-    std::vector<vk::Semaphore> wait_sems;
-    std::vector<vk::PipelineStageFlags> wait_stages;
-    std::vector<uint64_t> wait_sem_vals;
-    std::vector<vk::Semaphore> signal_sems;
-    std::vector<uint64_t> signal_sem_vals;
-
+    std::vector<vk::SemaphoreSubmitInfo> wait_sems;
+    std::vector<vk::SemaphoreSubmitInfo> signal_sems;
     for (auto s: wait_semaphores) {
-        wait_sems.push_back(getSemaphore(s.id_));
-        wait_stages.push_back(s.stages_);
-        wait_sem_vals.push_back(s.wait_val_);
+        wait_sems.emplace_back(getSemaphore(s.id_), s.val_, s.stages_);
     }
     for (auto s: signal_semaphores) {
-        signal_sems.push_back(getSemaphore(s.id_));
-        signal_sem_vals.push_back(s.signal_val_);
+        signal_sems.emplace_back(getSemaphore(s.id_), s.val_, s.stages_);
     }
-
     vk::Queue queue = getQueue(queue_id);
     vk::CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
-
-    vk::StructureChain<vk::SubmitInfo, vk::TimelineSemaphoreSubmitInfo> c{
-        vk::SubmitInfo{wait_sems, wait_stages, command_buffer, signal_sems},
-        vk::TimelineSemaphoreSubmitInfo{wait_sem_vals, signal_sem_vals},
-    };
-    CHECK_VKHPP_RET(queue.submit(c.get<vk::SubmitInfo>(),
-                                 fence_id != kUidNull ? getFence(fence_id) : vk::Fence{}));
+    vk::CommandBufferSubmitInfo cmdbuf_info = {command_buffer};
+    vk::SubmitInfo2 submit_info = {vk::SubmitFlags{}, wait_sems, cmdbuf_info, signal_sems};
+    CHECK_VKHPP_RET(
+        queue.submit2(submit_info, fence_id != kUidNull ? getFence(fence_id) : vk::Fence{}));
     return MyErrCode::kOk;
 }
 

@@ -2,7 +2,7 @@ get_filename_component(CURRENT_DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 set(TARGET_NAME ${CURRENT_DIR_NAME})
 
 set(MYVK_API_VERSION_MAJOR 1)
-set(MYVK_API_VERSION_MINOR 2)
+set(MYVK_API_VERSION_MINOR 3)
 
 ###############################################################################
 # library
