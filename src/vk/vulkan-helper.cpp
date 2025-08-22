@@ -376,8 +376,11 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         }
     }
 
-    device_ = CHECK_VKHPP_VAL(
-        physical_device_.createDevice({vk::DeviceCreateFlags(), queue_infos, {}, extensions}));
+    vk::StructureChain<vk::DeviceCreateInfo, vk::PhysicalDeviceTimelineSemaphoreFeatures> c{
+        vk::DeviceCreateInfo{vk::DeviceCreateFlags(), queue_infos, {}, extensions},
+        vk::PhysicalDeviceTimelineSemaphoreFeatures{true},
+    };
+    device_ = CHECK_VKHPP_VAL(physical_device_.createDevice(c.get<vk::DeviceCreateInfo>()));
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
 
@@ -689,6 +692,38 @@ MyErrCode Context::destroySemaphore(Uid id)
     }
 }
 
+MyErrCode Context::createFence(Uid id, bool init_signaled)
+{
+    if (fences_.find(id) != fences_.end()) {
+        CHECK_ERR_RET(destroyFence(id));
+    }
+    auto fence = CHECK_VKHPP_VAL(device_.createFence(
+        {init_signaled ? vk::FenceCreateFlagBits::eSignaled : vk::FenceCreateFlags{}}));
+    fences_[id] = fence;
+    CHECK_ERR_RET(setDebugObjectId(fence, id));
+    return MyErrCode::kOk;
+}
+
+vk::Fence& Context::getFence(Uid id)
+{
+    if (fences_.find(id) == fences_.end()) {
+        MY_THROW("fence not exist: {}", id);
+    }
+    return fences_.at(id);
+}
+
+MyErrCode Context::destroyFence(Uid id)
+{
+    if (auto it = fences_.find(id); it != fences_.end()) {
+        device_.destroy(it->second);
+        fences_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("fence not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
 MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids)
 {
     if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
@@ -932,21 +967,43 @@ MyErrCode Context::destroySwapchain(Uid id)
     }
 }
 
+MyErrCode Context::waitFences(std::vector<Uid> const& fence_ids, bool wait_all, uint64_t timeout)
+{
+    std::vector<vk::Fence> fences;
+    for (auto id: fence_ids) {
+        fences.push_back(getFence(id));
+    }
+    CHECK_VKHPP_RET(device_.waitForFences(fences, wait_all, timeout));
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
                                   uint64_t timeout)
 {
     std::vector<vk::Semaphore> sems;
     std::vector<uint64_t> vals;
-    for (auto& ws: wait_semaphores) {
-        auto& sem = getSemaphore(ws.id_);
+    for (auto& s: wait_semaphores) {
+        auto& sem = getSemaphore(s.id_);
         if (!sem.isTimeline()) {
-            ELOG("semaphore not timeline: {}", ws.id_);
+            ELOG("semaphore not timeline: {}", s.id_);
             return MyErrCode::kFailed;
         }
         sems.push_back(sem.sem_);
-        vals.push_back(ws.wait_val_);
+        vals.push_back(s.wait_val_);
     }
     CHECK_VKHPP_RET(device_.waitSemaphores({{}, sems, vals}, timeout));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::signalSemaphore(SignalSemaphore const& signal_semaphore)
+{
+    auto& sem = getSemaphore(signal_semaphore.id_);
+    if (!sem.isTimeline()) {
+        ELOG("semaphore not timeline: {}", signal_semaphore.id_);
+        return MyErrCode::kFailed;
+    }
+    CHECK_VKHPP_RET(
+        device_.signalSemaphore(vk::SemaphoreSignalInfo{sem, signal_semaphore.signal_val_}));
     return MyErrCode::kOk;
 }
 
@@ -964,20 +1021,46 @@ MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter
     CHECK_VKHPP_RET(command_buffer.end());
 
     vk::Queue queue = getQueue(queue_id);
-    CHECK_VKHPP_RET(queue.submit(vk::SubmitInfo{0, nullptr, nullptr, 1, &command_buffer}, nullptr));
+    CHECK_VKHPP_RET(queue.submit(vk::SubmitInfo{{}, {}, command_buffer}, nullptr));
     CHECK_VKHPP_RET(queue.waitIdle());
     return MyErrCode::kOk;
 }
 
 MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
                           std::vector<WaitSemaphore> const& wait_semaphores,
-                          std::vector<SignalSemaphore> const& signal_semaphores)
+                          std::vector<SignalSemaphore> const& signal_semaphores, Uid fence_id)
 {
+    std::vector<vk::Semaphore> wait_sems;
+    std::vector<vk::PipelineStageFlags> wait_stages;
+    std::vector<uint64_t> wait_sem_vals;
+    std::vector<vk::Semaphore> signal_sems;
+    std::vector<uint64_t> signal_sem_vals;
+
+    for (auto s: wait_semaphores) {
+        wait_sems.push_back(getSemaphore(s.id_));
+        wait_stages.push_back(s.stages_);
+        wait_sem_vals.push_back(s.wait_val_);
+    }
+    for (auto s: signal_semaphores) {
+        signal_sems.push_back(getSemaphore(s.id_));
+        signal_sem_vals.push_back(s.signal_val_);
+    }
+
+    vk::Queue queue = getQueue(queue_id);
+    vk::CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+
+    vk::StructureChain<vk::SubmitInfo, vk::TimelineSemaphoreSubmitInfo> c{
+        vk::SubmitInfo{wait_sems, wait_stages, command_buffer, signal_sems},
+        vk::TimelineSemaphoreSubmitInfo{wait_sem_vals, signal_sem_vals},
+    };
+    CHECK_VKHPP_RET(queue.submit(c.get<vk::SubmitInfo>(),
+                                 fence_id != kUidNull ? getFence(fence_id) : vk::Fence{}));
     return MyErrCode::kOk;
 }
 
 MyErrCode Context::destroy()
 {
+    CHECK_VKHPP_RET(device_.waitIdle());
     while (!swapchains_.empty()) {
         CHECK_ERR_RET(destroySwapchain(swapchains_.begin()->first));
     }
@@ -989,6 +1072,9 @@ MyErrCode Context::destroy()
     }
     while (!descriptor_set_layouts_.empty()) {
         CHECK_ERR_RET(destroyDescriptorSetLayout(descriptor_set_layouts_.begin()->first));
+    }
+    while (!fences_.empty()) {
+        CHECK_ERR_RET(destroyFence(fences_.begin()->first));
     }
     while (!semaphores_.empty()) {
         CHECK_ERR_RET(destroySemaphore(semaphores_.begin()->first));

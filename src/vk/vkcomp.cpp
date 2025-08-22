@@ -2,6 +2,7 @@
 #include "toolkit/toolkit.h"
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
+#include <thread>
 
 // NOLINTBEGIN
 enum AppUid : int
@@ -19,6 +20,8 @@ enum AppUid : int
     UID_vkPipelineLayout_compute,
     UID_vkPipeline_square,
     UID_vkPipeline_mul2,
+    UID_vkCommandBuffer_0,
+    UID_vkSemaphore_0,
 };
 
 // NOLINTEND
@@ -62,10 +65,6 @@ MY_MAIN
     int32_t* b_buffer_data =
         reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_b).getAllocInfo().pMappedData);
 
-    for (int32_t i = 0; i < num_elements; ++i) {
-        a_buffer_data[i] = i;
-    }
-
     CHECK_ERR_RET(ctx.createDescriptorSetLayout(
         UID_vkDescriptorSetLayout_compute,
         {
@@ -106,28 +105,39 @@ MY_MAIN
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_mul2, UID_vkPipelineLayout_compute,
                                             UID_vkShader_mul2));
 
-    auto submit_compute = [&ctx](vk::CommandBuffer& cmd) -> MyErrCode {
-        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
-        cmd.dispatch(num_elements, 1, 1);
+    CHECK_ERR_RET(ctx.createTimelineSemaphore(UID_vkSemaphore_0, 0));
+    CHECK_ERR_RET(ctx.createCommandBuffer(UID_vkCommandBuffer_0, UID_vkCommandPool_compute));
 
-        vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite,
-                                  vk::AccessFlagBits::eMemoryRead);
-        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                            vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{},
-                            barrier, {}, {});
+    vk::CommandBuffer cmd = ctx.getCommandBuffer(UID_vkCommandBuffer_0);
+    CHECK_VKHPP_RET(cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}));
+    cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                           ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
+                           {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
+    cmd.dispatch(num_elements, 1, 1);
 
-        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
-        cmd.dispatch(num_elements, 1, 1);
-        return MyErrCode::kOk;
-    };
-    CHECK_ERR_RET(
-        ctx.oneTimeSubmit(UID_vkQueue_compute, UID_vkCommandPool_compute, submit_compute));
+    vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
+    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                        vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{}, barrier,
+                        {}, {});
+
+    cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                           ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
+                           {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
+    cmd.dispatch(num_elements, 1, 1);
+    CHECK_VKHPP_RET(cmd.end());
+    CHECK_ERR_RET(ctx.submit(UID_vkQueue_compute, UID_vkCommandBuffer_0,
+                             {{UID_vkSemaphore_0, vk::PipelineStageFlagBits::eComputeShader, 1}},
+                             {{UID_vkSemaphore_0, 2}}));
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    for (int32_t i = 0; i < num_elements; ++i) {
+        a_buffer_data[i] = i;
+    }
+
+    CHECK_ERR_RET(ctx.signalSemaphore({UID_vkSemaphore_0, 1}));
+    CHECK_ERR_RET(ctx.waitSemaphores({{UID_vkSemaphore_0, 2}}));
 
     ILOG("a = [{}]", fmt::join(a_buffer_data, a_buffer_data + num_elements, ", "));
     ILOG("b = [{}]", fmt::join(b_buffer_data, b_buffer_data + num_elements, ", "));

@@ -35,6 +35,7 @@ namespace myvk
 {
 
 using Uid = int;
+constexpr Uid kUidNull = INT32_MIN;
 
 using DeviceRater =
     std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
@@ -230,7 +231,8 @@ public:
                           VmaAllocationCreateFlags flags);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
-    MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val = 0);
+    MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val);
+    MyErrCode createFence(Uid id, bool init_signaled = false);
     MyErrCode createShaderModule(Uid id, std::filesystem::path const& file_path);
     MyErrCode createDescriptorSetLayout(Uid id,
                                         std::vector<DescriptorSetLayoutBinding> const& bindings);
@@ -252,6 +254,7 @@ public:
     Image& getImage(Uid id);
     CommandBuffer& getCommandBuffer(Uid id);
     Semaphore& getSemaphore(Uid id);
+    vk::Fence& getFence(Uid id);
     vk::ShaderModule& getShaderModule(Uid id);
     vk::DescriptorSetLayout& getDescriptorSetLayout(Uid id);
     vk::PipelineLayout& getPipelineLayout(Uid id);
@@ -260,12 +263,16 @@ public:
     Swapchain& getSwapchain(Uid id);
 
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
+    MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,
+                         uint64_t timeout = UINT64_MAX);
     MyErrCode waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
                              uint64_t timeout = UINT64_MAX);
+    MyErrCode signalSemaphore(SignalSemaphore const& signal_semaphore);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
                      std::vector<WaitSemaphore> const& wait_semaphores = {},
-                     std::vector<SignalSemaphore> const& signal_semaphores = {});
+                     std::vector<SignalSemaphore> const& signal_semaphores = {},
+                     Uid fence_id = kUidNull);
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);
@@ -274,6 +281,7 @@ public:
     MyErrCode destroyImage(Uid id);
     MyErrCode destroyCommandBuffer(Uid id);
     MyErrCode destroySemaphore(Uid id);
+    MyErrCode destroyFence(Uid id);
     MyErrCode destroyShaderModule(Uid id);
     MyErrCode destroyDescriptorSetLayout(Uid id);
     MyErrCode destroyPipelineLayout(Uid id);
@@ -288,7 +296,6 @@ public:
 protected:
     template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
     MyErrCode setDebugObjectId(T obj, Uid id);
-
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
     static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
 
@@ -307,6 +314,7 @@ private:
     std::map<Uid, Image> images_;
     std::map<Uid, CommandBuffer> command_buffers_;
     std::map<Uid, Semaphore> semaphores_;
+    std::map<Uid, vk::Fence> fences_;
     std::map<Uid, vk::ShaderModule> shader_modules_;
     std::map<Uid, vk::PipelineLayout> pipeline_layouts_;
     std::map<Uid, vk::Pipeline> pipelines_;
