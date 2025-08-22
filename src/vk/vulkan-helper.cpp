@@ -1040,7 +1040,8 @@ MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter
     CHECK_VKHPP_RET(command_buffer.end());
 
     vk::Queue queue = getQueue(queue_id);
-    CHECK_VKHPP_RET(queue.submit(vk::SubmitInfo{{}, {}, command_buffer}, nullptr));
+    vk::CommandBufferSubmitInfo cmdbuf_info{command_buffer};
+    CHECK_VKHPP_RET(queue.submit2(vk::SubmitInfo2{vk::SubmitFlags{}, {}, cmdbuf_info}, {}));
     CHECK_VKHPP_RET(queue.waitIdle());
     return MyErrCode::kOk;
 }
