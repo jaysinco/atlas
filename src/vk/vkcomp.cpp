@@ -94,6 +94,7 @@ MY_MAIN
 
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_square, toolkit::getDataDir() / "square.glsl.spv"));
+
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_mul2, toolkit::getDataDir() / "mul2.glsl.spv"));
 
@@ -102,31 +103,38 @@ MY_MAIN
 
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_square, UID_vkPipelineLayout_compute,
                                             UID_vkShader_square));
+
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_mul2, UID_vkPipelineLayout_compute,
                                             UID_vkShader_mul2));
 
     CHECK_ERR_RET(ctx.createTimelineSemaphore(UID_vkSemaphore_0, 0));
+
     CHECK_ERR_RET(ctx.createCommandBuffer(UID_vkCommandBuffer_0, UID_vkCommandPool_compute));
 
-    vk::CommandBuffer cmd = ctx.getCommandBuffer(UID_vkCommandBuffer_0);
-    CHECK_VKHPP_RET(cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}));
-    cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                           ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                           {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
-    cmd.dispatch(num_elements, 1, 1);
+    auto record_compute = [&ctx](vk::CommandBuffer& cmd) -> MyErrCode {
+        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
+                               {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
+        cmd.dispatch(num_elements, 1, 1);
 
-    vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
-    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                        vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{}, barrier,
-                        {}, {});
+        vk::MemoryBarrier barrier(vk::AccessFlagBits::eMemoryWrite,
+                                  vk::AccessFlagBits::eMemoryRead);
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                            vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlags{},
+                            barrier, {}, {});
 
-    cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                           ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                           {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
-    cmd.dispatch(num_elements, 1, 1);
-    CHECK_VKHPP_RET(cmd.end());
+        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
+                               {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
+        cmd.dispatch(num_elements, 1, 1);
+        return MyErrCode::kOk;
+    };
+
+    CHECK_ERR_RET(ctx.recordCommand(
+        UID_vkCommandBuffer_0, vk::CommandBufferUsageFlagBits::eOneTimeSubmit, record_compute));
+
     CHECK_ERR_RET(ctx.submit(UID_vkQueue_compute, UID_vkCommandBuffer_0,
                              {{UID_vkSemaphore_0, vk::PipelineStageFlagBits::eComputeShader, 1}},
                              {{UID_vkSemaphore_0, 2}}));

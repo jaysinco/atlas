@@ -1007,6 +1007,16 @@ MyErrCode Context::signalSemaphore(SignalSemaphore const& signal_semaphore)
     return MyErrCode::kOk;
 }
 
+MyErrCode Context::recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
+                                 CmdSubmitter const& submitter)
+{
+    vk::CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+    CHECK_VKHPP_RET(command_buffer.begin({usage}));
+    CHECK_ERR_RET(submitter(command_buffer));
+    CHECK_VKHPP_RET(command_buffer.end());
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter)
 {
     auto& command_pool = getCommandPool(command_pool_id);

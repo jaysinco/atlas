@@ -268,6 +268,8 @@ public:
     MyErrCode waitSemaphores(std::vector<WaitSemaphore> const& wait_semaphores,
                              uint64_t timeout = UINT64_MAX);
     MyErrCode signalSemaphore(SignalSemaphore const& signal_semaphore);
+    MyErrCode recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
+                            CmdSubmitter const& submitter);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
                      std::vector<WaitSemaphore> const& wait_semaphores = {},
