@@ -395,7 +395,8 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
 
     for (auto& [id, family_index]: family_indices) {
-        ILOG("Queue[{}] Flags: {}", id, vk::to_string(family_props[family_index].queueFlags));
+        ILOG("Queue[{}] Flags: {} {}", id, vk::to_string(family_props[family_index].queueFlags),
+             family_index);
         auto queue = device_.getQueue(family_index, 0);
         queues_[id] = {queue, family_index};
         CHECK_ERR_RET(setDebugObjectId(queue, id));
@@ -734,7 +735,8 @@ MyErrCode Context::destroyFence(Uid id)
     }
 }
 
-MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids)
+MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids,
+                                        std::vector<vk::PushConstantRange> const& push_ranges)
 {
     if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
         CHECK_ERR_RET(destroyPipelineLayout(id));
@@ -743,7 +745,8 @@ MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layo
     for (auto id: set_layout_ids) {
         set_layouts.push_back(getDescriptorSetLayout(id));
     }
-    pipeline_layouts_[id] = CHECK_VKHPP_VAL(device_.createPipelineLayout({{}, set_layouts}));
+    pipeline_layouts_[id] =
+        CHECK_VKHPP_VAL(device_.createPipelineLayout({{}, set_layouts, push_ranges}));
     CHECK_ERR_RET(setDebugObjectId(pipeline_layouts_[id], id));
     return MyErrCode::kOk;
 }

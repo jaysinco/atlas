@@ -3,6 +3,7 @@
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
 #include <thread>
+#include <glm/glm.hpp>
 
 // NOLINTBEGIN
 enum AppUid : int
@@ -25,6 +26,11 @@ enum AppUid : int
 };
 
 // NOLINTEND
+
+struct PushConstants
+{
+    glm::ivec4 data;
+};
 
 MY_MAIN
 {
@@ -98,8 +104,9 @@ MY_MAIN
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_mul2, toolkit::getDataDir() / "mul2.glsl.spv"));
 
-    CHECK_ERR_RET(ctx.createPipelineLayout(UID_vkPipelineLayout_compute,
-                                           {UID_vkDescriptorSetLayout_compute}));
+    CHECK_ERR_RET(ctx.createPipelineLayout(
+        UID_vkPipelineLayout_compute, {UID_vkDescriptorSetLayout_compute},
+        {vk::PushConstantRange{vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants)}}));
 
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_square, UID_vkPipelineLayout_compute,
                                             UID_vkShader_square));
@@ -111,7 +118,14 @@ MY_MAIN
 
     CHECK_ERR_RET(ctx.createCommandBuffer(UID_vkCommandBuffer_0, UID_vkCommandPool_compute));
 
-    auto record_compute = [&ctx](vk::CommandBuffer& cmd) -> MyErrCode {
+    PushConstants contants;
+    contants.data.x = 3;
+    contants.data.y = 1;
+
+    auto record_compute = [&](vk::CommandBuffer& cmd) -> MyErrCode {
+        cmd.pushConstants(ctx.getPipelineLayout(UID_vkPipelineLayout_compute),
+                          vk::ShaderStageFlagBits::eCompute, 0, sizeof(contants), &contants);
+
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
                                ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
