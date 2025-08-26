@@ -12,18 +12,86 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace myvk
 {
 
-Buffer::Buffer() = default;
+Uid const Uid::kNull = INT32_MIN;
+int Uid::temp_id = INT32_MIN + 1000;
 
-Buffer::Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator)
-    : size_(size), buf_(buf), alloc_(alloc), allocator_(allocator)
+Uid Uid::temp()
+{
+    if (temp_id >= -1000) {
+        temp_id = INT32_MIN + 1000;
+    }
+    ++temp_id;
+    return temp_id;
+}
+
+Uid::Uid(int id): id_(id) {}
+
+bool Uid::operator<(Uid rhs) const { return id_ < rhs.id_; }
+
+bool Uid::operator==(Uid rhs) const { return id_ == rhs.id_; }
+
+bool Uid::operator!=(Uid rhs) const { return id_ != rhs.id_; }
+
+std::string Uid::toStr() const { return FSTR("#{}", id_); }
+
+Allocation::Allocation() = default;
+
+Allocation::Allocation(VmaAllocation alloc, VmaAllocator allocator)
+    : alloc_(alloc), allocator_(allocator)
 {
 }
 
-VmaAllocationInfo Buffer::getAllocInfo() const
+VmaAllocationInfo Allocation::getAllocInfo() const
 {
     VmaAllocationInfo alloc_info = {};
     vmaGetAllocationInfo(allocator_, alloc_, &alloc_info);
     return alloc_info;
+}
+
+vk::MemoryPropertyFlags Allocation::getMemProp() const
+{
+    VkMemoryPropertyFlags flags;
+    vmaGetAllocationMemoryProperties(allocator_, alloc_, &flags);
+    return static_cast<vk::MemoryPropertyFlags>(flags);
+}
+
+bool Allocation::canBeMapped() const
+{
+    return static_cast<bool>(getMemProp() & vk::MemoryPropertyFlagBits::eHostVisible);
+}
+
+bool Allocation::isMapped() const { return getAllocInfo().pMappedData != nullptr; }
+
+void* Allocation::map()
+{
+    void* data = nullptr;
+    if (auto err = vmaMapMemory(allocator_, alloc_, &data); err != VK_SUCCESS) {
+        MY_THROW("failed to map memory: {}", err);
+    }
+    return data;
+}
+
+void Allocation::unmap() { vmaUnmapMemory(allocator_, alloc_); }
+
+void Allocation::invalid(vk::DeviceSize offset, vk::DeviceSize size)
+{
+    if (auto err = vmaInvalidateAllocation(allocator_, alloc_, offset, size); err != VK_SUCCESS) {
+        MY_THROW("failed to invalidate memory: {}", err);
+    }
+}
+
+void Allocation::flush(vk::DeviceSize offset, vk::DeviceSize size)
+{
+    if (auto err = vmaFlushAllocation(allocator_, alloc_, offset, size); err != VK_SUCCESS) {
+        MY_THROW("failed to invalidate memory: {}", err);
+    }
+}
+
+Buffer::Buffer() = default;
+
+Buffer::Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator)
+    : size_(size), buf_(buf), Allocation(alloc, allocator)
+{
 }
 
 uint64_t Buffer::getSize() const { return size_; }
@@ -36,12 +104,7 @@ Image::Image() = default;
 
 Image::Image(vk::Format format, vk::Extent2D extent, vk::Image img, vk::ImageView img_view,
              VmaAllocation alloc, VmaAllocator allocator)
-    : format_(format),
-      extent_(extent),
-      img_(img),
-      img_view_(img_view),
-      alloc_(alloc),
-      allocator_(allocator)
+    : format_(format), extent_(extent), img_(img), img_view_(img_view), Allocation(alloc, allocator)
 {
 }
 
@@ -196,7 +259,7 @@ vk::Instance& Context::getInstance() { return instance_; }
 template <typename T, typename>
 MyErrCode Context::setDebugObjectId(T obj, Uid id)
 {
-    std::string name = FSTR("UID #{}", id);
+    std::string name = FSTR("{}", id);
     CHECK_VKHPP_RET(device_.setDebugUtilsObjectNameEXT(vk::DebugUtilsObjectNameInfoEXT(
         T::objectType, reinterpret_cast<uint64_t>(static_cast<typename T::CType>(obj)),
         name.c_str())));
@@ -244,16 +307,16 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
 
     // basic device
     DLOG("====== Vulkan Device Information ======");
-    ILOG("Device Name: {}", device_props.deviceName);
+    DLOG("Device Name: {}", device_props.deviceName);
     DLOG("Device ID: 0x{:x}", device_props.deviceID);
     DLOG("Vendor ID: 0x{:x}", device_props.vendorID);
-    ILOG("Device Type: {}", vk::to_string(device_props.deviceType));
+    DLOG("Device Type: {}", vk::to_string(device_props.deviceType));
     DLOG("Driver Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.driverVersion),
          VK_VERSION_MINOR(device_props.driverVersion),
          VK_VERSION_PATCH(device_props.driverVersion));
-    ILOG("Vulkan API Device Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
+    DLOG("Vulkan API Device Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.apiVersion),
          VK_VERSION_MINOR(device_props.apiVersion), VK_VERSION_PATCH(device_props.apiVersion));
-    ILOG("Vulkan API App Version: {}.{}.{}", VK_VERSION_MAJOR(MYVK_API_VERSION),
+    DLOG("Vulkan API App Version: {}.{}.{}", VK_VERSION_MAJOR(MYVK_API_VERSION),
          VK_VERSION_MINOR(MYVK_API_VERSION), VK_VERSION_PATCH(MYVK_API_VERSION));
 
     // pipeline
@@ -395,11 +458,11 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device_);
 
     for (auto& [id, family_index]: family_indices) {
-        ILOG("Queue[{}] Flags: {} {}", id, vk::to_string(family_props[family_index].queueFlags),
-             family_index);
         auto queue = device_.getQueue(family_index, 0);
         queues_[id] = {queue, family_index};
         CHECK_ERR_RET(setDebugObjectId(queue, id));
+        DLOG("create queue {}: family {}, {}", id, family_index,
+             vk::to_string(family_props[family_index].queueFlags));
     }
 
     return MyErrCode::kOk;
@@ -547,6 +610,7 @@ MyErrCode Context::createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usag
 
     buffers_[id] = {size, buf, alloc, allocator_};
     CHECK_ERR_RET(setDebugObjectId(buffers_[id].buf_, id));
+    DLOG("create buffer {}: {} bytes, {}", id, size, vk::to_string(buffers_[id].getMemProp()));
     return MyErrCode::kOk;
 }
 
@@ -980,6 +1044,13 @@ MyErrCode Context::destroySwapchain(Uid id)
     }
 }
 
+MyErrCode Context::waitQueueIdle(Uid queue_id)
+{
+    vk::Queue queue = getQueue(queue_id);
+    CHECK_VKHPP_RET(queue.waitIdle());
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::waitFences(std::vector<Uid> const& fence_ids, bool wait_all, uint64_t timeout)
 {
     std::vector<vk::Fence> fences;
@@ -1031,21 +1102,13 @@ MyErrCode Context::recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFl
 
 MyErrCode Context::oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter)
 {
-    auto& command_pool = getCommandPool(command_pool_id);
-    auto command_buffers = CHECK_VKHPP_VAL(
-        device_.allocateCommandBuffers({command_pool, vk::CommandBufferLevel::ePrimary, 1}));
-    auto command_buffers_guard =
-        toolkit::scopeExit([&] { device_.freeCommandBuffers(command_pool, command_buffers); });
-
-    auto& command_buffer = command_buffers.front();
-    CHECK_VKHPP_RET(command_buffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}));
-    CHECK_ERR_RET(submitter(command_buffer));
-    CHECK_VKHPP_RET(command_buffer.end());
-
-    vk::Queue queue = getQueue(queue_id);
-    vk::CommandBufferSubmitInfo cmdbuf_info{command_buffer};
-    CHECK_VKHPP_RET(queue.submit2(vk::SubmitInfo2{vk::SubmitFlags{}, {}, cmdbuf_info}, {}));
-    CHECK_VKHPP_RET(queue.waitIdle());
+    Uid command_buffer_id = Uid::temp();
+    CHECK_ERR_RET(createCommandBuffer(command_buffer_id, command_pool_id));
+    CHECK_ERR_RET(recordCommand(command_buffer_id, vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+                                submitter));
+    CHECK_ERR_RET(submit(queue_id, command_buffer_id));
+    CHECK_ERR_RET(waitQueueIdle(queue_id));
+    CHECK_ERR_RET(destroyCommandBuffer(command_buffer_id));
     return MyErrCode::kOk;
 }
 
@@ -1066,7 +1129,7 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
     vk::CommandBufferSubmitInfo cmdbuf_info = {command_buffer};
     vk::SubmitInfo2 submit_info = {vk::SubmitFlags{}, wait_sems, cmdbuf_info, signal_sems};
     CHECK_VKHPP_RET(
-        queue.submit2(submit_info, fence_id != kUidNull ? getFence(fence_id) : vk::Fence{}));
+        queue.submit2(submit_info, fence_id != Uid::kNull ? getFence(fence_id) : vk::Fence{}));
     return MyErrCode::kOk;
 }
 

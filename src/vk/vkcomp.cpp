@@ -57,19 +57,15 @@ MY_MAIN
 
     CHECK_ERR_RET(ctx.createBuffer(
         UID_vkBuffer_a, buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT));
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
 
     CHECK_ERR_RET(ctx.createBuffer(
         UID_vkBuffer_b, buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT));
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
 
-    int32_t* a_buffer_data =
-        reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_a).getAllocInfo().pMappedData);
+    int32_t* a_buffer_data = reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_a).map());
 
-    int32_t* b_buffer_data =
-        reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_b).getAllocInfo().pMappedData);
+    int32_t* b_buffer_data = reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_b).map());
 
     CHECK_ERR_RET(ctx.createDescriptorSetLayout(
         UID_vkDescriptorSetLayout_compute,

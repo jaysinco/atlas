@@ -34,9 +34,6 @@
 namespace myvk
 {
 
-using Uid = int;
-constexpr Uid kUidNull = INT32_MIN;
-
 using DeviceRater =
     std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
 
@@ -44,12 +41,47 @@ using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyPro
 
 using CmdSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
 
-class Buffer
+class Uid
+{
+public:
+    Uid(int id);
+    bool operator<(Uid rhs) const;
+    bool operator==(Uid rhs) const;
+    bool operator!=(Uid rhs) const;
+    std::string toStr() const;
+    static Uid const kNull;
+    static Uid temp();
+
+private:
+    int id_;
+    static int temp_id;
+};
+
+class Allocation
+{
+public:
+    Allocation();
+    Allocation(VmaAllocation alloc, VmaAllocator allocator);
+    vk::MemoryPropertyFlags getMemProp() const;
+    VmaAllocationInfo getAllocInfo() const;
+    bool canBeMapped() const;
+    bool isMapped() const;
+    void* map();
+    void unmap();
+    void invalid(vk::DeviceSize offset = 0, vk::DeviceSize size = vk::WholeSize);
+    void flush(vk::DeviceSize offset = 0, vk::DeviceSize size = vk::WholeSize);
+
+private:
+    friend class Context;
+    VmaAllocation alloc_;
+    VmaAllocator allocator_;
+};
+
+class Buffer: public Allocation
 {
 public:
     Buffer();
     Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator);
-    VmaAllocationInfo getAllocInfo() const;
     uint64_t getSize() const;
     operator vk::Buffer() const;
     operator bool() const;
@@ -58,11 +90,10 @@ private:
     friend class Context;
     uint64_t size_;
     vk::Buffer buf_;
-    VmaAllocation alloc_;
-    VmaAllocator allocator_;
 };
 
-class Image
+class Image: public Allocation
+
 {
 public:
     Image();
@@ -78,8 +109,6 @@ private:
     vk::Extent2D extent_;
     vk::Image img_;
     vk::ImageView img_view_;
-    VmaAllocation alloc_;
-    VmaAllocator allocator_;
 };
 
 class CommandBuffer
@@ -211,12 +240,12 @@ public:
     MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
                                    std::map<vk::DescriptorType, uint32_t> const& size);
     MyErrCode createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usage,
-                           vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags);
+                           vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags = 0);
     MyErrCode createImage(Uid id, vk::Format format, vk::Extent2D extent, vk::ImageTiling tiling,
                           vk::ImageLayout initial_layout, uint32_t mip_levels,
                           vk::SampleCountFlagBits num_samples, vk::ImageAspectFlags aspect_mask,
                           vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
-                          VmaAllocationCreateFlags flags);
+                          VmaAllocationCreateFlags flags = 0);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
     MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val);
@@ -251,7 +280,12 @@ public:
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
 
+    MyErrCode copyBufferToBuffer(Uid dst_buf, Uid src_buf);
+    MyErrCode copyBufferToImage(Uid dst_img, Uid src_img);
+    MyErrCode copyHostToBuffer(Uid dst_buf, void const* src_host);
+    MyErrCode copyHostToImage(Uid dst_img, void const* src_host);
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
+    MyErrCode waitQueueIdle(Uid queue_id);
     MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,
                          uint64_t timeout = UINT64_MAX);
     MyErrCode waitSemaphores(std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
@@ -263,7 +297,7 @@ public:
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
                      std::vector<SemaphoreSubmitInfo> const& wait_semaphores = {},
                      std::vector<SemaphoreSubmitInfo> const& signal_semaphores = {},
-                     Uid fence_id = kUidNull);
+                     Uid fence_id = Uid::kNull);
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);
