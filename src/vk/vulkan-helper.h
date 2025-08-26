@@ -4,9 +4,32 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.h>
-#include "toolkit/format.h"
 #include <map>
 #include <functional>
+
+namespace toolkit
+{
+
+template <typename T, typename = void>
+struct CanVkToString: std::false_type
+{
+};
+
+template <typename T>
+struct CanVkToString<T, std::void_t<decltype(vk::to_string(std::declval<T>()))>>
+    : std::is_same<decltype(vk::to_string(std::declval<T>())), std::string>
+{
+};
+
+template <typename T>
+std::enable_if_t<CanVkToString<T>::value, std::string> toFormattable(T&& arg)
+{
+    return vk::to_string(std::forward<T>(arg));
+}
+
+}  // namespace toolkit
+
+#include "toolkit/format.h"
 
 #define CHECK_VK_RET(err)                            \
     do {                                             \
@@ -16,12 +39,12 @@
         }                                            \
     } while (0)
 
-#define CHECK_VKHPP_RET(err)                                    \
-    do {                                                        \
-        if (auto _err = (err); _err != vk::Result::eSuccess) {  \
-            ELOG("failed to call vk: {}", vk::to_string(_err)); \
-            return MyErrCode::kFailed;                          \
-        }                                                       \
+#define CHECK_VKHPP_RET(err)                                   \
+    do {                                                       \
+        if (auto _err = (err); _err != vk::Result::eSuccess) { \
+            ELOG("failed to call vk: {}", _err);               \
+            return MyErrCode::kFailed;                         \
+        }                                                      \
     } while (0)
 
 #define CHECK_VKHPP_VAL(err)                                  \
@@ -97,8 +120,11 @@ class Image: public Allocation
 {
 public:
     Image();
-    Image(vk::Format format, vk::Extent2D extent, vk::Image img, vk::ImageView img_view,
-          VmaAllocation alloc, VmaAllocator allocator);
+    Image(vk::Format format, vk::Extent2D extent, vk::ImageLayout layout, uint32_t mip_levels,
+          vk::Image img, vk::ImageView img_view, VmaAllocation alloc, VmaAllocator allocator);
+    uint64_t getSize() const;
+    vk::ImageLayout getLayout() const;
+    void setLayout(vk::ImageLayout layout);
     operator vk::Image() const;
     operator vk::ImageView() const;
     operator bool() const;
@@ -107,6 +133,8 @@ private:
     friend class Context;
     vk::Format format_;
     vk::Extent2D extent_;
+    vk::ImageLayout layout_;
+    uint32_t mip_levels_;
     vk::Image img_;
     vk::ImageView img_view_;
 };
@@ -280,10 +308,14 @@ public:
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
 
-    MyErrCode copyBufferToBuffer(Uid dst_buf, Uid src_buf);
-    MyErrCode copyBufferToImage(Uid dst_img, Uid src_img);
-    MyErrCode copyHostToBuffer(Uid dst_buf, void const* src_host);
-    MyErrCode copyHostToImage(Uid dst_img, void const* src_host);
+    MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id, Uid src_buf_id);
+    MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id, Uid src_buf_id);
+    MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
+                               void const* src_host);
+    MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
+                              void const* src_host);
+    MyErrCode transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
+                                    vk::ImageLayout new_layout);
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
     MyErrCode waitQueueIdle(Uid queue_id);
     MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,

@@ -1,6 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 #include "vulkan-helper.h"
+#include <vulkan/vulkan_format_traits.hpp>
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
 #include <set>
@@ -102,11 +103,27 @@ Buffer::operator bool() const { return buf_; }
 
 Image::Image() = default;
 
-Image::Image(vk::Format format, vk::Extent2D extent, vk::Image img, vk::ImageView img_view,
-             VmaAllocation alloc, VmaAllocator allocator)
-    : format_(format), extent_(extent), img_(img), img_view_(img_view), Allocation(alloc, allocator)
+Image::Image(vk::Format format, vk::Extent2D extent, vk::ImageLayout layout, uint32_t mip_levels,
+             vk::Image img, vk::ImageView img_view, VmaAllocation alloc, VmaAllocator allocator)
+    : format_(format),
+      extent_(extent),
+      layout_(layout),
+      mip_levels_(mip_levels),
+      img_(img),
+      img_view_(img_view),
+      Allocation(alloc, allocator)
 {
 }
+
+uint64_t Image::getSize() const
+{
+    int block_size = vk::blockSize(format_);
+    return block_size * extent_.width * extent_.height;
+}
+
+vk::ImageLayout Image::getLayout() const { return layout_; }
+
+void Image::setLayout(vk::ImageLayout layout) { layout_ = layout; }
 
 Image::operator vk::Image() const { return img_; }
 
@@ -310,7 +327,7 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
     DLOG("Device Name: {}", device_props.deviceName);
     DLOG("Device ID: 0x{:x}", device_props.deviceID);
     DLOG("Vendor ID: 0x{:x}", device_props.vendorID);
-    DLOG("Device Type: {}", vk::to_string(device_props.deviceType));
+    DLOG("Device Type: {}", device_props.deviceType);
     DLOG("Driver Version: {}.{}.{}", VK_VERSION_MAJOR(device_props.driverVersion),
          VK_VERSION_MINOR(device_props.driverVersion),
          VK_VERSION_PATCH(device_props.driverVersion));
@@ -337,15 +354,13 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
     DLOG("Memory Heaps: {}", memory_props.memoryHeapCount);
     for (uint32_t i = 0; i < memory_props.memoryHeapCount; ++i) {
         auto const& heap = memory_props.memoryHeaps[i];
-        DLOG("  Heap {}: Size = {} MB, Flags = {}", i, heap.size / (1024 * 1024),
-             vk::to_string(heap.flags));
+        DLOG("  Heap {}: Size = {} MB, Flags = {}", i, heap.size / (1024 * 1024), heap.flags);
     }
 
     DLOG("Memory Types:");
     for (uint32_t i = 0; i < memory_props.memoryTypeCount; ++i) {
         auto const& type = memory_props.memoryTypes[i];
-        DLOG("  Type {}: Heap Index = {}, Flags = {}", i, type.heapIndex,
-             vk::to_string(type.propertyFlags));
+        DLOG("  Type {}: Heap Index = {}, Flags = {}", i, type.heapIndex, type.propertyFlags);
     }
 
     // queue
@@ -354,7 +369,7 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
         auto const& queue = queue_families[i];
         DLOG("Queue Family {}:", i);
         DLOG("  Queue Count: {}", queue.queueCount);
-        DLOG("  Queue Flags: {}", vk::to_string(queue.queueFlags));
+        DLOG("  Queue Flags: {}", queue.queueFlags);
         DLOG("  Timestamp Valid Bits: {}", queue.timestampValidBits);
         DLOG("  Min Image Transfer Granularity: {}x{}x{}", queue.minImageTransferGranularity.width,
              queue.minImageTransferGranularity.height, queue.minImageTransferGranularity.depth);
@@ -462,7 +477,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         queues_[id] = {queue, family_index};
         CHECK_ERR_RET(setDebugObjectId(queue, id));
         DLOG("create queue {}: family {}, {}", id, family_index,
-             vk::to_string(family_props[family_index].queueFlags));
+             family_props[family_index].queueFlags);
     }
 
     return MyErrCode::kOk;
@@ -610,7 +625,7 @@ MyErrCode Context::createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usag
 
     buffers_[id] = {size, buf, alloc, allocator_};
     CHECK_ERR_RET(setDebugObjectId(buffers_[id].buf_, id));
-    DLOG("create buffer {}: {} bytes, {}", id, size, vk::to_string(buffers_[id].getMemProp()));
+    DLOG("create buffer {}: {} bytes, {}", id, size, buffers_[id].getMemProp());
     return MyErrCode::kOk;
 }
 
@@ -661,7 +676,8 @@ MyErrCode Context::createImage(Uid id, vk::Format format, vk::Extent2D extent,
                                       {aspect_mask, 0, mip_levels, 0, 1});
     vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
 
-    images_[id] = Image{format, extent, img, img_view, alloc, allocator_};
+    images_[id] =
+        Image{format, extent, initial_layout, mip_levels, img, img_view, alloc, allocator_};
     CHECK_ERR_RET(setDebugObjectId(images_[id].img_, id));
     CHECK_ERR_RET(setDebugObjectId(images_[id].img_view_, id));
     return MyErrCode::kOk;
@@ -941,6 +957,136 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
+MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
+                                      Uid src_buf_id)
+{
+    Buffer& dst_buf = getBuffer(dst_buf_id);
+    Buffer& src_buf = getBuffer(src_buf_id);
+    if (src_buf.size_ != dst_buf.size_) {
+        ELOG("failed to copy, size not match: {}({}) != {}({})", src_buf.size_, src_buf_id,
+             dst_buf.size_, dst_buf_id);
+        return MyErrCode::kFailed;
+    }
+    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
+        vk::BufferCopy region(0, 0, dst_buf.size_);
+        cmdbuf.copyBuffer(src_buf, dst_buf, region);
+        return MyErrCode::kOk;
+    };
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
+                                     Uid src_buf_id)
+{
+    Image& dst_img = getImage(dst_img_id);
+    if (dst_img.layout_ != vk::ImageLayout::eTransferDstOptimal) {
+        ELOG("invalid image layout for copy: {}", dst_img.layout_);
+        return MyErrCode::kOk;
+    }
+    Buffer& src_buf = getBuffer(src_buf_id);
+    if (src_buf.size_ != dst_img.getSize()) {
+        ELOG("failed to copy, size not match: {}({}) != {}({})", src_buf.size_, src_buf_id,
+             dst_img.getSize(), dst_img_id);
+        return MyErrCode::kFailed;
+    }
+    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
+        vk::BufferImageCopy region(
+            0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+            {0, 0, 0}, vk::Extent3D(dst_img.extent_, 1));
+        cmdbuf.copyBufferToImage(src_buf, dst_img, vk::ImageLayout::eTransferDstOptimal, region);
+        return MyErrCode::kOk;
+    };
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
+                                    void const* src_host)
+{
+    Buffer dst_buf = getBuffer(dst_buf_id);
+    if (dst_buf.canBeMapped()) {
+        ELOG("no need to call this function for buffer {} that can be mapped", dst_buf_id);
+        return MyErrCode::kFailed;
+    }
+
+    Uid staging_buf_id = Uid::temp();
+    uint64_t buffer_size = dst_buf.size_;
+
+    CHECK_ERR_RET(createBuffer(
+        staging_buf_id, buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT));
+
+    memcpy(getBuffer(staging_buf_id).getAllocInfo().pMappedData, src_host, buffer_size);
+    CHECK_ERR_RET(copyBufferToBuffer(queue_id, command_pool_id, dst_buf_id, staging_buf_id));
+    CHECK_ERR_RET(destroyBuffer(staging_buf_id));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
+                                   void const* src_host)
+{
+    Image dst_img = getImage(dst_img_id);
+    if (dst_img.canBeMapped()) {
+        ELOG("no need to call this function for image {} that can be mapped", dst_img_id);
+        return MyErrCode::kFailed;
+    }
+
+    Uid staging_buffer_id = Uid::temp();
+    uint64_t buffer_size = dst_img.getSize();
+
+    CHECK_ERR_RET(createBuffer(
+        staging_buffer_id, buffer_size, vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT));
+
+    memcpy(getBuffer(staging_buffer_id).getAllocInfo().pMappedData, src_host, buffer_size);
+    CHECK_ERR_RET(transitionImageLayout(queue_id, command_pool_id, dst_img_id,
+                                        vk::ImageLayout::eTransferDstOptimal));
+    CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, dst_img_id, staging_buffer_id));
+    CHECK_ERR_RET(destroyBuffer(staging_buffer_id));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
+                                         vk::ImageLayout new_layout)
+{
+    Image image = getImage(image_id);
+    vk::ImageLayout old_layout = image.layout_;
+    if (old_layout == new_layout) {
+        return MyErrCode::kOk;
+    }
+    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
+        vk::ImageMemoryBarrier2 barrier(
+            {}, {}, {}, {}, old_layout, new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
+            image, {vk::ImageAspectFlagBits::eColor, 0, image.mip_levels_, 0, 1});
+
+        if (old_layout == vk::ImageLayout::eUndefined &&
+            new_layout == vk::ImageLayout::eTransferDstOptimal) {
+            barrier.setSrcStageMask(vk::PipelineStageFlagBits2::eNone);
+            barrier.setDstStageMask(vk::PipelineStageFlagBits2::eTransfer);
+            barrier.setSrcAccessMask(vk::AccessFlagBits2::eNone);
+            barrier.setDstAccessMask(vk::AccessFlagBits2::eTransferWrite);
+        } else if (old_layout == vk::ImageLayout::eTransferDstOptimal &&
+                   new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+            barrier.setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer);
+            barrier.setDstStageMask(vk::PipelineStageFlagBits2::eFragmentShader);
+            barrier.setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite);
+            barrier.setDstAccessMask(vk::AccessFlagBits2::eShaderRead);
+        } else {
+            ELOG("unsupported layout transition: {} -> {}", old_layout, new_layout);
+            return MyErrCode::kFailed;
+        }
+
+        cmdbuf.pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
+        return MyErrCode::kOk;
+    };
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
+    image.setLayout(new_layout);
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes)
 {
     auto& set = getDescriptorSet(set_id);
@@ -970,8 +1116,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
         }
     }
     if (!format_found) {
-        ELOG("surface format not found: {} {}", vk::to_string(surface_format.format),
-             vk::to_string(surface_format.colorSpace));
+        ELOG("surface format not found: {} {}", surface_format.format, surface_format.colorSpace);
         return MyErrCode::kFailed;
     }
 
@@ -998,7 +1143,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
         vk::CompositeAlphaFlagBitsKHR::eOpaque, mode, true);
 
     ILOG("create {} swapchain images with size={}x{}, format={}", image_count, extent.width,
-         extent.height, vk::to_string(surface_format.format));
+         extent.height, surface_format.format);
 
     Swapchain swapchain;
     swapchain.format_ = surface_format.format;
