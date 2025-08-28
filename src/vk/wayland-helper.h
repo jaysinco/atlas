@@ -6,93 +6,126 @@
 #include "toolkit/format.h"
 #include "toolkit/toolkit.h"
 
+#define CHECK_WL(err) \
+    if (!(err)) ELOG("failed to call wl")
+
+#define CHECK_WL_RET(err)              \
+    do {                               \
+        if (!(err)) {                  \
+            ELOG("failed to call wl"); \
+            return MyErrCode::kFailed; \
+        }                              \
+    } while (0)
+
 namespace mywl
 {
 
 using Uid = toolkit::Uid;
 
+class Surface
+{
+public:
+    Surface();
+    Surface(wl_surface* surface);
+    operator wl_surface*() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    wl_surface* surface_;
+    xdg_surface* shell_surface_;
+    xdg_toplevel* toplevel_;
+    bool need_resize_;
+    bool need_close_;
+    int width_;
+    int height_;
+};
+
 class Context
 {
 public:
-    MyErrCode createDisplay(Uid id);
+    MyErrCode createDisplay(char const* name = nullptr);
+    MyErrCode createRegistry(Context* ctx);
+    MyErrCode createCursorTheme(Uid id, char const* name, int size);
+    MyErrCode createCursor(Uid id, Uid cursor_theme_id, char const* name);
+    MyErrCode createSurface(Uid id);
+
+    wl_cursor_theme* getCursorTheme(Uid id);
+    wl_cursor* getCursor(Uid id);
+    Surface& getSurface(Uid id);
+
+    MyErrCode setPointerCursor(Uid cursor_id);
+
+    MyErrCode destroyDisplay(Uid id);
+    MyErrCode destroyRegistry(Uid id);
+    MyErrCode destroySurface(Uid id);
+    MyErrCode destroyShellSurface(Uid id);
+    MyErrCode destroyToplevel(Uid id);
+    MyErrCode destroyCursorTheme(Uid id);
+    MyErrCode destroyCursor(Uid id);
+    MyErrCode destroy();
 
 protected:
-    virtual void onRegistry(struct wl_registry* registry, uint32_t name, char const* interface,
-                            uint32_t version);
-    virtual void onShellPing(struct xdg_wm_base* shell, uint32_t serial);
-    virtual void onShellSurfaceConfigure(struct xdg_surface* shell_surface, uint32_t serial);
-    virtual void onToplevelConfigure(struct xdg_toplevel* toplevel, int32_t width, int32_t height,
-                                     struct wl_array* states);
-    virtual void onToplevelClose(struct xdg_toplevel* toplevel);
-    virtual void onSeatCapabilities(struct wl_seat* seat, uint32_t caps);
-    virtual void onPointerEnter(struct wl_pointer* pointer, uint32_t serial,
-                                struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy);
-    virtual void onPointerLeave(struct wl_pointer* pointer, uint32_t serial,
-                                struct wl_surface* surface);
-    virtual void onPointerMotion(struct wl_pointer* pointer, uint32_t time, wl_fixed_t sx,
-                                 wl_fixed_t sy);
-    virtual void onPointerButton(struct wl_pointer* wl_pointer, uint32_t serial, uint32_t time,
-                                 uint32_t button, uint32_t state);
-    virtual void onPointerAxis(struct wl_pointer* wl_pointer, uint32_t time, uint32_t axis,
-                               wl_fixed_t value);
-    virtual void onKeyboardKeymap(struct wl_keyboard* keyboard, uint32_t format, int fd,
-                                  uint32_t size);
-    virtual void onKeyboardEnter(struct wl_keyboard* keyboard, uint32_t serial,
-                                 struct wl_surface* surface, struct wl_array* keys);
-    virtual void onKeyboardLeave(struct wl_keyboard* keyboard, uint32_t serial,
-                                 struct wl_surface* surface);
-    virtual void onKeyboardKey(struct wl_keyboard* keyboard, uint32_t serial, uint32_t time,
-                               uint32_t key, uint32_t state);
-    virtual void onKeyboardModifiers(struct wl_keyboard* keyboard, uint32_t serial,
-                                     uint32_t mods_depressed, uint32_t mods_latched,
-                                     uint32_t mods_locked, uint32_t group);
+    Uid getSurfaceId(wl_surface* surface);
+    Uid getSurfaceId(xdg_surface* shell_surface);
+    Uid getSurfaceId(xdg_toplevel* toplevel);
+
+    virtual MyErrCode onSurfaceEnter(Uid surface_id);
+    virtual MyErrCode onSurfaceResize(Uid surface_id, int width, int height);
+    virtual MyErrCode onPointerMove(Uid surface_id, double xpos, double ypos);
+    virtual MyErrCode onPointerPress(Uid surface_id, int button, bool down);
+    virtual MyErrCode onPointerScroll(Uid surface_id, double xoffset, double yoffset);
+    virtual MyErrCode onKeyboardPress(Uid surface_id, int key, bool down);
 
 private:
-    static void handleRegistry(void* data, struct wl_registry* registry, uint32_t name,
+    static void handleRegistry(void* data, wl_registry* registry, uint32_t name,
                                char const* interface, uint32_t version);
-    static void handleShellPing(void* data, struct xdg_wm_base* shell, uint32_t serial);
-    static void handleShellSurfaceConfigure(void* data, struct xdg_surface* shell_surface,
+    static void handleShellPing(void* data, xdg_wm_base* shell, uint32_t serial);
+    static void handleShellSurfaceConfigure(void* data, xdg_surface* shell_surface,
                                             uint32_t serial);
-    static void handleToplevelConfigure(void* data, struct xdg_toplevel* toplevel, int32_t width,
-                                        int32_t height, struct wl_array* states);
-    static void handleToplevelClose(void* data, struct xdg_toplevel* toplevel);
-    static void handleSeatCapabilities(void* data, struct wl_seat* seat, uint32_t caps);
-    static void handlePointerEnter(void* data, struct wl_pointer* pointer, uint32_t serial,
-                                   struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy);
-    static void handlePointerLeave(void* data, struct wl_pointer* pointer, uint32_t serial,
-                                   struct wl_surface* surface);
-    static void handlePointerMotion(void* data, struct wl_pointer* pointer, uint32_t time,
-                                    wl_fixed_t sx, wl_fixed_t sy);
-    static void handlePointerButton(void* data, struct wl_pointer* wl_pointer, uint32_t serial,
-                                    uint32_t time, uint32_t button, uint32_t state);
-    static void handlePointerAxis(void* data, struct wl_pointer* wl_pointer, uint32_t time,
-                                  uint32_t axis, wl_fixed_t value);
-    static void handleKeyboardKeymap(void* data, struct wl_keyboard* keyboard, uint32_t format,
-                                     int fd, uint32_t size);
-    static void handleKeyboardEnter(void* data, struct wl_keyboard* keyboard, uint32_t serial,
-                                    struct wl_surface* surface, struct wl_array* keys);
-    static void handleKeyboardLeave(void* data, struct wl_keyboard* keyboard, uint32_t serial,
-                                    struct wl_surface* surface);
-    static void handleKeyboardKey(void* data, struct wl_keyboard* keyboard, uint32_t serial,
-                                  uint32_t time, uint32_t key, uint32_t state);
-    static void handleKeyboardModifiers(void* data, struct wl_keyboard* keyboard, uint32_t serial,
+    static void handleToplevelConfigure(void* data, xdg_toplevel* toplevel, int32_t width,
+                                        int32_t height, wl_array* states);
+    static void handleToplevelClose(void* data, xdg_toplevel* toplevel);
+    static void handleSeatCapabilities(void* data, wl_seat* seat, uint32_t caps);
+    static void handlePointerEnter(void* data, wl_pointer* pointer, uint32_t serial,
+                                   wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy);
+    static void handlePointerLeave(void* data, wl_pointer* pointer, uint32_t serial,
+                                   wl_surface* surface);
+    static void handlePointerMotion(void* data, wl_pointer* pointer, uint32_t time, wl_fixed_t sx,
+                                    wl_fixed_t sy);
+    static void handlePointerButton(void* data, wl_pointer* pointer, uint32_t serial, uint32_t time,
+                                    uint32_t button, uint32_t state);
+    static void handlePointerAxis(void* data, wl_pointer* pointer, uint32_t time, uint32_t axis,
+                                  wl_fixed_t value);
+    static void handleKeyboardKeymap(void* data, wl_keyboard* keyboard, uint32_t format, int fd,
+                                     uint32_t size);
+    static void handleKeyboardEnter(void* data, wl_keyboard* keyboard, uint32_t serial,
+                                    wl_surface* surface, wl_array* keys);
+    static void handleKeyboardLeave(void* data, wl_keyboard* keyboard, uint32_t serial,
+                                    wl_surface* surface);
+    static void handleKeyboardKey(void* data, wl_keyboard* keyboard, uint32_t serial, uint32_t time,
+                                  uint32_t key, uint32_t state);
+    static void handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_t serial,
                                         uint32_t mods_depressed, uint32_t mods_latched,
                                         uint32_t mods_locked, uint32_t group);
 
 private:
-    std::map<Uid, wl_display*> display_;
-    std::map<Uid, wl_registry*> registry_;
-    std::map<Uid, wl_compositor*> compositor_;
-    std::map<Uid, wl_surface*> surface_;
-    std::map<Uid, xdg_wm_base*> shell_;
-    std::map<Uid, xdg_surface*> shell_surface_;
-    std::map<Uid, xdg_toplevel*> toplevel_;
-    std::map<Uid, wl_seat*> seat_;
-    std::map<Uid, wl_pointer*> pointer_;
-    std::map<Uid, wl_keyboard*> keyboard_;
-    std::map<Uid, wl_shm*> shm_;
+    wl_display* display_;
+    wl_registry* registry_;
+    wl_compositor* compositor_;
+    xdg_wm_base* shell_;
+    wl_seat* seat_;
+    wl_shm* shm_;
+    wl_pointer* pointer_;
+    wl_surface* cursor_surface_;
+    wl_keyboard* keyboard_;
+
     std::map<Uid, wl_cursor_theme*> cursor_theme_;
     std::map<Uid, wl_cursor*> cursor_;
+    std::map<Uid, Surface> surface_;
+
+    Uid curr_pointer_surface_ = Uid::kNull;
+    Uid curr_keyboard_surface_ = Uid::kNull;
 
     static wl_registry_listener registry_listener;
     static xdg_wm_base_listener shell_listener;
