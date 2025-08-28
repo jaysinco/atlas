@@ -2,6 +2,7 @@
 #include "error.h"
 #include <filesystem>
 #include <vector>
+#include <atomic>
 
 #define CURR_FILE_DIR() (std::filesystem::path(__FILE__).parent_path())
 #define XXD_DECLARE_RES(res)    \
@@ -27,6 +28,22 @@ ScopeExit<T> scopeExit(T&& t)
 {
     return ScopeExit<T>(std::move(t));
 }
+
+class Uid
+{
+public:
+    Uid(int id = 0);
+    bool operator<(Uid rhs) const;
+    bool operator==(Uid rhs) const;
+    bool operator!=(Uid rhs) const;
+    std::string toStr() const;
+    static Uid const kNull;
+    static Uid temp();
+
+private:
+    int id_;
+    static std::atomic<int> temp_id;
+};
 
 std::string currentExeName();
 std::filesystem::path currentExeDir();

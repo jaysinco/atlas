@@ -17,6 +17,29 @@
 namespace toolkit
 {
 
+Uid const Uid::kNull = INT32_MIN;
+std::atomic<int> Uid::temp_id = INT32_MIN + 1000;
+
+Uid Uid::temp()
+{
+    int expected = temp_id.load();
+    int desired;
+    do {
+        desired = (expected >= -1000) ? (INT32_MIN + 1000) : (expected + 1);
+    } while (!temp_id.compare_exchange_weak(expected, desired));
+    return desired;
+}
+
+Uid::Uid(int id): id_(id) {}
+
+bool Uid::operator<(Uid rhs) const { return id_ < rhs.id_; }
+
+bool Uid::operator==(Uid rhs) const { return id_ == rhs.id_; }
+
+bool Uid::operator!=(Uid rhs) const { return id_ != rhs.id_; }
+
+std::string Uid::toStr() const { return FSTR("#{}", id_); }
+
 std::filesystem::path currentExeDir() { return currentExePath().parent_path(); }
 
 std::filesystem::path currentExePath()

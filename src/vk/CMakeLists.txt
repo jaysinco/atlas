@@ -8,7 +8,15 @@ set(MYVK_API_VERSION_MINOR 3)
 # library
 ###############################################################################
 
+set(WAYLAND_PROTO_DIR ${TC_USR_DIR}/share/wayland-protocols)
+
+wayland_gen_protocols(WAYLAND_PROTO_SRC
+    ${WAYLAND_PROTO_DIR}/stable/xdg-shell/xdg-shell.xml
+)
+
 add_library(${TARGET_NAME}
+   ${WAYLAND_PROTO_SRC}
+   wayland-helper.cpp
    vulkan-helper.cpp 
 )
 
@@ -17,8 +25,12 @@ set_source_files_properties(vulkan-helper.cpp
     "MYVK_API_VERSION_MAJOR=${MYVK_API_VERSION_MAJOR};MYVK_API_VERSION_MINOR=${MYVK_API_VERSION_MINOR}"
 )
 
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
 target_link_libraries(${TARGET_NAME} PUBLIC
     toolkit
+    wayland-client
+    wayland-cursor
     vulkan
     dl
 )
@@ -30,13 +42,7 @@ target_compile_options(${TARGET_NAME} PRIVATE -Wno-deprecated)
 # vkwl
 ###############################################################################
 
-# set(WAYLAND_PROTO_DIR ${TC_USR_DIR}/share/wayland-protocols)
-# wayland_gen_protocols(WAYLAND_PROTO_SRC
-#     ${WAYLAND_PROTO_DIR}/stable/xdg-shell/xdg-shell.xml
-# )
-#
 # add_executable(vkwl
-#     ${WAYLAND_PROTO_SRC}
 #     scene.cpp
 #     keycode.cpp
 #     vkwl.cpp
@@ -54,8 +60,6 @@ target_compile_options(${TARGET_NAME} PRIVATE -Wno-deprecated)
 #
 # target_link_libraries(vkwl
 #     ${TARGET_NAME} 
-#     wayland-client
-#     wayland-cursor
 #     opencv
 #     assimp
 #     easy-profiler 

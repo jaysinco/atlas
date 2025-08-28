@@ -13,28 +13,6 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace myvk
 {
 
-Uid const Uid::kNull = INT32_MIN;
-int Uid::temp_id = INT32_MIN + 1000;
-
-Uid Uid::temp()
-{
-    if (temp_id >= -1000) {
-        temp_id = INT32_MIN + 1000;
-    }
-    ++temp_id;
-    return temp_id;
-}
-
-Uid::Uid(int id): id_(id) {}
-
-bool Uid::operator<(Uid rhs) const { return id_ < rhs.id_; }
-
-bool Uid::operator==(Uid rhs) const { return id_ == rhs.id_; }
-
-bool Uid::operator!=(Uid rhs) const { return id_ != rhs.id_; }
-
-std::string Uid::toStr() const { return FSTR("#{}", id_); }
-
 Allocation::Allocation() = default;
 
 Allocation::Allocation(VmaAllocation alloc, VmaAllocator allocator)

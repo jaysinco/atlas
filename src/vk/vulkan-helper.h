@@ -30,6 +30,7 @@ std::enable_if_t<CanVkToString<T>::value, std::string> toFormattable(T&& arg)
 }  // namespace toolkit
 
 #include "toolkit/format.h"
+#include "toolkit/toolkit.h"
 
 #define CHECK_VK_RET(err)                            \
     do {                                             \
@@ -57,28 +58,14 @@ std::enable_if_t<CanVkToString<T>::value, std::string> toFormattable(T&& arg)
 namespace myvk
 {
 
+using Uid = toolkit::Uid;
+
 using DeviceRater =
     std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
 
 using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
 
 using CmdSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
-
-class Uid
-{
-public:
-    Uid(int id);
-    bool operator<(Uid rhs) const;
-    bool operator==(Uid rhs) const;
-    bool operator!=(Uid rhs) const;
-    std::string toStr() const;
-    static Uid const kNull;
-    static Uid temp();
-
-private:
-    int id_;
-    static int temp_id;
-};
 
 class Allocation
 {
@@ -255,7 +242,6 @@ private:
 };
 
 class Context
-
 {
 public:
     MyErrCode createInstance(char const* app_name, std::vector<char const*> const& extensions);
