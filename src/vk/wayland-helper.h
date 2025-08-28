@@ -26,7 +26,7 @@ class Surface
 {
 public:
     Surface();
-    Surface(wl_surface* surface);
+    Surface(wl_surface* surface, xdg_surface* shell_surface, xdg_toplevel* toplevel);
     operator wl_surface*() const;
     operator bool() const;
 
@@ -36,7 +36,6 @@ private:
     xdg_surface* shell_surface_;
     xdg_toplevel* toplevel_;
     bool need_resize_;
-    bool need_close_;
     int width_;
     int height_;
 };
@@ -45,32 +44,16 @@ class Context
 {
 public:
     MyErrCode createDisplay(char const* name = nullptr);
-    MyErrCode createRegistry(Context* ctx);
-    MyErrCode createCursorTheme(Uid id, char const* name, int size);
-    MyErrCode createCursor(Uid id, Uid cursor_theme_id, char const* name);
     MyErrCode createSurface(Uid id);
 
-    wl_cursor_theme* getCursorTheme(Uid id);
-    wl_cursor* getCursor(Uid id);
+    wl_display* getDisplay();
     Surface& getSurface(Uid id);
 
-    MyErrCode setPointerCursor(Uid cursor_id);
-
-    MyErrCode destroyDisplay(Uid id);
-    MyErrCode destroyRegistry(Uid id);
     MyErrCode destroySurface(Uid id);
-    MyErrCode destroyShellSurface(Uid id);
-    MyErrCode destroyToplevel(Uid id);
-    MyErrCode destroyCursorTheme(Uid id);
-    MyErrCode destroyCursor(Uid id);
     MyErrCode destroy();
 
 protected:
-    Uid getSurfaceId(wl_surface* surface);
-    Uid getSurfaceId(xdg_surface* shell_surface);
-    Uid getSurfaceId(xdg_toplevel* toplevel);
-
-    virtual MyErrCode onSurfaceEnter(Uid surface_id);
+    virtual MyErrCode onSurfaceClose(Uid surface_id);
     virtual MyErrCode onSurfaceResize(Uid surface_id, int width, int height);
     virtual MyErrCode onPointerMove(Uid surface_id, double xpos, double ypos);
     virtual MyErrCode onPointerPress(Uid surface_id, int button, bool down);
@@ -109,6 +92,10 @@ private:
                                         uint32_t mods_depressed, uint32_t mods_latched,
                                         uint32_t mods_locked, uint32_t group);
 
+    Uid getSurfaceId(wl_surface* surface);
+    Uid getSurfaceId(xdg_surface* shell_surface);
+    Uid getSurfaceId(xdg_toplevel* toplevel);
+
 private:
     wl_display* display_;
     wl_registry* registry_;
@@ -119,13 +106,13 @@ private:
     wl_pointer* pointer_;
     wl_surface* cursor_surface_;
     wl_keyboard* keyboard_;
+    wl_cursor_theme* cursor_theme_;
+    wl_cursor* cursor_;
 
-    std::map<Uid, wl_cursor_theme*> cursor_theme_;
-    std::map<Uid, wl_cursor*> cursor_;
-    std::map<Uid, Surface> surface_;
+    std::map<Uid, Surface> surfaces_;
 
-    Uid curr_pointer_surface_ = Uid::kNull;
-    Uid curr_keyboard_surface_ = Uid::kNull;
+    Uid pointer_surface_id_ = Uid::kNull;
+    Uid keyboard_surface_id_ = Uid::kNull;
 
     static wl_registry_listener registry_listener;
     static xdg_wm_base_listener shell_listener;
