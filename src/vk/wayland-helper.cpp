@@ -5,6 +5,138 @@
 namespace mywl
 {
 
+Surface::Surface() = default;
+
+Surface::Surface(wl_surface* surface, xdg_surface* shell_surface, xdg_toplevel* toplevel)
+    : surface_(surface), shell_surface_(shell_surface), toplevel_(toplevel)
+{
+}
+
+Surface::operator wl_surface*() const { return surface_; }
+
+Surface::operator bool() const { return surface_ != nullptr; }
+
+MyErrCode Context::createDisplay(char const* name)
+{
+    CHECK_WL_RET(display_ = wl_display_connect(name));
+    CHECK_WL_RET(registry_ = wl_display_get_registry(display_));
+    wl_registry_add_listener(registry_, &registry_listener, this);
+    wl_display_roundtrip(display_);
+    CHECK_WL_RET(cursor_surface_ = wl_compositor_create_surface(compositor_));
+    return MyErrCode::kOk;
+}
+
+wl_display* Context::getDisplay() { return display_; }
+
+MyErrCode Context::destroy()
+{
+    while (!surfaces_.empty()) {
+        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first));
+    }
+    if (cursor_surface_) {
+        wl_surface_destroy(cursor_surface_);
+    }
+    if (cursor_theme_) {
+        wl_cursor_theme_destroy(cursor_theme_);
+    }
+    if (keyboard_) {
+        wl_keyboard_destroy(keyboard_);
+    }
+    if (pointer_) {
+        wl_pointer_destroy(pointer_);
+    }
+    if (shm_) {
+        wl_shm_destroy(shm_);
+    }
+    if (seat_) {
+        wl_seat_destroy(seat_);
+    }
+    if (shell_) {
+        xdg_wm_base_destroy(shell_);
+    }
+    if (compositor_) {
+        wl_compositor_destroy(compositor_);
+    }
+    if (registry_) {
+        wl_registry_destroy(registry_);
+    }
+    if (display_) {
+        wl_display_disconnect(display_);
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::createSurface(Uid id, char const* app_id, char const* title)
+{
+    if (surfaces_.find(id) != surfaces_.end()) {
+        CHECK_ERR_RET(destroySurface(id));
+    }
+
+    wl_surface* surface;
+    xdg_surface* shell_surface;
+    xdg_toplevel* toplevel;
+
+    CHECK_WL_RET(surface = wl_compositor_create_surface(compositor_));
+    CHECK_WL_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell_, surface));
+    CHECK_WL_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
+
+    xdg_surface_add_listener(shell_surface, &shell_surface_listener, this);
+    xdg_toplevel_add_listener(toplevel, &toplevel_listener, this);
+
+    xdg_toplevel_set_app_id(toplevel, app_id);
+    xdg_toplevel_set_title(toplevel, title);
+
+    wl_surface_commit(surface);
+    wl_display_roundtrip(display_);
+    wl_surface_commit(surface);
+
+    surfaces_[id] = {surface, shell_surface, toplevel};
+    return MyErrCode::kOk;
+}
+
+Surface& Context::getSurface(Uid id)
+{
+    if (surfaces_.find(id) == surfaces_.end()) {
+        MY_THROW("surface not exist: {}", id);
+    }
+    return surfaces_.at(id);
+}
+
+MyErrCode Context::destroySurface(Uid id)
+{
+    if (auto it = surfaces_.find(id); it != surfaces_.end()) {
+        xdg_toplevel_destroy(it->second.toplevel_);
+        xdg_surface_destroy(it->second.shell_surface_);
+        wl_surface_destroy(it->second.surface_);
+        surfaces_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("surface not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+Uid Context::getSurfaceId(wl_surface* surface)
+{
+    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
+                           [&](auto& s) { return s.second.surface_ == surface; });
+    return it == surfaces_.end() ? Uid::kNull : it->first;
+}
+
+Uid Context::getSurfaceId(xdg_surface* shell_surface)
+{
+    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
+                           [&](auto& s) { return s.second.shell_surface_ == shell_surface; });
+    return it == surfaces_.end() ? Uid::kNull : it->first;
+}
+
+Uid Context::getSurfaceId(xdg_toplevel* toplevel)
+{
+    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
+                           [&](auto& s) { return s.second.toplevel_ == toplevel; });
+    return it == surfaces_.end() ? Uid::kNull : it->first;
+}
+
 wl_registry_listener Context::registry_listener = {
     .global = &handleRegistry,
 };
@@ -59,6 +191,8 @@ void Context::handleRegistry(void* data, wl_registry* registry, uint32_t name,
         wl_seat_add_listener(ctx->seat_, &seat_listener, data);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
         CHECK_WL(ctx->shm_ = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, version));
+        CHECK_WL(ctx->cursor_theme_ = wl_cursor_theme_load(nullptr, 24, ctx->shm_));
+        CHECK_WL(ctx->cursor_ = wl_cursor_theme_get_cursor(ctx->cursor_theme_, "left_ptr"));
     }
 }
 
@@ -214,5 +348,23 @@ void Context::handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_
                                       uint32_t mods_locked, uint32_t group)
 {
 }
+
+MyErrCode Context::onSurfaceClose(Uid surface_id) { return MyErrCode::kOk; }
+
+MyErrCode Context::onSurfaceResize(Uid surface_id, int width, int height) { return MyErrCode::kOk; }
+
+MyErrCode Context::onPointerMove(Uid surface_id, double xpos, double ypos)
+{
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::onPointerPress(Uid surface_id, int button, bool down) { return MyErrCode::kOk; }
+
+MyErrCode Context::onPointerScroll(Uid surface_id, double xoffset, double yoffset)
+{
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::onKeyboardPress(Uid surface_id, int key, bool down) { return MyErrCode::kOk; }
 
 };  // namespace mywl

@@ -1101,15 +1101,6 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR 
     vk::SurfaceCapabilitiesKHR surface_caps =
         CHECK_VKHPP_VAL(physical_device_.getSurfaceCapabilitiesKHR(surface));
 
-    if (surface_caps.currentExtent.width == std::numeric_limits<uint32_t>::max()) {
-        extent.width = std::clamp(extent.width, surface_caps.minImageExtent.width,
-                                  surface_caps.maxImageExtent.width);
-        extent.height = std::clamp(extent.height, surface_caps.minImageExtent.height,
-                                   surface_caps.maxImageExtent.height);
-    } else {
-        extent = surface_caps.currentExtent;
-    }
-
     uint32_t image_count = surface_caps.minImageCount + 1;
     if (surface_caps.maxImageCount > 0) {
         image_count = std::min(image_count, surface_caps.maxImageCount);

@@ -44,11 +44,9 @@ class Context
 {
 public:
     MyErrCode createDisplay(char const* name = nullptr);
-    MyErrCode createSurface(Uid id);
-
+    MyErrCode createSurface(Uid id, char const* app_id, char const* title);
     wl_display* getDisplay();
     Surface& getSurface(Uid id);
-
     MyErrCode destroySurface(Uid id);
     MyErrCode destroy();
 
@@ -104,10 +102,10 @@ private:
     wl_seat* seat_;
     wl_shm* shm_;
     wl_pointer* pointer_;
-    wl_surface* cursor_surface_;
     wl_keyboard* keyboard_;
     wl_cursor_theme* cursor_theme_;
     wl_cursor* cursor_;
+    wl_surface* cursor_surface_;
 
     std::map<Uid, Surface> surfaces_;
 
