@@ -118,25 +118,22 @@ MY_MAIN
     contants.data.x = 3;
     contants.data.y = 1;
 
-    auto record_compute = [&](vk::CommandBuffer& cmd) -> MyErrCode {
-        cmd.pushConstants(ctx.getPipelineLayout(UID_vkPipelineLayout_compute),
-                          vk::ShaderStageFlagBits::eCompute, 0, sizeof(contants), &contants);
+    auto record_compute = [&](myvk::CommandBuffer& cmd) -> MyErrCode {
+        cmd.pushConstants(UID_vkPipelineLayout_compute, vk::ShaderStageFlagBits::eCompute, 0,
+                          sizeof(contants), &contants);
 
-        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_square));
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_square)}, {});
+        cmd.bindComputePipeline(UID_vkPipeline_square);
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, UID_vkPipelineLayout_compute,
+                               {UID_vkDescriptorSet_square});
         cmd.dispatch(num_elements, 1, 1);
 
-        vk::MemoryBarrier2 barrier(
+        cmd.pipelineMemoryBarrier(
             vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
             vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderRead);
-        cmd.pipelineBarrier2(vk::DependencyInfo{{}, barrier});
 
-        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ctx.getPipeline(UID_vkPipeline_mul2));
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                               ctx.getPipelineLayout(UID_vkPipelineLayout_compute), 0,
-                               {ctx.getDescriptorSet(UID_vkDescriptorSet_mul2)}, {});
+        cmd.bindComputePipeline(UID_vkPipeline_mul2);
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, UID_vkPipelineLayout_compute,
+                               {UID_vkDescriptorSet_mul2});
         cmd.dispatch(num_elements, 1, 1);
         return MyErrCode::kOk;
     };

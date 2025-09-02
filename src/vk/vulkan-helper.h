@@ -65,7 +65,7 @@ using DeviceRater =
 
 using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
 
-using CmdSubmitter = std::function<MyErrCode(vk::CommandBuffer&)>;
+class Context;
 
 class Allocation
 {
@@ -110,7 +110,9 @@ public:
     Image(vk::Format format, vk::Extent2D extent, vk::ImageLayout layout, uint32_t mip_levels,
           vk::Image img, vk::ImageView img_view, VmaAllocation alloc, VmaAllocator allocator);
     uint64_t getSize() const;
+    vk::Extent2D getExtent() const;
     vk::ImageLayout getLayout() const;
+    uint32_t getMipLevels() const;
     void setLayout(vk::ImageLayout layout);
     operator vk::Image() const;
     operator vk::ImageView() const;
@@ -124,20 +126,6 @@ private:
     uint32_t mip_levels_;
     vk::Image img_;
     vk::ImageView img_view_;
-};
-
-class CommandBuffer
-{
-public:
-    CommandBuffer();
-    CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool);
-    operator vk::CommandBuffer() const;
-    operator bool() const;
-
-private:
-    friend class Context;
-    vk::CommandBuffer buf_;
-    vk::CommandPool pool_;
 };
 
 class Semaphore
@@ -241,6 +229,39 @@ private:
     std::vector<vk::DescriptorBufferInfo> buffers_;
 };
 
+class CommandBuffer: public vk::CommandBuffer
+{
+public:
+    CommandBuffer();
+    CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context* ctx);
+
+    MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
+                                 vk::DeviceSize dst_offset = 0,
+                                 vk::DeviceSize size = vk::WholeSize);
+    MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id);
+    MyErrCode pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
+                                    vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
+    MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout new_layout,
+                                   vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
+                                   vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
+    MyErrCode pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages, uint32_t offset,
+                            uint32_t size, void const* data);
+    MyErrCode bindComputePipeline(Uid pipeline_id);
+    MyErrCode bindDescriptorSets(vk::PipelineBindPoint bind_point, Uid pipeline_layout_id,
+                                 std::vector<Uid> const& set_ids);
+
+    using vk::CommandBuffer::bindDescriptorSets;
+    using vk::CommandBuffer::copyBufferToImage;
+    using vk::CommandBuffer::pushConstants;
+
+private:
+    friend class Context;
+    vk::CommandPool pool_;
+    Context* ctx_;
+};
+
+using CmdSubmitter = std::function<MyErrCode(CommandBuffer&)>;
+
 class Context
 {
 public:
@@ -257,7 +278,7 @@ public:
                            vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags = 0);
     MyErrCode createImage(Uid id, vk::Format format, vk::Extent2D extent, vk::ImageTiling tiling,
                           vk::ImageLayout initial_layout, uint32_t mip_levels,
-                          vk::SampleCountFlagBits num_samples, vk::ImageAspectFlags aspect_mask,
+                          vk::SampleCountFlagBits samples, vk::ImageAspectFlags aspect_mask,
                           vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
@@ -294,12 +315,12 @@ public:
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
 
-    MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id, Uid src_buf_id);
-    MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id, Uid src_buf_id);
-    MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
-                               void const* src_host);
-    MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
-                              void const* src_host);
+    MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
+    MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id);
+    MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
+                               Uid dst_buf_id);
+    MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
+                              Uid dst_img_id);
     MyErrCode transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
                                     vk::ImageLayout new_layout);
     MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);

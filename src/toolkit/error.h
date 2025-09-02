@@ -1,7 +1,12 @@
 #pragma once
 
-#define CHECK_ERR_RET(err) \
-    if (auto _err = (err); _err != MyErrCode::kOk) return _err
+#define CHECK_ERR_RET(_err)          \
+    do {                             \
+        MyErrCode err = (_err);      \
+        if (err != MyErrCode::kOk) { \
+            return err;              \
+        }                            \
+    } while (0)
 
 #define MY_MAIN                                                                       \
     static MyErrCode my_main(int argc, char** argv);                                  \

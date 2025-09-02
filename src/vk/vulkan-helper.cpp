@@ -99,7 +99,11 @@ uint64_t Image::getSize() const
     return block_size * extent_.width * extent_.height;
 }
 
+vk::Extent2D Image::getExtent() const { return extent_; }
+
 vk::ImageLayout Image::getLayout() const { return layout_; }
+
+uint32_t Image::getMipLevels() const { return mip_levels_; }
 
 void Image::setLayout(vk::ImageLayout layout) { layout_ = layout; }
 
@@ -108,14 +112,6 @@ Image::operator vk::Image() const { return img_; }
 Image::operator vk::ImageView() const { return img_view_; }
 
 Image::operator bool() const { return img_; }
-
-CommandBuffer::CommandBuffer() = default;
-
-CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool): buf_(buf), pool_(pool) {}
-
-CommandBuffer::operator vk::CommandBuffer() const { return buf_; }
-
-CommandBuffer::operator bool() const { return buf_; }
 
 Semaphore::Semaphore() = default;
 
@@ -629,7 +625,7 @@ MyErrCode Context::destroyBuffer(Uid id)
 
 MyErrCode Context::createImage(Uid id, vk::Format format, vk::Extent2D extent,
                                vk::ImageTiling tiling, vk::ImageLayout initial_layout,
-                               uint32_t mip_levels, vk::SampleCountFlagBits num_samples,
+                               uint32_t mip_levels, vk::SampleCountFlagBits samples,
                                vk::ImageAspectFlags aspect_mask, vk::ImageUsageFlags usage,
                                vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags)
 {
@@ -638,8 +634,8 @@ MyErrCode Context::createImage(Uid id, vk::Format format, vk::Extent2D extent,
     }
 
     vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), vk::ImageType::e2D, format,
-                                   vk::Extent3D(extent, 1), mip_levels, 1, num_samples, tiling,
-                                   usage, vk::SharingMode::eExclusive, {}, initial_layout);
+                                   vk::Extent3D(extent, 1), mip_levels, 1, samples, tiling, usage,
+                                   vk::SharingMode::eExclusive, {}, initial_layout);
 
     VmaAllocationCreateInfo vma_info = {};
     vma_info.flags = flags;
@@ -690,8 +686,8 @@ MyErrCode Context::createCommandBuffer(Uid id, Uid command_pool_id)
     auto& pool = getCommandPool(command_pool_id);
     auto bufs = CHECK_VKHPP_VAL(
         device_.allocateCommandBuffers({pool, vk::CommandBufferLevel::ePrimary, 1}));
-    command_buffers_[id] = {bufs.front(), pool};
-    CHECK_ERR_RET(setDebugObjectId(command_buffers_[id].buf_, id));
+    command_buffers_[id] = {bufs.front(), pool, this};
+    CHECK_ERR_RET(setDebugObjectId(command_buffers_[id], id));
     return MyErrCode::kOk;
 }
 
@@ -706,7 +702,7 @@ CommandBuffer& Context::getCommandBuffer(Uid id)
 MyErrCode Context::destroyCommandBuffer(Uid id)
 {
     if (auto it = command_buffers_.find(id); it != command_buffers_.end()) {
-        device_.freeCommandBuffers(it->second.pool_, it->second.buf_);
+        device_.freeCommandBuffers(it->second.pool_, it->second);
         command_buffers_.erase(it);
         return MyErrCode::kOk;
     } else {
@@ -935,52 +931,119 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
-MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
-                                      Uid src_buf_id)
+CommandBuffer::CommandBuffer() = default;
+
+CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context* ctx)
+    : vk::CommandBuffer(buf), pool_(pool), ctx_(ctx)
 {
-    Buffer& dst_buf = getBuffer(dst_buf_id);
-    Buffer& src_buf = getBuffer(src_buf_id);
-    if (src_buf.size_ != dst_buf.size_) {
-        ELOG("failed to copy, size not match: {}({}) != {}({})", src_buf.size_, src_buf_id,
-             dst_buf.size_, dst_buf_id);
+}
+
+MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
+                                            vk::DeviceSize src_offset, vk::DeviceSize dst_offset,
+                                            vk::DeviceSize size)
+{
+    Buffer& dst_buf = ctx_->getBuffer(dst_buf_id);
+    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
+    if (src_offset + size > src_buf.getSize() || dst_offset + size > dst_buf.getSize()) {
+        ELOG("invalid buffer size for copy");
         return MyErrCode::kFailed;
     }
-    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
-        vk::BufferCopy region(0, 0, dst_buf.size_);
-        cmdbuf.copyBuffer(src_buf, dst_buf, region);
-        return MyErrCode::kOk;
-    };
-    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
+    vk::BufferCopy region(src_offset, dst_offset, size == vk::WholeSize ? dst_buf.getSize() : size);
+    copyBuffer(src_buf, dst_buf, region);
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
-                                     Uid src_buf_id)
+MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id)
 {
-    Image& dst_img = getImage(dst_img_id);
-    if (dst_img.layout_ != vk::ImageLayout::eTransferDstOptimal) {
-        ELOG("invalid image layout for copy: {}", dst_img.layout_);
+    Image& dst_img = ctx_->getImage(dst_img_id);
+    if (dst_img.getLayout() != vk::ImageLayout::eTransferDstOptimal) {
+        ELOG("invalid image layout for copy: {}", dst_img.getLayout());
         return MyErrCode::kOk;
     }
-    Buffer& src_buf = getBuffer(src_buf_id);
-    if (src_buf.size_ != dst_img.getSize()) {
-        ELOG("failed to copy, size not match: {}({}) != {}({})", src_buf.size_, src_buf_id,
-             dst_img.getSize(), dst_img_id);
+    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
+    if (src_buf.getSize() != dst_img.getSize()) {
+        ELOG("invalid buffer size for copy: {} != {}", src_buf.getSize(), dst_img.getSize());
         return MyErrCode::kFailed;
     }
-    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
-        vk::BufferImageCopy region(
-            0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-            {0, 0, 0}, vk::Extent3D(dst_img.extent_, 1));
-        cmdbuf.copyBufferToImage(src_buf, dst_img, vk::ImageLayout::eTransferDstOptimal, region);
-        return MyErrCode::kOk;
-    };
-    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
+    vk::BufferImageCopy region(0, 0, 0,
+                               vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                               {0, 0, 0}, vk::Extent3D(dst_img.getExtent(), 1));
+    copyBufferToImage(src_buf, dst_img, vk::ImageLayout::eTransferDstOptimal, region);
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_buf_id,
-                                    void const* src_host)
+MyErrCode CommandBuffer::pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage,
+                                               vk::AccessFlags2 src_access,
+                                               vk::PipelineStageFlags2 dst_stage,
+                                               vk::AccessFlags2 dst_access)
+{
+    vk::MemoryBarrier2 barrier(src_stage, src_access, dst_stage, dst_access);
+    pipelineBarrier2(vk::DependencyInfo{{}, barrier});
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout new_layout,
+                                              vk::PipelineStageFlags2 src_stage,
+                                              vk::AccessFlags2 src_access,
+                                              vk::PipelineStageFlags2 dst_stage,
+                                              vk::AccessFlags2 dst_access)
+{
+    Image image = ctx_->getImage(image_id);
+    vk::ImageMemoryBarrier2 barrier(
+        src_stage, src_access, dst_stage, dst_access, image.getLayout(), new_layout,
+        vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
+        {vk::ImageAspectFlagBits::eColor, 0, image.getMipLevels(), 0, 1});
+    pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
+    image.setLayout(new_layout);
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages,
+                                       uint32_t offset, uint32_t size, void const* data)
+{
+    pushConstants(ctx_->getPipelineLayout(pipeline_layout_id), stages, offset, size, data);
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::bindComputePipeline(Uid pipeline_id)
+{
+    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_->getPipeline(pipeline_id));
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
+                                            Uid pipeline_layout_id, std::vector<Uid> const& set_ids)
+{
+    std::vector<vk::DescriptorSet> sets;
+    for (auto id: set_ids) {
+        sets.push_back(ctx_->getDescriptorSet(id));
+    }
+    bindDescriptorSets(bind_point, ctx_->getPipelineLayout(pipeline_layout_id), 0, sets, {});
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
+                                      Uid dst_buf_id)
+{
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmdbuf) -> MyErrCode {
+        CHECK_ERR_RET(cmdbuf.copyBufferToBuffer(src_buf_id, dst_buf_id));
+        return MyErrCode::kOk;
+    }));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
+                                     Uid dst_img_id)
+{
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmdbuf) -> MyErrCode {
+        CHECK_ERR_RET(cmdbuf.copyBufferToImage(src_buf_id, dst_img_id));
+        return MyErrCode::kOk;
+    }));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
+                                    Uid dst_buf_id)
 {
     Buffer dst_buf = getBuffer(dst_buf_id);
     if (dst_buf.canBeMapped()) {
@@ -1002,8 +1065,47 @@ MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, Uid dst_b
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, Uid dst_img_id,
-                                   void const* src_host)
+MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
+                                         vk::ImageLayout new_layout)
+{
+    Image image = getImage(image_id);
+    vk::ImageLayout old_layout = image.layout_;
+    if (old_layout == new_layout) {
+        return MyErrCode::kOk;
+    }
+
+    vk::PipelineStageFlags2 src_stage;
+    vk::AccessFlags2 src_access;
+    vk::PipelineStageFlags2 dst_stage;
+    vk::AccessFlags2 dst_access;
+
+    if (old_layout == vk::ImageLayout::eUndefined &&
+        new_layout == vk::ImageLayout::eTransferDstOptimal) {
+        src_stage = vk::PipelineStageFlagBits2::eNone;
+        src_access = vk::AccessFlagBits2::eNone;
+        dst_stage = vk::PipelineStageFlagBits2::eTransfer;
+        dst_access = vk::AccessFlagBits2::eTransferWrite;
+    } else if (old_layout == vk::ImageLayout::eTransferDstOptimal &&
+               new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+        src_stage = vk::PipelineStageFlagBits2::eTransfer;
+        src_access = vk::AccessFlagBits2::eTransferWrite;
+        dst_stage = vk::PipelineStageFlagBits2::eFragmentShader;
+        dst_access = vk::AccessFlagBits2::eShaderRead;
+    } else {
+        ELOG("unsupported layout transition: {} -> {}", old_layout, new_layout);
+        return MyErrCode::kFailed;
+    }
+
+    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmdbuf) -> MyErrCode {
+        CHECK_ERR_RET(cmdbuf.pipelineImageBarrier(image_id, new_layout, src_stage, src_access,
+                                                  dst_stage, dst_access));
+        return MyErrCode::kOk;
+    }));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
+                                   Uid dst_img_id)
 {
     Image dst_img = getImage(dst_img_id);
     if (dst_img.canBeMapped()) {
@@ -1024,44 +1126,6 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, Uid dst_im
                                         vk::ImageLayout::eTransferDstOptimal));
     CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, dst_img_id, staging_buffer_id));
     CHECK_ERR_RET(destroyBuffer(staging_buffer_id));
-    return MyErrCode::kOk;
-}
-
-MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
-                                         vk::ImageLayout new_layout)
-{
-    Image image = getImage(image_id);
-    vk::ImageLayout old_layout = image.layout_;
-    if (old_layout == new_layout) {
-        return MyErrCode::kOk;
-    }
-    auto cmd = [&](vk::CommandBuffer& cmdbuf) -> MyErrCode {
-        vk::ImageMemoryBarrier2 barrier(
-            {}, {}, {}, {}, old_layout, new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
-            image, {vk::ImageAspectFlagBits::eColor, 0, image.mip_levels_, 0, 1});
-
-        if (old_layout == vk::ImageLayout::eUndefined &&
-            new_layout == vk::ImageLayout::eTransferDstOptimal) {
-            barrier.setSrcStageMask(vk::PipelineStageFlagBits2::eNone);
-            barrier.setDstStageMask(vk::PipelineStageFlagBits2::eTransfer);
-            barrier.setSrcAccessMask(vk::AccessFlagBits2::eNone);
-            barrier.setDstAccessMask(vk::AccessFlagBits2::eTransferWrite);
-        } else if (old_layout == vk::ImageLayout::eTransferDstOptimal &&
-                   new_layout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-            barrier.setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer);
-            barrier.setDstStageMask(vk::PipelineStageFlagBits2::eFragmentShader);
-            barrier.setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite);
-            barrier.setDstAccessMask(vk::AccessFlagBits2::eShaderRead);
-        } else {
-            ELOG("unsupported layout transition: {} -> {}", old_layout, new_layout);
-            return MyErrCode::kFailed;
-        }
-
-        cmdbuf.pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
-        return MyErrCode::kOk;
-    };
-    CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, cmd));
-    image.setLayout(new_layout);
     return MyErrCode::kOk;
 }
 
@@ -1207,7 +1271,7 @@ MyErrCode Context::signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore)
 MyErrCode Context::recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
                                  CmdSubmitter const& submitter)
 {
-    vk::CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+    CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
     CHECK_VKHPP_RET(command_buffer.begin({usage}));
     CHECK_ERR_RET(submitter(command_buffer));
     CHECK_VKHPP_RET(command_buffer.end());
@@ -1239,7 +1303,7 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
         signal_sems.emplace_back(getSemaphore(s.id_), s.val_, s.stages_);
     }
     vk::Queue queue = getQueue(queue_id);
-    vk::CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+    CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
     vk::CommandBufferSubmitInfo cmdbuf_info = {command_buffer};
     vk::SubmitInfo2 submit_info = {vk::SubmitFlags{}, wait_sems, cmdbuf_info, signal_sems};
     CHECK_VKHPP_RET(
