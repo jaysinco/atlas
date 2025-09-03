@@ -41,10 +41,12 @@ MY_MAIN
     myvk::Context ctx;
     CHECK_ERR_RET(ctx.createInstance("vkcomp", {"VK_EXT_debug_utils"}));
     CHECK_ERR_RET(ctx.createPhysicalDevice());
+    uint32_t queue_family;
     auto queue_picker = [](uint32_t family_index, vk::QueueFamilyProperties const& prop) -> bool {
         return static_cast<bool>(prop.queueFlags & vk::QueueFlagBits::eCompute);
     };
-    CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{UID_vkQueue_compute, queue_picker}}));
+    CHECK_ERR_RET(ctx.pickQueueFamily(queue_picker, queue_family));
+    CHECK_ERR_RET(ctx.createDeviceAndQueues({}, {{queue_family, {UID_vkQueue_compute}}}));
     CHECK_ERR_RET(ctx.createCommandPool(UID_vkCommandPool_compute, UID_vkQueue_compute,
                                         vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
                                             vk::CommandPoolCreateFlagBits::eTransient));
@@ -56,11 +58,11 @@ MY_MAIN
     uint32_t const buffer_size = num_elements * sizeof(int32_t);
 
     CHECK_ERR_RET(ctx.createBuffer(
-        UID_vkBuffer_a, buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
+        UID_vkBuffer_a, {buffer_size, vk::BufferUsageFlagBits::eStorageBuffer},
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
 
     CHECK_ERR_RET(ctx.createBuffer(
-        UID_vkBuffer_b, buffer_size, vk::BufferUsageFlagBits::eStorageBuffer,
+        UID_vkBuffer_b, {buffer_size, vk::BufferUsageFlagBits::eStorageBuffer},
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
 
     int32_t* a_buffer_data = reinterpret_cast<int32_t*>(ctx.getBuffer(UID_vkBuffer_a).map());

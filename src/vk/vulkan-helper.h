@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.h>
 #include <map>
+#include <set>
 #include <functional>
 
 namespace toolkit
@@ -70,7 +71,6 @@ class Context;
 class Allocation
 {
 public:
-    Allocation();
     Allocation(VmaAllocation alloc, VmaAllocator allocator);
     vk::MemoryPropertyFlags getMemProp() const;
     VmaAllocationInfo getAllocInfo() const;
@@ -87,32 +87,46 @@ private:
     VmaAllocator allocator_;
 };
 
+struct BufferMeta
+{
+    uint64_t size = 0;
+    vk::BufferUsageFlags usages = vk::BufferUsageFlagBits::eStorageBuffer;
+};
+
 class Buffer: public Allocation
 {
 public:
-    Buffer();
-    Buffer(uint64_t size, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator);
-    uint64_t getSize() const;
+    Buffer(BufferMeta const& meta, vk::Buffer buf, VmaAllocation alloc, VmaAllocator allocator);
+    BufferMeta const& getMeta() const;
     operator vk::Buffer() const;
     operator bool() const;
 
 private:
     friend class Context;
-    uint64_t size_;
+    BufferMeta meta_;
     vk::Buffer buf_;
+};
+
+struct ImageMeta
+{
+    vk::Format format;
+    vk::Extent2D extent = {0, 0};
+    uint64_t size = 0;
+    vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
+    vk::ImageLayout layout = vk::ImageLayout::eUndefined;
+    uint32_t mip_levels = 1;
+    vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
+    vk::ImageAspectFlags aspects = vk::ImageAspectFlagBits::eColor;
+    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eSampled;
 };
 
 class Image: public Allocation
 
 {
 public:
-    Image();
-    Image(vk::Format format, vk::Extent2D extent, vk::ImageLayout layout, uint32_t mip_levels,
-          vk::Image img, vk::ImageView img_view, VmaAllocation alloc, VmaAllocator allocator);
-    uint64_t getSize() const;
-    vk::Extent2D getExtent() const;
-    vk::ImageLayout getLayout() const;
-    uint32_t getMipLevels() const;
+    Image(ImageMeta const& meta, vk::Image img, vk::ImageView img_view, VmaAllocation alloc,
+          VmaAllocator allocator);
+    ImageMeta const& getMeta() const;
     void setLayout(vk::ImageLayout layout);
     operator vk::Image() const;
     operator vk::ImageView() const;
@@ -120,10 +134,7 @@ public:
 
 private:
     friend class Context;
-    vk::Format format_;
-    vk::Extent2D extent_;
-    vk::ImageLayout layout_;
-    uint32_t mip_levels_;
+    ImageMeta meta_;
     vk::Image img_;
     vk::ImageView img_view_;
 };
@@ -131,7 +142,6 @@ private:
 class Semaphore
 {
 public:
-    Semaphore();
     Semaphore(vk::SemaphoreType type, vk::Semaphore sem);
     bool isTimeline() const;
     operator vk::Semaphore() const;
@@ -157,19 +167,25 @@ private:
     uint64_t val_;
 };
 
+struct SwapchainMeta
+{
+    vk::SurfaceFormatKHR surface_format;
+    vk::Extent2D extent = {0, 0};
+    vk::PresentModeKHR mode = vk::PresentModeKHR::eMailbox;
+    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eColorAttachment;
+};
+
 class Swapchain
 {
 public:
-    Swapchain();
-    Swapchain(vk::Format format, vk::Extent2D extent, vk::SwapchainKHR swapchain,
+    Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
               std::vector<vk::Image> const& images, std::vector<vk::ImageView> const& image_views);
     operator vk::SwapchainKHR() const;
     operator bool() const;
 
 private:
     friend class Context;
-    vk::Format format_;
-    vk::Extent2D extent_;
+    SwapchainMeta meta_;
     vk::SwapchainKHR swapchain_;
     std::vector<vk::Image> images_;
     std::vector<vk::ImageView> image_views_;
@@ -178,7 +194,6 @@ private:
 class Queue
 {
 public:
-    Queue();
     Queue(vk::Queue queue, uint32_t family_index);
     uint32_t getFamilyIndex() const;
     operator vk::Queue() const;
@@ -205,7 +220,6 @@ private:
 class DescriptorSet
 {
 public:
-    DescriptorSet();
     DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool);
     operator vk::DescriptorSet() const;
     operator bool() const;
@@ -232,7 +246,6 @@ private:
 class CommandBuffer: public vk::CommandBuffer
 {
 public:
-    CommandBuffer();
     CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context* ctx);
 
     MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
@@ -268,18 +281,15 @@ public:
     MyErrCode createInstance(char const* app_name, std::vector<char const*> const& extensions);
     MyErrCode createPhysicalDevice(DeviceRater const& device_rater = defaultDeviceRater);
     MyErrCode createDeviceAndQueues(std::vector<char const*> const& extensions,
-                                    std::map<Uid, QueuePicker> const& queue_pickers);
+                                    std::map<uint32_t, std::set<Uid>> const& queue_ids);
     MyErrCode createAllocator();
     MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
     MyErrCode createCommandPool(Uid id, Uid queue_id, vk::CommandPoolCreateFlags flags = {});
     MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
-                                   std::map<vk::DescriptorType, uint32_t> const& size);
-    MyErrCode createBuffer(Uid id, uint64_t size, vk::BufferUsageFlags usage,
-                           vk::MemoryPropertyFlags properties, VmaAllocationCreateFlags flags = 0);
-    MyErrCode createImage(Uid id, vk::Format format, vk::Extent2D extent, vk::ImageTiling tiling,
-                          vk::ImageLayout initial_layout, uint32_t mip_levels,
-                          vk::SampleCountFlagBits samples, vk::ImageAspectFlags aspect_mask,
-                          vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties,
+                                   std::map<vk::DescriptorType, uint32_t> const& sizes);
+    MyErrCode createBuffer(Uid id, BufferMeta const& meta, vk::MemoryPropertyFlags properties,
+                           VmaAllocationCreateFlags flags = 0);
+    MyErrCode createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
@@ -292,9 +302,7 @@ public:
     MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids,
                                    std::vector<vk::PushConstantRange> const& push_ranges = {});
     MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
-    MyErrCode createSwapchain(Uid id, Uid surface_id, vk::SurfaceFormatKHR surface_format,
-                              vk::Extent2D extent, vk::PresentModeKHR mode,
-                              vk::ImageUsageFlags usage);
+    MyErrCode createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& meta);
 
     vk::Instance& getInstance();
     vk::SurfaceKHR& getSurface(Uid id);
@@ -315,6 +323,7 @@ public:
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
 
+    MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
     MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
     MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id);
     MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
