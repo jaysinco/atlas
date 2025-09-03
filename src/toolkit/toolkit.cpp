@@ -22,11 +22,12 @@ std::atomic<int> Uid::temp_id = INT32_MIN + 1000;
 
 Uid Uid::temp()
 {
-    int expected = temp_id.load();
+    int expected = temp_id.load(std::memory_order_relaxed);
     int desired;
     do {
         desired = (expected >= -1000) ? (INT32_MIN + 1000) : (expected + 1);
-    } while (!temp_id.compare_exchange_weak(expected, desired));
+    } while (!temp_id.compare_exchange_weak(expected, desired, std::memory_order_relaxed,
+                                            std::memory_order_relaxed));
     return desired;
 }
 
