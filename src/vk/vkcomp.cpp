@@ -51,7 +51,8 @@ MY_MAIN
                                         vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
                                             vk::CommandPoolCreateFlagBits::eTransient));
     CHECK_ERR_RET(ctx.createDescriptorPool(UID_vkDescriptorPool_main, 2,
-                                           {{vk::DescriptorType::eStorageBuffer, 4}}));
+                                           {{vk::DescriptorType::eStorageBuffer, 4}},
+                                           vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
     CHECK_ERR_RET(ctx.createAllocator());
 
     uint32_t const num_elements = 10;
@@ -84,17 +85,11 @@ MY_MAIN
 
     CHECK_ERR_RET(ctx.updateDescriptorSet(
         UID_vkDescriptorSet_square,
-        {
-            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
-            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
-        }));
+        {{0, {.buffer_id = UID_vkBuffer_a}}, {1, {.buffer_id = UID_vkBuffer_b}}}));
 
     CHECK_ERR_RET(ctx.updateDescriptorSet(
         UID_vkDescriptorSet_mul2,
-        {
-            {0, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_b)},
-            {1, vk::DescriptorType::eStorageBuffer, ctx.getBuffer(UID_vkBuffer_a)},
-        }));
+        {{0, {.buffer_id = UID_vkBuffer_b}}, {1, {.buffer_id = UID_vkBuffer_a}}}));
 
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_square, toolkit::getDataDir() / "square.glsl.spv"));

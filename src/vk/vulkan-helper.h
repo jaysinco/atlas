@@ -84,7 +84,7 @@ struct ImageMeta
     vk::Extent2D extent;
     uint64_t size = 0;  // skip filling
     vk::ImageTiling tiling;
-    vk::ImageLayout layout;
+    vk::ImageLayout init_layout;
     uint32_t mip_levels;
     vk::SampleCountFlagBits samples;
     vk::ImageAspectFlags aspects;
@@ -106,6 +106,14 @@ struct RenderPassMeta
     std::vector<vk::AttachmentReference> attachment_refs;
     std::vector<vk::SubpassDescription> subpasses;
     std::vector<vk::SubpassDependency> dependencies;
+};
+
+struct WriteDescriptorSetBinding
+{
+    Uid buffer_id;
+    Uid sample_id;
+    Uid image_id;
+    vk::ImageLayout image_layout;
 };
 
 class Allocation
@@ -148,7 +156,6 @@ public:
     Image(ImageMeta const& meta, vk::Image img, vk::ImageView img_view, VmaAllocation alloc,
           VmaAllocator allocator);
     ImageMeta const& getMeta() const;
-    void setLayout(vk::ImageLayout layout);
     operator vk::Image() const;
     operator vk::ImageView() const;
     operator bool() const;
@@ -229,10 +236,25 @@ private:
     vk::DescriptorSetLayoutBinding layout_;
 };
 
+class DescriptorSetLayout
+{
+public:
+    DescriptorSetLayout(vk::DescriptorSetLayout layout,
+                        std::vector<vk::DescriptorSetLayoutBinding> const& bindings);
+    operator vk::DescriptorSetLayout() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    vk::DescriptorSetLayout layout_;
+    std::vector<vk::DescriptorSetLayoutBinding> bindings_;
+};
+
 class DescriptorSet
 {
 public:
-    DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool);
+    DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool,
+                  std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings);
     operator vk::DescriptorSet() const;
     operator bool() const;
 
@@ -240,19 +262,7 @@ private:
     friend class Context;
     vk::DescriptorSet set_;
     vk::DescriptorPool pool_;
-};
-
-class WriteDescriptorSet
-{
-public:
-    WriteDescriptorSet(uint32_t binding, vk::DescriptorType type, Buffer& buffer);
-    operator vk::WriteDescriptorSet() const;
-
-private:
-    friend class Context;
-    vk::WriteDescriptorSet write_;
-    std::vector<vk::DescriptorImageInfo> images_;
-    std::vector<vk::DescriptorBufferInfo> buffers_;
+    std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings_;
 };
 
 class CommandBuffer: public vk::CommandBuffer
@@ -263,12 +273,13 @@ public:
     MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
                                  vk::DeviceSize dst_offset = 0,
                                  vk::DeviceSize size = vk::WholeSize);
-    MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id);
+    MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id, vk::ImageLayout dst_img_layout);
     MyErrCode pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
                                     vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
-    MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout new_layout,
-                                   vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
-                                   vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
+    MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
+                                   vk::ImageLayout new_layout, vk::PipelineStageFlags2 src_stage,
+                                   vk::AccessFlags2 src_access, vk::PipelineStageFlags2 dst_stage,
+                                   vk::AccessFlags2 dst_access);
     MyErrCode pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages, uint32_t offset,
                             uint32_t size, void const* data);
     MyErrCode bindComputePipeline(Uid pipeline_id);
@@ -296,11 +307,13 @@ public:
     MyErrCode createSurface(Uid id, vk::SurfaceKHR surface);
     MyErrCode createCommandPool(Uid id, Uid queue_id, vk::CommandPoolCreateFlags flags = {});
     MyErrCode createDescriptorPool(Uid id, uint32_t max_sets,
-                                   std::map<vk::DescriptorType, uint32_t> const& sizes);
+                                   std::map<vk::DescriptorType, uint32_t> const& sizes,
+                                   vk::DescriptorPoolCreateFlags flags = {});
     MyErrCode createBuffer(Uid id, BufferMeta const& meta, vk::MemoryPropertyFlags properties,
                            VmaAllocationCreateFlags flags = 0);
     MyErrCode createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
+    MyErrCode createSampler();
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
     MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val);
@@ -325,11 +338,12 @@ public:
     vk::DescriptorPool& getDescriptorPool(Uid id);
     Buffer& getBuffer(Uid id);
     Image& getImage(Uid id);
+    vk::Sampler& getSampler(Uid id);
     CommandBuffer& getCommandBuffer(Uid id);
     Semaphore& getSemaphore(Uid id);
     vk::Fence& getFence(Uid id);
     vk::ShaderModule& getShaderModule(Uid id);
-    vk::DescriptorSetLayout& getDescriptorSetLayout(Uid id);
+    DescriptorSetLayout& getDescriptorSetLayout(Uid id);
     vk::PipelineLayout& getPipelineLayout(Uid id);
     vk::Pipeline& getPipeline(Uid id);
     DescriptorSet& getDescriptorSet(Uid id);
@@ -339,14 +353,16 @@ public:
 
     MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
     MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
-    MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id);
+    MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id,
+                                vk::ImageLayout dst_img_layout);
     MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
                                Uid dst_buf_id);
     MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
-                              Uid dst_img_id);
+                              Uid dst_img_id, vk::ImageLayout dst_img_layout);
     MyErrCode transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
-                                    vk::ImageLayout new_layout);
-    MyErrCode updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes);
+                                    vk::ImageLayout old_layout, vk::ImageLayout new_layout);
+    MyErrCode updateDescriptorSet(
+        Uid set_id, std::map<uint32_t, WriteDescriptorSetBinding> const& write_bindings);
     MyErrCode waitQueueIdle(Uid queue_id);
     MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,
                          uint64_t timeout = UINT64_MAX);
@@ -366,6 +382,7 @@ public:
     MyErrCode destroyDescriptorPool(Uid id);
     MyErrCode destroyBuffer(Uid id);
     MyErrCode destroyImage(Uid id);
+    MyErrCode destroySampler(Uid id);
     MyErrCode destroyCommandBuffer(Uid id);
     MyErrCode destroySemaphore(Uid id);
     MyErrCode destroyFence(Uid id);
@@ -401,13 +418,14 @@ private:
     std::map<Uid, vk::DescriptorPool> descriptor_pools_;
     std::map<Uid, Buffer> buffers_;
     std::map<Uid, Image> images_;
+    std::map<Uid, vk::Sampler> samplers_;
     std::map<Uid, CommandBuffer> command_buffers_;
     std::map<Uid, Semaphore> semaphores_;
     std::map<Uid, vk::Fence> fences_;
     std::map<Uid, vk::ShaderModule> shader_modules_;
     std::map<Uid, vk::PipelineLayout> pipeline_layouts_;
     std::map<Uid, vk::Pipeline> pipelines_;
-    std::map<Uid, vk::DescriptorSetLayout> descriptor_set_layouts_;
+    std::map<Uid, DescriptorSetLayout> descriptor_set_layouts_;
     std::map<Uid, DescriptorSet> descriptor_sets_;
     std::map<Uid, Swapchain> swapchains_;
     std::map<Uid, vk::RenderPass> render_passes_;

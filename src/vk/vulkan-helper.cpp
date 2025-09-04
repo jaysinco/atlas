@@ -84,8 +84,6 @@ Image::Image(ImageMeta const& meta, vk::Image img, vk::ImageView img_view, VmaAl
 
 ImageMeta const& Image::getMeta() const { return meta_; }
 
-void Image::setLayout(vk::ImageLayout layout) { meta_.layout = layout; }
-
 Image::operator vk::Image() const { return img_; }
 
 Image::operator vk::ImageView() const { return img_view_; }
@@ -134,7 +132,19 @@ Queue::operator vk::Queue() const { return queue_; }
 
 Queue::operator bool() const { return queue_; }
 
-DescriptorSet::DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool): set_(set), pool_(pool)
+DescriptorSetLayout::DescriptorSetLayout(
+    vk::DescriptorSetLayout layout, std::vector<vk::DescriptorSetLayoutBinding> const& bindings)
+    : layout_(layout), bindings_(bindings)
+{
+}
+
+DescriptorSetLayout::operator vk::DescriptorSetLayout() const { return layout_; }
+
+DescriptorSetLayout::operator bool() const { return layout_; }
+
+DescriptorSet::DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool,
+                             std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings)
+    : set_(set), pool_(pool), layout_bindings_(layout_bindings)
 {
 }
 
@@ -149,15 +159,6 @@ DescriptorSetLayoutBinding::DescriptorSetLayoutBinding(vk::DescriptorType type,
 }
 
 DescriptorSetLayoutBinding::operator vk::DescriptorSetLayoutBinding() const { return layout_; }
-
-WriteDescriptorSet::WriteDescriptorSet(uint32_t binding, vk::DescriptorType type, Buffer& buffer)
-{
-    vk::DescriptorBufferInfo buf_info(buffer, 0, buffer.getMeta().size);
-    buffers_.emplace_back(buf_info);
-    write_ = vk::WriteDescriptorSet({}, binding, 0, 1, type, nullptr, &buffers_.back());
-}
-
-WriteDescriptorSet::operator vk::WriteDescriptorSet() const { return write_; }
 
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
@@ -462,7 +463,8 @@ MyErrCode Context::destroyCommandPool(Uid id)
 }
 
 MyErrCode Context::createDescriptorPool(Uid id, uint32_t max_sets,
-                                        std::map<vk::DescriptorType, uint32_t> const& sizes)
+                                        std::map<vk::DescriptorType, uint32_t> const& sizes,
+                                        vk::DescriptorPoolCreateFlags flags)
 {
     if (descriptor_pools_.find(id) != descriptor_pools_.end()) {
         CHECK_ERR_RET(destroyDescriptorPool(id));
@@ -471,8 +473,7 @@ MyErrCode Context::createDescriptorPool(Uid id, uint32_t max_sets,
     for (auto [type, count]: sizes) {
         pool_size.emplace_back(type, count);
     }
-    auto pool = CHECK_VKHPP_VAL(
-        device_.createDescriptorPool({vk::DescriptorPoolCreateFlags(), max_sets, pool_size}));
+    auto pool = CHECK_VKHPP_VAL(device_.createDescriptorPool({flags, max_sets, pool_size}));
     descriptor_pools_.emplace(id, pool);
     CHECK_ERR_RET(setDebugObjectId(pool, id));
     return MyErrCode::kOk;
@@ -598,7 +599,7 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
     vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), vk::ImageType::e2D, meta.format,
                                    vk::Extent3D(meta.extent, 1), meta.mip_levels, 1, meta.samples,
                                    meta.tiling, meta.usages, vk::SharingMode::eExclusive, {},
-                                   meta.layout);
+                                   meta.init_layout);
 
     VmaAllocationCreateInfo vma_info = {};
     vma_info.flags = flags;
@@ -638,6 +639,28 @@ MyErrCode Context::destroyImage(Uid id)
         return MyErrCode::kOk;
     } else {
         ELOG("image not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createSampler() { return MyErrCode::kOk; }
+
+vk::Sampler& Context::getSampler(Uid id)
+{
+    if (samplers_.find(id) == samplers_.end()) {
+        MY_THROW("sampler not exist: {}", id);
+    }
+    return samplers_.at(id);
+}
+
+MyErrCode Context::destroySampler(Uid id)
+{
+    if (auto it = samplers_.find(id); it != samplers_.end()) {
+        device_.destroy(it->second);
+        samplers_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("sampler not exist: {}", id);
         return MyErrCode::kFailed;
     }
 }
@@ -839,12 +862,12 @@ MyErrCode Context::createDescriptorSetLayout(
     }
     auto layout = CHECK_VKHPP_VAL(
         device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layout_bindings}));
-    descriptor_set_layouts_.emplace(id, layout);
+    descriptor_set_layouts_.emplace(id, DescriptorSetLayout{layout, layout_bindings});
     CHECK_ERR_RET(setDebugObjectId(layout, id));
     return MyErrCode::kOk;
 }
 
-vk::DescriptorSetLayout& Context::getDescriptorSetLayout(Uid id)
+DescriptorSetLayout& Context::getDescriptorSetLayout(Uid id)
 {
     if (descriptor_set_layouts_.find(id) == descriptor_set_layouts_.end()) {
         MY_THROW("descriptor set layout not exist: {}", id);
@@ -870,9 +893,9 @@ MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid descriptor
         CHECK_ERR_RET(destroyDescriptorSet(id));
     }
     auto& pool = getDescriptorPool(descriptor_pool_id);
-    auto sets = CHECK_VKHPP_VAL(
-        device_.allocateDescriptorSets({pool, 1, &getDescriptorSetLayout(set_layout_id)}));
-    descriptor_sets_.emplace(id, DescriptorSet{sets.front(), pool});
+    DescriptorSetLayout& layout = getDescriptorSetLayout(set_layout_id);
+    auto sets = CHECK_VKHPP_VAL(device_.allocateDescriptorSets({pool, layout.layout_}));
+    descriptor_sets_.emplace(id, DescriptorSet{sets.front(), pool, layout.bindings_});
     CHECK_ERR_RET(setDebugObjectId(sets.front(), id));
     return MyErrCode::kOk;
 }
@@ -918,13 +941,10 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
     return MyErrCode::kOk;
 }
 
-MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id)
+MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id,
+                                           vk::ImageLayout dst_img_layout)
 {
     Image& dst_img = ctx_->getImage(dst_img_id);
-    if (dst_img.getMeta().layout != vk::ImageLayout::eTransferDstOptimal) {
-        ELOG("invalid image layout for copy: {}", dst_img.getMeta().layout);
-        return MyErrCode::kOk;
-    }
     Buffer& src_buf = ctx_->getBuffer(src_buf_id);
     if (src_buf.getMeta().size != dst_img.getMeta().size) {
         ELOG("invalid buffer size for copy: {} != {}", src_buf.getMeta().size,
@@ -934,7 +954,7 @@ MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id)
     vk::BufferImageCopy region(0, 0, 0,
                                vk::ImageSubresourceLayers{dst_img.getMeta().aspects, 0, 0, 1},
                                {0, 0, 0}, vk::Extent3D(dst_img.getMeta().extent, 1));
-    copyBufferToImage(src_buf, dst_img, vk::ImageLayout::eTransferDstOptimal, region);
+    copyBufferToImage(src_buf, dst_img, dst_img_layout, region);
     return MyErrCode::kOk;
 }
 
@@ -948,19 +968,19 @@ MyErrCode CommandBuffer::pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage
     return MyErrCode::kOk;
 }
 
-MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout new_layout,
+MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
+                                              vk::ImageLayout new_layout,
                                               vk::PipelineStageFlags2 src_stage,
                                               vk::AccessFlags2 src_access,
                                               vk::PipelineStageFlags2 dst_stage,
                                               vk::AccessFlags2 dst_access)
 {
     Image image = ctx_->getImage(image_id);
-    vk::ImageMemoryBarrier2 barrier(src_stage, src_access, dst_stage, dst_access,
-                                    image.getMeta().layout, new_layout, vk::QueueFamilyIgnored,
-                                    vk::QueueFamilyIgnored, image,
+    vk::ImageMemoryBarrier2 barrier(src_stage, src_access, dst_stage, dst_access, old_layout,
+                                    new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
+                                    image,
                                     {image.getMeta().aspects, 0, image.getMeta().mip_levels, 0, 1});
     pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
-    image.setLayout(new_layout);
     return MyErrCode::kOk;
 }
 
@@ -999,10 +1019,10 @@ MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src
 }
 
 MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
-                                     Uid dst_img_id)
+                                     Uid dst_img_id, vk::ImageLayout dst_img_layout)
 {
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id));
+        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id, dst_img_layout));
         return MyErrCode::kOk;
     }));
     return MyErrCode::kOk;
@@ -1011,7 +1031,7 @@ MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_
 MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
                                     Uid dst_buf_id)
 {
-    Buffer dst_buf = getBuffer(dst_buf_id);
+    Buffer& dst_buf = getBuffer(dst_buf_id);
     if (dst_buf.canBeMapped()) {
         ELOG("no need to call this function for buffer {} that can be mapped", dst_buf_id);
         return MyErrCode::kFailed;
@@ -1032,10 +1052,8 @@ MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, void cons
 }
 
 MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
-                                         vk::ImageLayout new_layout)
+                                         vk::ImageLayout old_layout, vk::ImageLayout new_layout)
 {
-    Image image = getImage(image_id);
-    vk::ImageLayout old_layout = image.getMeta().layout;
     if (old_layout == new_layout) {
         return MyErrCode::kOk;
     }
@@ -1063,17 +1081,17 @@ MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid 
     }
 
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.pipelineImageBarrier(image_id, new_layout, src_stage, src_access,
-                                               dst_stage, dst_access));
+        CHECK_ERR_RET(cmd.pipelineImageBarrier(image_id, old_layout, new_layout, src_stage,
+                                               src_access, dst_stage, dst_access));
         return MyErrCode::kOk;
     }));
     return MyErrCode::kOk;
 }
 
 MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
-                                   Uid dst_img_id)
+                                   Uid dst_img_id, vk::ImageLayout dst_img_layout)
 {
-    Image dst_img = getImage(dst_img_id);
+    Image& dst_img = getImage(dst_img_id);
     if (dst_img.canBeMapped()) {
         ELOG("no need to call this function for image {} that can be mapped", dst_img_id);
         return MyErrCode::kFailed;
@@ -1088,22 +1106,48 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const
         VMA_ALLOCATION_CREATE_MAPPED_BIT));
 
     memcpy(getBuffer(staging_buffer_id).getAllocInfo().pMappedData, src_host, buffer_size);
-    CHECK_ERR_RET(transitionImageLayout(queue_id, command_pool_id, dst_img_id,
+    CHECK_ERR_RET(transitionImageLayout(queue_id, command_pool_id, dst_img_id, dst_img_layout,
                                         vk::ImageLayout::eTransferDstOptimal));
-    CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, dst_img_id, staging_buffer_id));
+    CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, dst_img_id, staging_buffer_id,
+                                    vk::ImageLayout::eTransferDstOptimal));
     CHECK_ERR_RET(destroyBuffer(staging_buffer_id));
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::updateDescriptorSet(Uid set_id, std::vector<WriteDescriptorSet> const& writes)
+MyErrCode Context::updateDescriptorSet(
+    Uid set_id, std::map<uint32_t, WriteDescriptorSetBinding> const& write_bindings)
 {
     auto& set = getDescriptorSet(set_id);
-    std::vector<vk::WriteDescriptorSet> write_set;
-    for (vk::WriteDescriptorSet w: writes) {
-        w.setDstSet(set);
-        write_set.push_back(w);
+
+    std::vector<vk::DescriptorImageInfo> image_infos;
+    std::vector<vk::DescriptorBufferInfo> buffer_infos;
+    image_infos.reserve(write_bindings.size());
+    buffer_infos.reserve(write_bindings.size());
+
+    std::vector<vk::WriteDescriptorSet> set_writes;
+    for (auto& [binding, write]: write_bindings) {
+        vk::DescriptorType type = set.layout_bindings_.at(binding).descriptorType;
+        switch (type) {
+            case vk::DescriptorType::eStorageBuffer: {
+                auto& buffer = getBuffer(write.buffer_id);
+                buffer_infos.emplace_back(buffer, 0, buffer.getMeta().size);
+                set_writes.emplace_back(set, binding, 0, 1, type, nullptr, &buffer_infos.back());
+                break;
+            }
+            case vk::DescriptorType::eCombinedImageSampler: {
+                auto& image = getImage(write.image_id);
+                auto& sampler = getSampler(write.sample_id);
+                image_infos.emplace_back(sampler, image.img_view_, write.image_layout);
+                set_writes.emplace_back(set, binding, 0, 1, type, &image_infos.back());
+                break;
+            }
+            default:
+                ELOG("unsupported write descriptor type: {}", type);
+                return MyErrCode::kFailed;
+        }
     }
-    device_.updateDescriptorSets(write_set, {});
+
+    device_.updateDescriptorSets(set_writes, {});
     return MyErrCode::kOk;
 }
 
@@ -1148,7 +1192,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
     ImageMeta image_meta = {.format = meta.surface_format.format,
                             .extent = meta.extent,
                             .tiling = vk::ImageTiling::eOptimal,
-                            .layout = vk::ImageLayout::eUndefined,
+                            .init_layout = vk::ImageLayout::eUndefined,
                             .mip_levels = 1,
                             .samples = vk::SampleCountFlagBits::e1,
                             .aspects = vk::ImageAspectFlagBits::eColor,
@@ -1318,7 +1362,7 @@ MyErrCode Context::signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore)
 MyErrCode Context::recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
                                  CmdSubmitter const& submitter)
 {
-    CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+    CommandBuffer& command_buffer = getCommandBuffer(command_buffer_id);
     CHECK_VKHPP_RET(command_buffer.begin({usage}));
     CHECK_ERR_RET(submitter(command_buffer));
     CHECK_VKHPP_RET(command_buffer.end());
@@ -1350,7 +1394,7 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
         signal_sems.emplace_back(getSemaphore(s.id_), s.val_, s.stages_);
     }
     vk::Queue queue = getQueue(queue_id);
-    CommandBuffer command_buffer = getCommandBuffer(command_buffer_id);
+    CommandBuffer& command_buffer = getCommandBuffer(command_buffer_id);
     vk::CommandBufferSubmitInfo cmdbuf_info = {command_buffer};
     vk::SubmitInfo2 submit_info = {vk::SubmitFlags{}, wait_sems, cmdbuf_info, signal_sems};
     CHECK_VKHPP_RET(
@@ -1393,6 +1437,9 @@ MyErrCode Context::destroy()
     }
     while (!buffers_.empty()) {
         CHECK_ERR_RET(destroyBuffer(buffers_.begin()->first));
+    }
+    while (!samplers_.empty()) {
+        CHECK_ERR_RET(destroySampler(samplers_.begin()->first));
     }
     while (!shader_modules_.empty()) {
         CHECK_ERR_RET(destroyShaderModule(shader_modules_.begin()->first));
