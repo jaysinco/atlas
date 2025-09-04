@@ -83,13 +83,11 @@ MY_MAIN
     CHECK_ERR_RET(ctx.createDescriptorSet(
         UID_vkDescriptorSet_mul2, UID_vkDescriptorSetLayout_compute, UID_vkDescriptorPool_main));
 
-    CHECK_ERR_RET(ctx.updateDescriptorSet(
-        UID_vkDescriptorSet_square,
-        {{0, {.buffer_id = UID_vkBuffer_a}}, {1, {.buffer_id = UID_vkBuffer_b}}}));
+    CHECK_ERR_RET(ctx.updateDescriptorSet(UID_vkDescriptorSet_square,
+                                          {{0, UID_vkBuffer_a}, {1, UID_vkBuffer_b}}));
 
-    CHECK_ERR_RET(ctx.updateDescriptorSet(
-        UID_vkDescriptorSet_mul2,
-        {{0, {.buffer_id = UID_vkBuffer_b}}, {1, {.buffer_id = UID_vkBuffer_a}}}));
+    CHECK_ERR_RET(ctx.updateDescriptorSet(UID_vkDescriptorSet_mul2,
+                                          {{0, UID_vkBuffer_b}, {1, UID_vkBuffer_a}}));
 
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_square, toolkit::getDataDir() / "square.glsl.spv"));
@@ -97,9 +95,9 @@ MY_MAIN
     CHECK_ERR_RET(
         ctx.createShaderModule(UID_vkShader_mul2, toolkit::getDataDir() / "mul2.glsl.spv"));
 
-    CHECK_ERR_RET(ctx.createPipelineLayout(
-        UID_vkPipelineLayout_compute, {UID_vkDescriptorSetLayout_compute},
-        {vk::PushConstantRange{vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants)}}));
+    CHECK_ERR_RET(
+        ctx.createPipelineLayout(UID_vkPipelineLayout_compute, {UID_vkDescriptorSetLayout_compute},
+                                 {{vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants)}}));
 
     CHECK_ERR_RET(ctx.createComputePipeline(UID_vkPipeline_square, UID_vkPipelineLayout_compute,
                                             UID_vkShader_square));

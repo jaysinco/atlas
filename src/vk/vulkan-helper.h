@@ -108,14 +108,6 @@ struct RenderPassMeta
     std::vector<vk::SubpassDependency> dependencies;
 };
 
-struct WriteDescriptorSetBinding
-{
-    Uid buffer_id;
-    Uid sample_id;
-    Uid image_id;
-    vk::ImageLayout image_layout;
-};
-
 class Allocation
 {
 public:
@@ -265,10 +257,23 @@ private:
     std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings_;
 };
 
+class WriteDescriptorSetBinding
+{
+public:
+    WriteDescriptorSetBinding(int id);
+    WriteDescriptorSetBinding(int id_0, int id_1, vk::ImageLayout layout);
+
+private:
+    friend class Context;
+    Uid id_0_;
+    Uid id_1_;
+    vk::ImageLayout layout_;
+};
+
 class CommandBuffer: public vk::CommandBuffer
 {
 public:
-    CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context* ctx);
+    CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context& ctx);
 
     MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
                                  vk::DeviceSize dst_offset = 0,
@@ -293,7 +298,7 @@ public:
 private:
     friend class Context;
     vk::CommandPool pool_;
-    Context* ctx_;
+    Context& ctx_;
 };
 
 class Context

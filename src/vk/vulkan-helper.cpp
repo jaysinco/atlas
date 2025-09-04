@@ -160,6 +160,13 @@ DescriptorSetLayoutBinding::DescriptorSetLayoutBinding(vk::DescriptorType type,
 
 DescriptorSetLayoutBinding::operator vk::DescriptorSetLayoutBinding() const { return layout_; }
 
+WriteDescriptorSetBinding::WriteDescriptorSetBinding(int id): id_0_(id) {}
+
+WriteDescriptorSetBinding::WriteDescriptorSetBinding(int id_0, int id_1, vk::ImageLayout layout)
+    : id_0_(id_0), id_1_(id_1), layout_(layout)
+{
+}
+
 static VkBool32 debugMessengerUserCallback(
     vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
     vk::DebugUtilsMessengerCallbackDataEXT const* callback_data, void* user_data)
@@ -673,7 +680,7 @@ MyErrCode Context::createCommandBuffer(Uid id, Uid command_pool_id)
     auto& pool = getCommandPool(command_pool_id);
     auto bufs = CHECK_VKHPP_VAL(
         device_.allocateCommandBuffers({pool, vk::CommandBufferLevel::ePrimary, 1}));
-    command_buffers_.emplace(id, CommandBuffer{bufs.front(), pool, this});
+    command_buffers_.emplace(id, CommandBuffer{bufs.front(), pool, *this});
     CHECK_ERR_RET(setDebugObjectId(bufs.front(), id));
     return MyErrCode::kOk;
 }
@@ -920,7 +927,7 @@ MyErrCode Context::destroyDescriptorSet(Uid id)
     }
 }
 
-CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context* ctx)
+CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context& ctx)
     : vk::CommandBuffer(buf), pool_(pool), ctx_(ctx)
 {
 }
@@ -929,8 +936,8 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
                                             vk::DeviceSize src_offset, vk::DeviceSize dst_offset,
                                             vk::DeviceSize size)
 {
-    Buffer& dst_buf = ctx_->getBuffer(dst_buf_id);
-    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
+    Buffer& dst_buf = ctx_.getBuffer(dst_buf_id);
+    Buffer& src_buf = ctx_.getBuffer(src_buf_id);
     if (src_offset + size > src_buf.getMeta().size || dst_offset + size > dst_buf.getMeta().size) {
         ELOG("invalid buffer size for copy");
         return MyErrCode::kFailed;
@@ -944,8 +951,8 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
 MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id,
                                            vk::ImageLayout dst_img_layout)
 {
-    Image& dst_img = ctx_->getImage(dst_img_id);
-    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
+    Image& dst_img = ctx_.getImage(dst_img_id);
+    Buffer& src_buf = ctx_.getBuffer(src_buf_id);
     if (src_buf.getMeta().size != dst_img.getMeta().size) {
         ELOG("invalid buffer size for copy: {} != {}", src_buf.getMeta().size,
              dst_img.getMeta().size);
@@ -975,7 +982,7 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_
                                               vk::PipelineStageFlags2 dst_stage,
                                               vk::AccessFlags2 dst_access)
 {
-    Image image = ctx_->getImage(image_id);
+    Image image = ctx_.getImage(image_id);
     vk::ImageMemoryBarrier2 barrier(src_stage, src_access, dst_stage, dst_access, old_layout,
                                     new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
                                     image,
@@ -987,13 +994,13 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_
 MyErrCode CommandBuffer::pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages,
                                        uint32_t offset, uint32_t size, void const* data)
 {
-    pushConstants(ctx_->getPipelineLayout(pipeline_layout_id), stages, offset, size, data);
+    pushConstants(ctx_.getPipelineLayout(pipeline_layout_id), stages, offset, size, data);
     return MyErrCode::kOk;
 }
 
 MyErrCode CommandBuffer::bindComputePipeline(Uid pipeline_id)
 {
-    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_->getPipeline(pipeline_id));
+    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_.getPipeline(pipeline_id));
     return MyErrCode::kOk;
 }
 
@@ -1002,9 +1009,9 @@ MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
 {
     std::vector<vk::DescriptorSet> sets;
     for (auto id: set_ids) {
-        sets.push_back(ctx_->getDescriptorSet(id));
+        sets.push_back(ctx_.getDescriptorSet(id));
     }
-    bindDescriptorSets(bind_point, ctx_->getPipelineLayout(pipeline_layout_id), 0, sets, {});
+    bindDescriptorSets(bind_point, ctx_.getPipelineLayout(pipeline_layout_id), 0, sets, {});
     return MyErrCode::kOk;
 }
 
@@ -1129,15 +1136,15 @@ MyErrCode Context::updateDescriptorSet(
         vk::DescriptorType type = set.layout_bindings_.at(binding).descriptorType;
         switch (type) {
             case vk::DescriptorType::eStorageBuffer: {
-                auto& buffer = getBuffer(write.buffer_id);
+                auto& buffer = getBuffer(write.id_0_);
                 buffer_infos.emplace_back(buffer, 0, buffer.getMeta().size);
                 set_writes.emplace_back(set, binding, 0, 1, type, nullptr, &buffer_infos.back());
                 break;
             }
             case vk::DescriptorType::eCombinedImageSampler: {
-                auto& image = getImage(write.image_id);
-                auto& sampler = getSampler(write.sample_id);
-                image_infos.emplace_back(sampler, image.img_view_, write.image_layout);
+                auto& image = getImage(write.id_0_);
+                auto& sampler = getSampler(write.id_1_);
+                image_infos.emplace_back(sampler, image.img_view_, write.layout_);
                 set_writes.emplace_back(set, binding, 0, 1, type, &image_infos.back());
                 break;
             }
