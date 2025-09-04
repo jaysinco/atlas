@@ -116,10 +116,10 @@ SemaphoreSubmitInfo::SemaphoreSubmitInfo(Uid id, uint64_t val)
 }
 
 Swapchain::Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
-                     std::vector<vk::Image> const& images,
-                     std::vector<vk::ImageView> const& image_views)
-    : meta_(meta), swapchain_(swapchain), images_(images), image_views_(image_views)
+                     std::vector<Uid> const& image_ids)
+    : meta_(meta), swapchain_(swapchain), image_ids_(image_ids)
 {
+    meta_.image_count = image_ids.size();
 }
 
 Swapchain::operator vk::SwapchainKHR() const { return swapchain_; }
@@ -631,7 +631,9 @@ MyErrCode Context::destroyImage(Uid id)
 {
     if (auto it = images_.find(id); it != images_.end()) {
         device_.destroy(it->second.img_view_);
-        vmaDestroyImage(it->second.allocator_, it->second.img_, it->second.alloc_);
+        if (it->second.alloc_) {
+            vmaDestroyImage(it->second.allocator_, it->second.img_, it->second.alloc_);
+        }
         images_.erase(it);
         return MyErrCode::kOk;
     } else {
@@ -1128,7 +1130,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
     vk::SurfaceCapabilitiesKHR surface_caps =
         CHECK_VKHPP_VAL(physical_device_.getSurfaceCapabilitiesKHR(surface));
 
-    uint32_t image_count = surface_caps.minImageCount + 1;
+    uint32_t image_count = std::max(surface_caps.minImageCount + 1, meta.image_count);
     if (surface_caps.maxImageCount > 0) {
         image_count = std::min(image_count, surface_caps.maxImageCount);
     }
@@ -1138,23 +1140,35 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
         meta.extent, 1, meta.usages, vk::SharingMode::eExclusive, {}, surface_caps.currentTransform,
         vk::CompositeAlphaFlagBitsKHR::eOpaque, meta.mode, true);
 
-    ILOG("create {} swapchain images with size={}x{}, format={}", image_count, meta.extent.width,
+    auto swap = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
+    auto images = CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swap));
+    ILOG("create {} swapchain images with size={}x{}, format={}", images.size(), meta.extent.width,
          meta.extent.height, meta.surface_format.format);
 
-    auto swap = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
-    Swapchain swapchain{meta, swap, {}, {}};
+    ImageMeta image_meta = {.format = meta.surface_format.format,
+                            .extent = meta.extent,
+                            .tiling = vk::ImageTiling::eOptimal,
+                            .layout = vk::ImageLayout::eUndefined,
+                            .mip_levels = 1,
+                            .samples = vk::SampleCountFlagBits::e1,
+                            .aspects = vk::ImageAspectFlagBits::eColor,
+                            .usages = meta.usages};
 
-    for (auto& image: CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swapchain))) {
-        swapchain.images_.push_back(image);
+    std::vector<Uid> image_ids;
+    for (auto& image: images) {
+        vk::ImageViewCreateInfo view_info({}, image, vk::ImageViewType::e2D,
+                                          meta.surface_format.format, {},
+                                          {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+        vk::ImageView image_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
+        Uid image_id = Uid::temp();
+        images_.emplace(image_id,
+                        Image{image_meta, image, image_view, VK_NULL_HANDLE, VK_NULL_HANDLE});
+        CHECK_ERR_RET(setDebugObjectId(image, image_id));
+        CHECK_ERR_RET(setDebugObjectId(image_view, image_id));
+        image_ids.push_back(image_id);
     }
 
-    vk::ImageViewCreateInfo view_info({}, {}, vk::ImageViewType::e2D, meta.surface_format.format,
-                                      {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-    for (auto image: swapchain.images_) {
-        view_info.image = image;
-        swapchain.image_views_.push_back(CHECK_VKHPP_VAL(device_.createImageView(view_info)));
-    }
-
+    Swapchain swapchain{meta, swap, image_ids};
     swapchains_.emplace(id, std::move(swapchain));
     CHECK_ERR_RET(setDebugObjectId(swap, id));
     return MyErrCode::kOk;
@@ -1171,14 +1185,86 @@ Swapchain& Context::getSwapchain(Uid id)
 MyErrCode Context::destroySwapchain(Uid id)
 {
     if (auto it = swapchains_.find(id); it != swapchains_.end()) {
-        for (auto& view: it->second.image_views_) {
-            device_.destroy(view);
-        }
         device_.destroy(it->second.swapchain_);
         swapchains_.erase(it);
         return MyErrCode::kOk;
     } else {
         ELOG("swapchain not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createRenderPass(Uid id, RenderPassMeta const& meta)
+{
+    if (render_passes_.find(id) != render_passes_.end()) {
+        CHECK_ERR_RET(destroyRenderPass(id));
+    }
+    auto render_pass = CHECK_VKHPP_VAL(
+        device_.createRenderPass({{}, meta.attachments, meta.subpasses, meta.dependencies}));
+    render_passes_.emplace(id, render_pass);
+    CHECK_ERR_RET(setDebugObjectId(render_pass, id));
+    return MyErrCode::kOk;
+}
+
+vk::RenderPass& Context::getRenderPass(Uid id)
+{
+    if (render_passes_.find(id) == render_passes_.end()) {
+        MY_THROW("render pass not exist: {}", id);
+    }
+    return render_passes_.at(id);
+}
+
+MyErrCode Context::destroyRenderPass(Uid id)
+{
+    if (auto it = render_passes_.find(id); it != render_passes_.end()) {
+        device_.destroy(it->second);
+        render_passes_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("render pass not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_ids)
+{
+    if (framebuffers_.find(id) != framebuffers_.end()) {
+        CHECK_ERR_RET(destroyFramebuffer(id));
+    }
+    std::vector<vk::ImageView> attachments;
+    vk::Extent2D extent = {0, 0};
+    for (auto id: image_ids) {
+        Image& image = getImage(id);
+        if (extent.width != 0 && extent != image.meta_.extent) {
+            ELOG("inconsistent image extent: {}", id);
+            return MyErrCode::kFailed;
+        }
+        extent = image.meta_.extent;
+        attachments.push_back(image.img_view_);
+    }
+    auto framebuffer = CHECK_VKHPP_VAL(device_.createFramebuffer(
+        {{}, getRenderPass(render_pass_id), attachments, extent.width, extent.height, 1}));
+    framebuffers_.emplace(id, framebuffer);
+    CHECK_ERR_RET(setDebugObjectId(framebuffer, id));
+    return MyErrCode::kOk;
+}
+
+vk::Framebuffer& Context::getFramebuffer(Uid id)
+{
+    if (framebuffers_.find(id) == framebuffers_.end()) {
+        MY_THROW("framebuffer not exist: {}", id);
+    }
+    return framebuffers_.at(id);
+}
+
+MyErrCode Context::destroyFramebuffer(Uid id)
+{
+    if (auto it = framebuffers_.find(id); it != framebuffers_.end()) {
+        device_.destroy(it->second);
+        framebuffers_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("framebuffer not exist: {}", id);
         return MyErrCode::kFailed;
     }
 }
@@ -1275,14 +1361,17 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
 MyErrCode Context::destroy()
 {
     CHECK_VKHPP_RET(device_.waitIdle());
-    while (!swapchains_.empty()) {
-        CHECK_ERR_RET(destroySwapchain(swapchains_.begin()->first));
+    while (!render_passes_.empty()) {
+        CHECK_ERR_RET(destroyRenderPass(render_passes_.begin()->first));
     }
     while (!pipelines_.empty()) {
         CHECK_ERR_RET(destroyPipeline(pipelines_.begin()->first));
     }
     while (!pipeline_layouts_.empty()) {
         CHECK_ERR_RET(destroyPipelineLayout(pipeline_layouts_.begin()->first));
+    }
+    while (!descriptor_sets_.empty()) {
+        CHECK_ERR_RET(destroyDescriptorSet(descriptor_sets_.begin()->first));
     }
     while (!descriptor_set_layouts_.empty()) {
         CHECK_ERR_RET(destroyDescriptorSetLayout(descriptor_set_layouts_.begin()->first));
@@ -1299,8 +1388,8 @@ MyErrCode Context::destroy()
     while (!images_.empty()) {
         CHECK_ERR_RET(destroyImage(images_.begin()->first));
     }
-    while (!images_.empty()) {
-        CHECK_ERR_RET(destroyImage(images_.begin()->first));
+    while (!swapchains_.empty()) {
+        CHECK_ERR_RET(destroySwapchain(swapchains_.begin()->first));
     }
     while (!buffers_.empty()) {
         CHECK_ERR_RET(destroyBuffer(buffers_.begin()->first));

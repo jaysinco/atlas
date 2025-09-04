@@ -59,6 +59,10 @@ std::enable_if_t<CanVkToString<T>::value, std::string> toFormattable(T&& arg)
 namespace myvk
 {
 
+class Context;
+
+class CommandBuffer;
+
 using Uid = toolkit::Uid;
 
 using DeviceRater =
@@ -66,7 +70,43 @@ using DeviceRater =
 
 using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
 
-class Context;
+using CmdSubmitter = std::function<MyErrCode(CommandBuffer&)>;
+
+struct BufferMeta
+{
+    uint64_t size;
+    vk::BufferUsageFlags usages;
+};
+
+struct ImageMeta
+{
+    vk::Format format;
+    vk::Extent2D extent;
+    uint64_t size = 0;  // skip filling
+    vk::ImageTiling tiling;
+    vk::ImageLayout layout;
+    uint32_t mip_levels;
+    vk::SampleCountFlagBits samples;
+    vk::ImageAspectFlags aspects;
+    vk::ImageUsageFlags usages;
+};
+
+struct SwapchainMeta
+{
+    uint32_t image_count = 0;  // optional hint
+    vk::SurfaceFormatKHR surface_format;
+    vk::Extent2D extent;
+    vk::PresentModeKHR mode;
+    vk::ImageUsageFlags usages;
+};
+
+struct RenderPassMeta
+{
+    std::vector<vk::AttachmentDescription> attachments;
+    std::vector<vk::AttachmentReference> attachment_refs;
+    std::vector<vk::SubpassDescription> subpasses;
+    std::vector<vk::SubpassDependency> dependencies;
+};
 
 class Allocation
 {
@@ -87,12 +127,6 @@ private:
     VmaAllocator allocator_;
 };
 
-struct BufferMeta
-{
-    uint64_t size = 0;
-    vk::BufferUsageFlags usages = vk::BufferUsageFlagBits::eStorageBuffer;
-};
-
 class Buffer: public Allocation
 {
 public:
@@ -105,19 +139,6 @@ private:
     friend class Context;
     BufferMeta meta_;
     vk::Buffer buf_;
-};
-
-struct ImageMeta
-{
-    vk::Format format;
-    vk::Extent2D extent = {0, 0};
-    uint64_t size = 0;
-    vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
-    vk::ImageLayout layout = vk::ImageLayout::eUndefined;
-    uint32_t mip_levels = 1;
-    vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
-    vk::ImageAspectFlags aspects = vk::ImageAspectFlagBits::eColor;
-    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eSampled;
 };
 
 class Image: public Allocation
@@ -167,19 +188,11 @@ private:
     uint64_t val_;
 };
 
-struct SwapchainMeta
-{
-    vk::SurfaceFormatKHR surface_format;
-    vk::Extent2D extent = {0, 0};
-    vk::PresentModeKHR mode = vk::PresentModeKHR::eMailbox;
-    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eColorAttachment;
-};
-
 class Swapchain
 {
 public:
     Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
-              std::vector<vk::Image> const& images, std::vector<vk::ImageView> const& image_views);
+              std::vector<Uid> const& image_ids);
     operator vk::SwapchainKHR() const;
     operator bool() const;
 
@@ -187,8 +200,7 @@ private:
     friend class Context;
     SwapchainMeta meta_;
     vk::SwapchainKHR swapchain_;
-    std::vector<vk::Image> images_;
-    std::vector<vk::ImageView> image_views_;
+    std::vector<Uid> image_ids_;
 };
 
 class Queue
@@ -273,8 +285,6 @@ private:
     Context* ctx_;
 };
 
-using CmdSubmitter = std::function<MyErrCode(CommandBuffer&)>;
-
 class Context
 {
 public:
@@ -303,6 +313,8 @@ public:
                                    std::vector<vk::PushConstantRange> const& push_ranges = {});
     MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
     MyErrCode createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& meta);
+    MyErrCode createRenderPass(Uid id, RenderPassMeta const& meta);
+    MyErrCode createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_ids);
 
     vk::Instance& getInstance();
     vk::SurfaceKHR& getSurface(Uid id);
@@ -322,6 +334,8 @@ public:
     vk::Pipeline& getPipeline(Uid id);
     DescriptorSet& getDescriptorSet(Uid id);
     Swapchain& getSwapchain(Uid id);
+    vk::RenderPass& getRenderPass(Uid id);
+    vk::Framebuffer& getFramebuffer(Uid id);
 
     MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
     MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
@@ -361,6 +375,8 @@ public:
     MyErrCode destroyPipeline(Uid id);
     MyErrCode destroyDescriptorSet(Uid id);
     MyErrCode destroySwapchain(Uid id);
+    MyErrCode destroyRenderPass(Uid id);
+    MyErrCode destroyFramebuffer(Uid id);
     MyErrCode destroy();
 
     static int defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
@@ -394,6 +410,8 @@ private:
     std::map<Uid, vk::DescriptorSetLayout> descriptor_set_layouts_;
     std::map<Uid, DescriptorSet> descriptor_sets_;
     std::map<Uid, Swapchain> swapchains_;
+    std::map<Uid, vk::RenderPass> render_passes_;
+    std::map<Uid, vk::Framebuffer> framebuffers_;
 };
 
 }  // namespace myvk
