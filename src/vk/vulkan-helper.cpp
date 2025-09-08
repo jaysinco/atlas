@@ -37,7 +37,7 @@ bool Allocation::canBeMapped() const
     return static_cast<bool>(getMemProp() & vk::MemoryPropertyFlagBits::eHostVisible);
 }
 
-bool Allocation::isMapped() const { return getAllocInfo().pMappedData != nullptr; }
+bool Allocation::isMapped() const { return getMappedData() != nullptr; }
 
 void* Allocation::map()
 {
@@ -49,6 +49,8 @@ void* Allocation::map()
 }
 
 void Allocation::unmap() { vmaUnmapMemory(allocator_, alloc_); }
+
+void* Allocation::getMappedData() const { return getAllocInfo().pMappedData; }
 
 void Allocation::invalid(vk::DeviceSize offset, vk::DeviceSize size)
 {
@@ -75,20 +77,27 @@ Buffer::operator vk::Buffer() const { return buf_; }
 
 Buffer::operator bool() const { return buf_; }
 
-Image::Image(ImageMeta const& meta, vk::Image img, vk::ImageView img_view, VmaAllocation alloc,
-             VmaAllocator allocator)
-    : meta_(meta), img_(img), img_view_(img_view), Allocation(alloc, allocator)
+Image::Image(ImageMeta const& meta, vk::Image img, VmaAllocation alloc, VmaAllocator allocator)
+    : meta_(meta), img_(img), Allocation(alloc, allocator)
 {
-    meta_.size = vk::blockSize(meta_.format) * meta_.extent.width * meta_.extent.height;
 }
 
 ImageMeta const& Image::getMeta() const { return meta_; }
 
 Image::operator vk::Image() const { return img_; }
 
-Image::operator vk::ImageView() const { return img_view_; }
-
 Image::operator bool() const { return img_; }
+
+ImageView::ImageView(ImageViewMeta const& meta, ImageMeta const& img_meta, vk::ImageView view)
+    : meta_(meta), img_meta_(img_meta), view_(view)
+{
+}
+
+ImageViewMeta const& ImageView::getMeta() const { return meta_; }
+
+ImageView::operator vk::ImageView() const { return view_; }
+
+ImageView::operator bool() const { return view_; }
 
 Semaphore::Semaphore(vk::SemaphoreType type, vk::Semaphore sem): type_(type), sem_(sem) {}
 
@@ -114,11 +123,13 @@ SemaphoreSubmitInfo::SemaphoreSubmitInfo(Uid id, uint64_t val)
 }
 
 Swapchain::Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
-                     std::vector<Uid> const& image_ids)
-    : meta_(meta), swapchain_(swapchain), image_ids_(image_ids)
+                     std::vector<Uid> const& image_ids, std::vector<Uid> const& image_view_ids)
+    : meta_(meta), swapchain_(swapchain), image_ids_(image_ids), image_view_ids_(image_view_ids)
 {
     meta_.image_count = image_ids.size();
 }
+
+SwapchainMeta const& Swapchain::getMeta() const { return meta_; }
 
 Swapchain::operator vk::SwapchainKHR() const { return swapchain_; }
 
@@ -603,10 +614,9 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
         CHECK_ERR_RET(destroyImage(id));
     }
 
-    vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), vk::ImageType::e2D, meta.format,
-                                   vk::Extent3D(meta.extent, 1), meta.mip_levels, 1, meta.samples,
-                                   meta.tiling, meta.usages, vk::SharingMode::eExclusive, {},
-                                   meta.init_layout);
+    vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), meta.type, meta.format, meta.extent,
+                                   meta.mip_levels, meta.layers, meta.samples, meta.tiling,
+                                   meta.usages, vk::SharingMode::eExclusive, {}, meta.init_layout);
 
     VmaAllocationCreateInfo vma_info = {};
     vma_info.flags = flags;
@@ -614,16 +624,10 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
 
     VkImage img;
     VmaAllocation alloc;
-    VmaAllocationInfo alloc_info;
-    CHECK_VK_RET(vmaCreateImage(allocator_, image_info, &vma_info, &img, &alloc, &alloc_info));
+    CHECK_VK_RET(vmaCreateImage(allocator_, image_info, &vma_info, &img, &alloc, nullptr));
 
-    vk::ImageViewCreateInfo view_info({}, img, vk::ImageViewType::e2D, meta.format, {},
-                                      {meta.aspects, 0, meta.mip_levels, 0, 1});
-    vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
-
-    images_.emplace(id, Image{meta, img, img_view, alloc, allocator_});
+    images_.emplace(id, Image{meta, img, alloc, allocator_});
     CHECK_ERR_RET(setDebugObjectId(images_.at(id).img_, id));
-    CHECK_ERR_RET(setDebugObjectId(img_view, id));
     return MyErrCode::kOk;
 }
 
@@ -638,7 +642,6 @@ Image& Context::getImage(Uid id)
 MyErrCode Context::destroyImage(Uid id)
 {
     if (auto it = images_.find(id); it != images_.end()) {
-        device_.destroy(it->second.img_view_);
         if (it->second.alloc_) {
             vmaDestroyImage(it->second.allocator_, it->second.img_, it->second.alloc_);
         }
@@ -646,6 +649,42 @@ MyErrCode Context::destroyImage(Uid id)
         return MyErrCode::kOk;
     } else {
         ELOG("image not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
+
+MyErrCode Context::createImageView(Uid id, Uid image_id, ImageViewMeta const& meta)
+{
+    if (image_views_.find(id) != image_views_.end()) {
+        CHECK_ERR_RET(destroyImageView(id));
+    }
+    auto& image = getImage(image_id);
+    vk::ImageViewCreateInfo view_info({}, image.img_, meta.type, image.getMeta().format,
+                                      meta.swizzle,
+                                      {image.getMeta().aspects, meta.base_level, meta.num_levels,
+                                       meta.base_layer, meta.num_layers});
+    vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
+    image_views_.emplace(id, ImageView{meta, image.getMeta(), img_view});
+    CHECK_ERR_RET(setDebugObjectId(img_view, id));
+    return MyErrCode::kOk;
+}
+
+ImageView& Context::getImageView(Uid id)
+{
+    if (image_views_.find(id) == image_views_.end()) {
+        MY_THROW("image view not exist: {}", id);
+    }
+    return image_views_.at(id);
+}
+
+MyErrCode Context::destroyImageView(Uid id)
+{
+    if (auto it = image_views_.find(id); it != image_views_.end()) {
+        device_.destroy(it->second.view_);
+        image_views_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("image view not exist: {}", id);
         return MyErrCode::kFailed;
     }
 }
@@ -949,18 +988,13 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
 }
 
 MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id,
-                                           vk::ImageLayout dst_img_layout)
+                                           vk::ImageLayout dst_img_layout, uint32_t dst_img_layer)
 {
     Image& dst_img = ctx_.getImage(dst_img_id);
     Buffer& src_buf = ctx_.getBuffer(src_buf_id);
-    if (src_buf.getMeta().size != dst_img.getMeta().size) {
-        ELOG("invalid buffer size for copy: {} != {}", src_buf.getMeta().size,
-             dst_img.getMeta().size);
-        return MyErrCode::kFailed;
-    }
-    vk::BufferImageCopy region(0, 0, 0,
-                               vk::ImageSubresourceLayers{dst_img.getMeta().aspects, 0, 0, 1},
-                               {0, 0, 0}, vk::Extent3D(dst_img.getMeta().extent, 1));
+    vk::BufferImageCopy region(
+        0, 0, 0, vk::ImageSubresourceLayers{dst_img.getMeta().aspects, 0, dst_img_layer, 1},
+        {0, 0, 0}, dst_img.getMeta().extent);
     copyBufferToImage(src_buf, dst_img, dst_img_layout, region);
     return MyErrCode::kOk;
 }
@@ -983,10 +1017,10 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_
                                               vk::AccessFlags2 dst_access)
 {
     Image image = ctx_.getImage(image_id);
-    vk::ImageMemoryBarrier2 barrier(src_stage, src_access, dst_stage, dst_access, old_layout,
-                                    new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored,
-                                    image,
-                                    {image.getMeta().aspects, 0, image.getMeta().mip_levels, 0, 1});
+    vk::ImageMemoryBarrier2 barrier(
+        src_stage, src_access, dst_stage, dst_access, old_layout, new_layout,
+        vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
+        {image.getMeta().aspects, 0, image.getMeta().mip_levels, 0, image.getMeta().layers});
     pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
     return MyErrCode::kOk;
 }
@@ -1026,10 +1060,11 @@ MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src
 }
 
 MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
-                                     Uid dst_img_id, vk::ImageLayout dst_img_layout)
+                                     Uid dst_img_id, vk::ImageLayout dst_img_layout,
+                                     uint32_t dst_img_layer)
 {
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id, dst_img_layout));
+        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id, dst_img_layout, dst_img_layer));
         return MyErrCode::kOk;
     }));
     return MyErrCode::kOk;
@@ -1052,8 +1087,8 @@ MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, void cons
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
         VMA_ALLOCATION_CREATE_MAPPED_BIT));
 
-    memcpy(getBuffer(staging_buf_id).getAllocInfo().pMappedData, src_host, buffer_size);
-    CHECK_ERR_RET(copyBufferToBuffer(queue_id, command_pool_id, dst_buf_id, staging_buf_id));
+    memcpy(getBuffer(staging_buf_id).getMappedData(), src_host, buffer_size);
+    CHECK_ERR_RET(copyBufferToBuffer(queue_id, command_pool_id, staging_buf_id, dst_buf_id));
     CHECK_ERR_RET(destroyBuffer(staging_buf_id));
     return MyErrCode::kOk;
 }
@@ -1096,27 +1131,30 @@ MyErrCode Context::transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid 
 }
 
 MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
-                                   Uid dst_img_id, vk::ImageLayout dst_img_layout)
+                                   Uid dst_img_id, vk::ImageLayout dst_img_layout,
+                                   uint32_t dst_img_layer)
 {
     Image& dst_img = getImage(dst_img_id);
+    ImageMeta const& image_meta = dst_img.getMeta();
     if (dst_img.canBeMapped()) {
         ELOG("no need to call this function for image {} that can be mapped", dst_img_id);
         return MyErrCode::kFailed;
     }
 
     Uid staging_buffer_id = Uid::temp();
-    uint64_t buffer_size = dst_img.getMeta().size;
+    uint64_t buffer_size = vk::blockSize(image_meta.format) * image_meta.extent.width *
+                           image_meta.extent.height * image_meta.extent.depth;
 
     CHECK_ERR_RET(createBuffer(
         staging_buffer_id, {buffer_size, vk::BufferUsageFlagBits::eTransferSrc},
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
         VMA_ALLOCATION_CREATE_MAPPED_BIT));
 
-    memcpy(getBuffer(staging_buffer_id).getAllocInfo().pMappedData, src_host, buffer_size);
+    memcpy(getBuffer(staging_buffer_id).getMappedData(), src_host, buffer_size);
     CHECK_ERR_RET(transitionImageLayout(queue_id, command_pool_id, dst_img_id, dst_img_layout,
                                         vk::ImageLayout::eTransferDstOptimal));
-    CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, dst_img_id, staging_buffer_id,
-                                    vk::ImageLayout::eTransferDstOptimal));
+    CHECK_ERR_RET(copyBufferToImage(queue_id, command_pool_id, staging_buffer_id, dst_img_id,
+                                    vk::ImageLayout::eTransferDstOptimal, dst_img_layer));
     CHECK_ERR_RET(destroyBuffer(staging_buffer_id));
     return MyErrCode::kOk;
 }
@@ -1142,9 +1180,9 @@ MyErrCode Context::updateDescriptorSet(
                 break;
             }
             case vk::DescriptorType::eCombinedImageSampler: {
-                auto& image = getImage(write.id_0_);
+                auto& view = getImageView(write.id_0_);
                 auto& sampler = getSampler(write.id_1_);
-                image_infos.emplace_back(sampler, image.img_view_, write.layout_);
+                image_infos.emplace_back(sampler, view, write.layout_);
                 set_writes.emplace_back(set, binding, 0, 1, type, &image_infos.back());
                 break;
             }
@@ -1196,30 +1234,38 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
     ILOG("create {} swapchain images with size={}x{}, format={}", images.size(), meta.extent.width,
          meta.extent.height, meta.surface_format.format);
 
-    ImageMeta image_meta = {.format = meta.surface_format.format,
-                            .extent = meta.extent,
-                            .tiling = vk::ImageTiling::eOptimal,
-                            .init_layout = vk::ImageLayout::eUndefined,
+    ImageMeta image_meta = {.type = vk::ImageType::e2D,
+                            .format = meta.surface_format.format,
+                            .aspects = vk::ImageAspectFlagBits::eColor,
+                            .extent = vk::Extent3D(meta.extent, 1),
+                            .layers = 1,
                             .mip_levels = 1,
                             .samples = vk::SampleCountFlagBits::e1,
-                            .aspects = vk::ImageAspectFlagBits::eColor,
+                            .tiling = vk::ImageTiling::eOptimal,
+                            .init_layout = vk::ImageLayout::eUndefined,
                             .usages = meta.usages};
 
+    ImageViewMeta view_meta = {.type = vk::ImageViewType::e2D,
+                               .base_level = 0,
+                               .num_levels = 1,
+                               .base_layer = 0,
+                               .num_layers = 1,
+                               .swizzle = {}};
+
     std::vector<Uid> image_ids;
+    std::vector<Uid> view_ids;
     for (auto& image: images) {
-        vk::ImageViewCreateInfo view_info({}, image, vk::ImageViewType::e2D,
-                                          meta.surface_format.format, {},
-                                          {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-        vk::ImageView image_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
         Uid image_id = Uid::temp();
-        images_.emplace(image_id,
-                        Image{image_meta, image, image_view, VK_NULL_HANDLE, VK_NULL_HANDLE});
+        images_.emplace(image_id, Image{image_meta, image, VK_NULL_HANDLE, VK_NULL_HANDLE});
         CHECK_ERR_RET(setDebugObjectId(image, image_id));
-        CHECK_ERR_RET(setDebugObjectId(image_view, image_id));
         image_ids.push_back(image_id);
+
+        Uid view_id = Uid::temp();
+        CHECK_ERR_RET(createImageView(view_id, image_id, view_meta));
+        view_ids.push_back(view_id);
     }
 
-    Swapchain swapchain{meta, swap, image_ids};
+    Swapchain swapchain{meta, swap, image_ids, view_ids};
     swapchains_.emplace(id, std::move(swapchain));
     CHECK_ERR_RET(setDebugObjectId(swap, id));
     return MyErrCode::kOk;
@@ -1277,24 +1323,31 @@ MyErrCode Context::destroyRenderPass(Uid id)
     }
 }
 
-MyErrCode Context::createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_ids)
+MyErrCode Context::createFramebuffer(Uid id, Uid render_pass_id,
+                                     std::vector<Uid> const& image_view_ids)
 {
     if (framebuffers_.find(id) != framebuffers_.end()) {
         CHECK_ERR_RET(destroyFramebuffer(id));
     }
     std::vector<vk::ImageView> attachments;
-    vk::Extent2D extent = {0, 0};
-    for (auto id: image_ids) {
-        Image& image = getImage(id);
-        if (extent.width != 0 && extent != image.meta_.extent) {
-            ELOG("inconsistent image extent: {}", id);
+    vk::Extent3D extent = {0, 0, 0};
+    uint32_t layers = 0;
+    for (auto view_id: image_view_ids) {
+        ImageView& view = getImageView(view_id);
+        if (extent.width != 0 && extent != view.img_meta_.extent) {
+            ELOG("inconsistent image extent: {}", view_id);
             return MyErrCode::kFailed;
         }
-        extent = image.meta_.extent;
-        attachments.push_back(image.img_view_);
+        extent = view.img_meta_.extent;
+        if (layers != 0 && layers != view.meta_.num_layers) {
+            ELOG("inconsistent image layers: {}", view_id);
+            return MyErrCode::kFailed;
+        }
+        layers = view.meta_.num_layers;
+        attachments.push_back(view.view_);
     }
     auto framebuffer = CHECK_VKHPP_VAL(device_.createFramebuffer(
-        {{}, getRenderPass(render_pass_id), attachments, extent.width, extent.height, 1}));
+        {{}, getRenderPass(render_pass_id), attachments, extent.width, extent.height, layers}));
     framebuffers_.emplace(id, framebuffer);
     CHECK_ERR_RET(setDebugObjectId(framebuffer, id));
     return MyErrCode::kOk;
@@ -1435,6 +1488,9 @@ MyErrCode Context::destroy()
     }
     while (!command_buffers_.empty()) {
         CHECK_ERR_RET(destroyCommandBuffer(command_buffers_.begin()->first));
+    }
+    while (!image_views_.empty()) {
+        CHECK_ERR_RET(destroyImageView(image_views_.begin()->first));
     }
     while (!images_.empty()) {
         CHECK_ERR_RET(destroyImage(images_.begin()->first));

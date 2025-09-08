@@ -80,20 +80,31 @@ struct BufferMeta
 
 struct ImageMeta
 {
+    vk::ImageType type;
     vk::Format format;
-    vk::Extent2D extent;
-    uint64_t size = 0;  // skip filling
-    vk::ImageTiling tiling;
-    vk::ImageLayout init_layout;
+    vk::ImageAspectFlags aspects;
+    vk::Extent3D extent;
+    uint32_t layers;
     uint32_t mip_levels;
     vk::SampleCountFlagBits samples;
-    vk::ImageAspectFlags aspects;
+    vk::ImageTiling tiling;
+    vk::ImageLayout init_layout;
     vk::ImageUsageFlags usages;
+};
+
+struct ImageViewMeta
+{
+    vk::ImageViewType type;
+    uint32_t base_level;
+    uint32_t num_levels;
+    uint32_t base_layer;
+    uint32_t num_layers;
+    vk::ComponentMapping swizzle;
 };
 
 struct SwapchainMeta
 {
-    uint32_t image_count = 0;  // optional hint
+    uint32_t image_count;
     vk::SurfaceFormatKHR surface_format;
     vk::Extent2D extent;
     vk::PresentModeKHR mode;
@@ -118,6 +129,7 @@ public:
     bool isMapped() const;
     void* map();
     void unmap();
+    void* getMappedData() const;
     void invalid(vk::DeviceSize offset = 0, vk::DeviceSize size = vk::WholeSize);
     void flush(vk::DeviceSize offset = 0, vk::DeviceSize size = vk::WholeSize);
 
@@ -145,18 +157,30 @@ class Image: public Allocation
 
 {
 public:
-    Image(ImageMeta const& meta, vk::Image img, vk::ImageView img_view, VmaAllocation alloc,
-          VmaAllocator allocator);
+    Image(ImageMeta const& meta, vk::Image img, VmaAllocation alloc, VmaAllocator allocator);
     ImageMeta const& getMeta() const;
     operator vk::Image() const;
-    operator vk::ImageView() const;
     operator bool() const;
 
 private:
     friend class Context;
     ImageMeta meta_;
     vk::Image img_;
-    vk::ImageView img_view_;
+};
+
+class ImageView
+{
+public:
+    ImageView(ImageViewMeta const& meta, ImageMeta const& img_meta, vk::ImageView view);
+    ImageViewMeta const& getMeta() const;
+    operator vk::ImageView() const;
+    operator bool() const;
+
+private:
+    friend class Context;
+    ImageViewMeta meta_;
+    ImageMeta const& img_meta_;
+    vk::ImageView view_;
 };
 
 class Semaphore
@@ -191,7 +215,8 @@ class Swapchain
 {
 public:
     Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
-              std::vector<Uid> const& image_ids);
+              std::vector<Uid> const& image_ids, std::vector<Uid> const& image_view_ids);
+    SwapchainMeta const& getMeta() const;
     operator vk::SwapchainKHR() const;
     operator bool() const;
 
@@ -200,6 +225,7 @@ private:
     SwapchainMeta meta_;
     vk::SwapchainKHR swapchain_;
     std::vector<Uid> image_ids_;
+    std::vector<Uid> image_view_ids_;
 };
 
 class Queue
@@ -278,7 +304,8 @@ public:
     MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
                                  vk::DeviceSize dst_offset = 0,
                                  vk::DeviceSize size = vk::WholeSize);
-    MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id, vk::ImageLayout dst_img_layout);
+    MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id, vk::ImageLayout dst_img_layout,
+                                uint32_t dst_img_layer);
     MyErrCode pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
                                     vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
     MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
@@ -318,6 +345,7 @@ public:
                            VmaAllocationCreateFlags flags = 0);
     MyErrCode createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
+    MyErrCode createImageView(Uid id, Uid image_id, ImageViewMeta const& meta);
     MyErrCode createSampler();
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
@@ -332,7 +360,7 @@ public:
     MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
     MyErrCode createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& meta);
     MyErrCode createRenderPass(Uid id, RenderPassMeta const& meta);
-    MyErrCode createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_ids);
+    MyErrCode createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_view_ids);
 
     vk::Instance& getInstance();
     vk::SurfaceKHR& getSurface(Uid id);
@@ -343,6 +371,7 @@ public:
     vk::DescriptorPool& getDescriptorPool(Uid id);
     Buffer& getBuffer(Uid id);
     Image& getImage(Uid id);
+    ImageView& getImageView(Uid id);
     vk::Sampler& getSampler(Uid id);
     CommandBuffer& getCommandBuffer(Uid id);
     Semaphore& getSemaphore(Uid id);
@@ -359,11 +388,12 @@ public:
     MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
     MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
     MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id,
-                                vk::ImageLayout dst_img_layout);
+                                vk::ImageLayout dst_img_layout, uint32_t dst_img_layer);
     MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
                                Uid dst_buf_id);
     MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
-                              Uid dst_img_id, vk::ImageLayout dst_img_layout);
+                              Uid dst_img_id, vk::ImageLayout dst_img_layout,
+                              uint32_t dst_img_layer);
     MyErrCode transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
                                     vk::ImageLayout old_layout, vk::ImageLayout new_layout);
     MyErrCode updateDescriptorSet(
@@ -387,6 +417,7 @@ public:
     MyErrCode destroyDescriptorPool(Uid id);
     MyErrCode destroyBuffer(Uid id);
     MyErrCode destroyImage(Uid id);
+    MyErrCode destroyImageView(Uid id);
     MyErrCode destroySampler(Uid id);
     MyErrCode destroyCommandBuffer(Uid id);
     MyErrCode destroySemaphore(Uid id);
@@ -423,6 +454,7 @@ private:
     std::map<Uid, vk::DescriptorPool> descriptor_pools_;
     std::map<Uid, Buffer> buffers_;
     std::map<Uid, Image> images_;
+    std::map<Uid, ImageView> image_views_;
     std::map<Uid, vk::Sampler> samplers_;
     std::map<Uid, CommandBuffer> command_buffers_;
     std::map<Uid, Semaphore> semaphores_;
