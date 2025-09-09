@@ -732,8 +732,24 @@ MyErrCode Context::destroyImageView(Uid id) { return destroy(image_views_, id); 
 
 MyErrCode Context::createSampler(Uid id, SamplerMeta const& meta)
 {
-    ;
-    return MyErrCode::kOk;
+    auto device_props = physical_device_.getProperties();
+    auto sampler = CHECK_VKHPP_VAL(device_.createSampler({{},
+                                                          meta.filter,
+                                                          meta.filter,
+                                                          vk::SamplerMipmapMode::eLinear,
+                                                          meta.address_mode,
+                                                          meta.address_mode,
+                                                          meta.address_mode,
+                                                          0.0f,
+                                                          true,
+                                                          device_props.limits.maxSamplerAnisotropy,
+                                                          false,
+                                                          vk::CompareOp::eNever,
+                                                          meta.min_lod,
+                                                          meta.max_lod,
+                                                          meta.border_color,
+                                                          false}));
+    return create(samplers_, id, sampler);
 }
 
 vk::Sampler& Context::getSampler(Uid id) { return get(samplers_, id); }

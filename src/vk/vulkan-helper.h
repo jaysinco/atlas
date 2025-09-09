@@ -125,6 +125,11 @@ struct RenderPassMeta
 
 struct SamplerMeta
 {
+    vk::Filter filter;
+    vk::SamplerAddressMode address_mode;
+    vk::BorderColor border_color;
+    float min_lod;
+    float max_lod;
 };
 
 class Allocation
