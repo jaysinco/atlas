@@ -41,6 +41,8 @@ bool Uid::operator!=(Uid rhs) const { return id_ != rhs.id_; }
 
 std::string Uid::toStr() const { return FSTR("#{}", id_); }
 
+size_t hash_value(Uid const& id) { return std::hash<int>()(id.id_); }
+
 std::filesystem::path currentExeDir() { return currentExePath().parent_path(); }
 
 std::filesystem::path currentExePath()

@@ -4,9 +4,10 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.h>
-#include <map>
-#include <set>
+#include <parallel_hashmap/phmap.h>
 #include <functional>
+#include <set>
+#include <map>
 
 namespace toolkit
 {
@@ -65,6 +66,9 @@ class CommandBuffer;
 
 using Uid = toolkit::Uid;
 
+template <typename T>
+using UidMap = phmap::parallel_node_hash_map_m<Uid, T>;
+
 using DeviceRater =
     std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
 
@@ -117,6 +121,10 @@ struct RenderPassMeta
     std::vector<vk::AttachmentReference> attachment_refs;
     std::vector<vk::SubpassDescription> subpasses;
     std::vector<vk::SubpassDependency> dependencies;
+};
+
+struct SamplerMeta
+{
 };
 
 class Allocation
@@ -179,7 +187,7 @@ public:
 private:
     friend class Context;
     ImageViewMeta meta_;
-    ImageMeta const& img_meta_;
+    ImageMeta const* img_meta_;
     vk::ImageView view_;
 };
 
@@ -280,7 +288,7 @@ private:
     friend class Context;
     vk::DescriptorSet set_;
     vk::DescriptorPool pool_;
-    std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings_;
+    std::vector<vk::DescriptorSetLayoutBinding> const* layout_bindings_;
 };
 
 class WriteDescriptorSetBinding
@@ -325,7 +333,7 @@ public:
 private:
     friend class Context;
     vk::CommandPool pool_;
-    Context& ctx_;
+    Context* ctx_;
 };
 
 class Context
@@ -346,7 +354,7 @@ public:
     MyErrCode createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
     MyErrCode createImageView(Uid id, Uid image_id, ImageViewMeta const& meta);
-    MyErrCode createSampler();
+    MyErrCode createSampler(Uid id, SamplerMeta const& meta);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
     MyErrCode createTimelineSemaphore(Uid id, uint64_t init_val);
@@ -435,11 +443,49 @@ public:
     static int defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
                                   vk::PhysicalDeviceFeatures const& feat);
 
-protected:
-    template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
-    MyErrCode setDebugObjectId(T obj, Uid id);
+private:
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
     static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
+
+    template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
+    MyErrCode setDebugObjectId(T const& obj, Uid id);
+    MyErrCode setDebugObjectId(Queue const& queue, Uid id);
+    MyErrCode setDebugObjectId(Buffer const& buffer, Uid id);
+    MyErrCode setDebugObjectId(Image const& image, Uid id);
+    MyErrCode setDebugObjectId(ImageView const& image_view, Uid id);
+    MyErrCode setDebugObjectId(Semaphore const& semaphore, Uid id);
+    MyErrCode setDebugObjectId(DescriptorSetLayout const& descriptor_set_layout, Uid id);
+    MyErrCode setDebugObjectId(DescriptorSet const& descriptor_set, Uid id);
+    MyErrCode setDebugObjectId(Swapchain const& swapchain, Uid id);
+
+    template <typename T>
+    MyErrCode create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& val);
+    template <typename T>
+    T& get(UidMap<T>& map, Uid id);
+
+    template <typename T>
+    MyErrCode destroy(UidMap<T>& map);
+    template <typename T>
+    MyErrCode destroy(UidMap<T>& map, Uid id);
+    MyErrCode destroy(Queue const& queue);
+    MyErrCode destroy(vk::SurfaceKHR const& surface);
+    MyErrCode destroy(vk::CommandPool const& command_pool);
+    MyErrCode destroy(vk::DescriptorPool const& descriptor_pool);
+    MyErrCode destroy(Buffer const& buffer);
+    MyErrCode destroy(Image const& image);
+    MyErrCode destroy(ImageView const& image_view);
+    MyErrCode destroy(vk::Sampler const& sampler);
+    MyErrCode destroy(CommandBuffer const& command_buffer);
+    MyErrCode destroy(Semaphore const& semaphore);
+    MyErrCode destroy(vk::Fence const& fence);
+    MyErrCode destroy(vk::ShaderModule const& shader_module);
+    MyErrCode destroy(vk::PipelineLayout const& pipeline_layout);
+    MyErrCode destroy(vk::Pipeline const& pipeline);
+    MyErrCode destroy(DescriptorSetLayout const& descriptor_set_layout);
+    MyErrCode destroy(DescriptorSet const& descriptor_set);
+    MyErrCode destroy(Swapchain const& swapchain);
+    MyErrCode destroy(vk::RenderPass const& render_pass);
+    MyErrCode destroy(vk::Framebuffer const& framebuffer);
 
 private:
     vk::Instance instance_;
@@ -448,25 +494,25 @@ private:
     vk::Device device_;
     VmaAllocator allocator_;
 
-    std::map<Uid, Queue> queues_;
-    std::map<Uid, vk::SurfaceKHR> surfaces_;
-    std::map<Uid, vk::CommandPool> command_pools_;
-    std::map<Uid, vk::DescriptorPool> descriptor_pools_;
-    std::map<Uid, Buffer> buffers_;
-    std::map<Uid, Image> images_;
-    std::map<Uid, ImageView> image_views_;
-    std::map<Uid, vk::Sampler> samplers_;
-    std::map<Uid, CommandBuffer> command_buffers_;
-    std::map<Uid, Semaphore> semaphores_;
-    std::map<Uid, vk::Fence> fences_;
-    std::map<Uid, vk::ShaderModule> shader_modules_;
-    std::map<Uid, vk::PipelineLayout> pipeline_layouts_;
-    std::map<Uid, vk::Pipeline> pipelines_;
-    std::map<Uid, DescriptorSetLayout> descriptor_set_layouts_;
-    std::map<Uid, DescriptorSet> descriptor_sets_;
-    std::map<Uid, Swapchain> swapchains_;
-    std::map<Uid, vk::RenderPass> render_passes_;
-    std::map<Uid, vk::Framebuffer> framebuffers_;
+    UidMap<Queue> queues_;
+    UidMap<vk::SurfaceKHR> surfaces_;
+    UidMap<vk::CommandPool> command_pools_;
+    UidMap<vk::DescriptorPool> descriptor_pools_;
+    UidMap<Buffer> buffers_;
+    UidMap<Image> images_;
+    UidMap<ImageView> image_views_;
+    UidMap<vk::Sampler> samplers_;
+    UidMap<CommandBuffer> command_buffers_;
+    UidMap<Semaphore> semaphores_;
+    UidMap<vk::Fence> fences_;
+    UidMap<vk::ShaderModule> shader_modules_;
+    UidMap<vk::PipelineLayout> pipeline_layouts_;
+    UidMap<vk::Pipeline> pipelines_;
+    UidMap<DescriptorSetLayout> descriptor_set_layouts_;
+    UidMap<DescriptorSet> descriptor_sets_;
+    UidMap<Swapchain> swapchains_;
+    UidMap<vk::RenderPass> render_passes_;
+    UidMap<vk::Framebuffer> framebuffers_;
 };
 
 }  // namespace myvk

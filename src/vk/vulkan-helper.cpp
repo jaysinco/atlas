@@ -89,7 +89,7 @@ Image::operator vk::Image() const { return img_; }
 Image::operator bool() const { return img_; }
 
 ImageView::ImageView(ImageViewMeta const& meta, ImageMeta const& img_meta, vk::ImageView view)
-    : meta_(meta), img_meta_(img_meta), view_(view)
+    : meta_(meta), img_meta_(&img_meta), view_(view)
 {
 }
 
@@ -155,7 +155,7 @@ DescriptorSetLayout::operator bool() const { return layout_; }
 
 DescriptorSet::DescriptorSet(vk::DescriptorSet set, vk::DescriptorPool pool,
                              std::vector<vk::DescriptorSetLayoutBinding> const& layout_bindings)
-    : set_(set), pool_(pool), layout_bindings_(layout_bindings)
+    : set_(set), pool_(pool), layout_bindings_(&layout_bindings)
 {
 }
 
@@ -234,7 +234,7 @@ MyErrCode Context::createInstance(char const* app_name, std::vector<char const*>
 vk::Instance& Context::getInstance() { return instance_; }
 
 template <typename T, typename>
-MyErrCode Context::setDebugObjectId(T obj, Uid id)
+MyErrCode Context::setDebugObjectId(T const& obj, Uid id)
 {
     std::string name = FSTR("{}", id);
     CHECK_VKHPP_RET(device_.setDebugUtilsObjectNameEXT(vk::DebugUtilsObjectNameInfoEXT(
@@ -243,35 +243,212 @@ MyErrCode Context::setDebugObjectId(T obj, Uid id)
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createSurface(Uid id, vk::SurfaceKHR surface)
+MyErrCode Context::setDebugObjectId(Queue const& queue, Uid id)
 {
-    if (surfaces_.find(id) != surfaces_.end()) {
-        CHECK_ERR_RET(destroySurface(id));
-    }
-    surfaces_.emplace(id, surface);
-    CHECK_ERR_RET(setDebugObjectId(surface, id));
+    return setDebugObjectId(queue.queue_, id);
+}
+
+MyErrCode Context::setDebugObjectId(Buffer const& buffer, Uid id)
+{
+    return setDebugObjectId(buffer.buf_, id);
+}
+
+MyErrCode Context::setDebugObjectId(Image const& image, Uid id)
+{
+    return setDebugObjectId(image.img_, id);
+}
+
+MyErrCode Context::setDebugObjectId(ImageView const& image_view, Uid id)
+{
+    return setDebugObjectId(image_view.view_, id);
+}
+
+MyErrCode Context::setDebugObjectId(Semaphore const& semaphore, Uid id)
+{
+    return setDebugObjectId(semaphore.sem_, id);
+}
+
+MyErrCode Context::setDebugObjectId(DescriptorSetLayout const& descriptor_set_layout, Uid id)
+{
+    return setDebugObjectId(descriptor_set_layout.layout_, id);
+}
+
+MyErrCode Context::setDebugObjectId(DescriptorSet const& descriptor_set, Uid id)
+{
+    return setDebugObjectId(descriptor_set.set_, id);
+}
+
+MyErrCode Context::setDebugObjectId(Swapchain const& swapchain, Uid id)
+{
+    return setDebugObjectId(swapchain.swapchain_, id);
+}
+
+template <typename T>
+MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& val)
+{
+    CHECK_ERR_RET(setDebugObjectId(val, id));
+    map.try_emplace_l(
+        id,
+        [&](auto& old) {
+            destroy(old.second);
+            old.second = std::move(val);
+        },
+        std::move(val));
     return MyErrCode::kOk;
 }
 
-vk::SurfaceKHR& Context::getSurface(Uid id)
+template <typename T>
+T& Context::get(UidMap<T>& map, Uid id)
 {
-    if (surfaces_.find(id) == surfaces_.end()) {
-        MY_THROW("surface not exist: {}", id);
+    if (auto it = map.find(id); it == map.end()) {
+        MY_THROW("id not exist: {}", id);
+    } else {
+        return it->second;
     }
-    return surfaces_.at(id);
 }
 
-MyErrCode Context::destroySurface(Uid id)
+template <typename T>
+MyErrCode Context::destroy(UidMap<T>& map)
 {
-    if (auto it = surfaces_.find(id); it != surfaces_.end()) {
-        instance_.destroy(it->second);
-        surfaces_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("surface not exist: {}", id);
+    map.for_each([&](auto const& v) { destroy(v.second); });
+    map.clear();
+    return MyErrCode::kOk;
+}
+
+template <typename T>
+MyErrCode Context::destroy(UidMap<T>& map, Uid id)
+{
+    bool erased = surfaces_.erase_if(id, [&](auto& old) {
+        destroy(old.second);
+        return true;
+    });
+    if (!erased) {
+        ELOG("id not exist: {}", id);
         return MyErrCode::kFailed;
     }
+    return MyErrCode::kOk;
 }
+
+MyErrCode Context::destroy(Queue const& queue) { return MyErrCode::kOk; }
+
+MyErrCode Context::destroy(vk::SurfaceKHR const& surface)
+{
+    instance_.destroy(surface);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::CommandPool const& command_pool)
+{
+    device_.destroy(command_pool);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::DescriptorPool const& descriptor_pool)
+{
+    device_.destroy(descriptor_pool);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(Buffer const& buffer)
+{
+    vmaDestroyBuffer(buffer.allocator_, buffer.buf_, buffer.alloc_);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(Image const& image)
+{
+    if (image.alloc_) {
+        vmaDestroyImage(image.allocator_, image.img_, image.alloc_);
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(ImageView const& image_view)
+{
+    device_.destroy(image_view);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::Sampler const& sampler)
+{
+    device_.destroy(sampler);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(CommandBuffer const& command_buffer)
+{
+    device_.freeCommandBuffers(command_buffer.pool_, command_buffer);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(Semaphore const& semaphore)
+{
+    device_.destroy(semaphore);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::Fence const& fence)
+{
+    device_.destroy(fence);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::ShaderModule const& shader_module)
+{
+    device_.destroy(shader_module);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::PipelineLayout const& pipeline_layout)
+{
+    device_.destroy(pipeline_layout);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::Pipeline const& pipeline)
+{
+    device_.destroy(pipeline);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(DescriptorSetLayout const& descriptor_set_layout)
+{
+    device_.destroy(descriptor_set_layout);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(DescriptorSet const& descriptor_set)
+{
+    device_.freeDescriptorSets(descriptor_set.pool_, {descriptor_set.set_});
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(Swapchain const& swapchain)
+{
+    device_.destroy(swapchain);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::RenderPass const& render_pass)
+{
+    device_.destroy(render_pass);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(vk::Framebuffer const& framebuffer)
+{
+    device_.destroy(framebuffer);
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::createSurface(Uid id, vk::SurfaceKHR surface)
+{
+    return create(surfaces_, id, surface);
+}
+
+vk::SurfaceKHR& Context::getSurface(Uid id) { return get(surfaces_, id); }
+
+MyErrCode Context::destroySurface(Uid id) { return destroy(surfaces_, id); }
 
 MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
 {
@@ -429,8 +606,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         int i = 0;
         for (auto id: ids) {
             auto queue = device_.getQueue(family, i++);
-            queues_.emplace(id, Queue{queue, family});
-            CHECK_ERR_RET(setDebugObjectId(queue, id));
+            CHECK_ERR_RET(create(queues_, id, Queue{queue, family}));
             DLOG("create queue {}: family {}, {}", id, family, family_props[family].queueFlags);
         }
     }
@@ -440,82 +616,34 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
 
 vk::Device& Context::getDevice() { return device_; }
 
-Queue& Context::getQueue(Uid id)
-{
-    if (queues_.find(id) == queues_.end()) {
-        MY_THROW("queue not exist: {}", id);
-    }
-    return queues_.at(id);
-}
+Queue& Context::getQueue(Uid id) { return get(queues_, id); }
 
 MyErrCode Context::createCommandPool(Uid id, Uid queue_id, vk::CommandPoolCreateFlags flags)
 {
-    if (command_pools_.find(id) != command_pools_.end()) {
-        CHECK_ERR_RET(destroyCommandPool(id));
-    }
     auto pool =
         CHECK_VKHPP_VAL(device_.createCommandPool({flags, getQueue(queue_id).getFamilyIndex()}));
-    command_pools_.emplace(id, pool);
-    CHECK_ERR_RET(setDebugObjectId(pool, id));
-    return MyErrCode::kOk;
+    return create(command_pools_, id, pool);
 }
 
-vk::CommandPool& Context::getCommandPool(Uid id)
-{
-    if (command_pools_.find(id) == command_pools_.end()) {
-        MY_THROW("command pool not exist: {}", id);
-    }
-    return command_pools_.at(id);
-}
+vk::CommandPool& Context::getCommandPool(Uid id) { return get(command_pools_, id); }
 
-MyErrCode Context::destroyCommandPool(Uid id)
-{
-    if (auto it = command_pools_.find(id); it != command_pools_.end()) {
-        device_.destroy(it->second);
-        command_pools_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("command pool not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyCommandPool(Uid id) { return destroy(command_pools_, id); }
 
 MyErrCode Context::createDescriptorPool(Uid id, uint32_t max_sets,
                                         std::map<vk::DescriptorType, uint32_t> const& sizes,
                                         vk::DescriptorPoolCreateFlags flags)
 {
-    if (descriptor_pools_.find(id) != descriptor_pools_.end()) {
-        CHECK_ERR_RET(destroyDescriptorPool(id));
-    }
     std::vector<vk::DescriptorPoolSize> pool_size;
     for (auto [type, count]: sizes) {
         pool_size.emplace_back(type, count);
     }
     auto pool = CHECK_VKHPP_VAL(device_.createDescriptorPool({flags, max_sets, pool_size}));
-    descriptor_pools_.emplace(id, pool);
-    CHECK_ERR_RET(setDebugObjectId(pool, id));
-    return MyErrCode::kOk;
+    return create(descriptor_pools_, id, pool);
 }
 
-vk::DescriptorPool& Context::getDescriptorPool(Uid id)
-{
-    if (descriptor_pools_.find(id) == descriptor_pools_.end()) {
-        MY_THROW("descriptor pool not exist: {}", id);
-    }
-    return descriptor_pools_.at(id);
-}
+vk::DescriptorPool& Context::getDescriptorPool(Uid id) { return get(descriptor_pools_, id); }
 
-MyErrCode Context::destroyDescriptorPool(Uid id)
-{
-    if (auto it = descriptor_pools_.find(id); it != descriptor_pools_.end()) {
-        device_.destroy(it->second);
-        descriptor_pools_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("descriptor pool not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyDescriptorPool(Uid id) { return destroy(descriptor_pools_, id); }
 
 MyErrCode Context::createAllocator()
 {
@@ -530,46 +658,21 @@ MyErrCode Context::createAllocator()
 
 MyErrCode Context::createShaderModule(Uid id, std::filesystem::path const& file_path)
 {
-    if (shader_modules_.find(id) != shader_modules_.end()) {
-        CHECK_ERR_RET(destroyShaderModule(id));
-    }
     std::vector<uint8_t> code;
     CHECK_ERR_RET(toolkit::readBinaryFile(file_path, code));
     vk::ShaderModuleCreateInfo create_info(vk::ShaderModuleCreateFlags(), code.size(),
                                            reinterpret_cast<uint32_t const*>(code.data()));
     auto shader = CHECK_VKHPP_VAL(device_.createShaderModule(create_info));
-    shader_modules_.emplace(id, shader);
-    CHECK_ERR_RET(setDebugObjectId(shader, id));
-    return MyErrCode::kOk;
+    return create(shader_modules_, id, shader);
 }
 
-vk::ShaderModule& Context::getShaderModule(Uid id)
-{
-    if (shader_modules_.find(id) == shader_modules_.end()) {
-        MY_THROW("shader module not exist: {}", id);
-    }
-    return shader_modules_.at(id);
-}
+vk::ShaderModule& Context::getShaderModule(Uid id) { return get(shader_modules_, id); }
 
-MyErrCode Context::destroyShaderModule(Uid id)
-{
-    if (auto it = shader_modules_.find(id); it != shader_modules_.end()) {
-        device_.destroy(it->second);
-        shader_modules_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("shader module not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyShaderModule(Uid id) { return destroy(shader_modules_, id); }
 
 MyErrCode Context::createBuffer(Uid id, BufferMeta const& meta, vk::MemoryPropertyFlags properties,
                                 VmaAllocationCreateFlags flags)
 {
-    if (buffers_.find(id) != buffers_.end()) {
-        CHECK_ERR_RET(destroyBuffer(id));
-    }
-
     vk::BufferCreateInfo buffer_info(vk::BufferCreateFlags{}, meta.size, meta.usages,
                                      vk::SharingMode::eExclusive);
 
@@ -581,39 +684,18 @@ MyErrCode Context::createBuffer(Uid id, BufferMeta const& meta, vk::MemoryProper
     VmaAllocation alloc;
     CHECK_VK_RET(vmaCreateBuffer(allocator_, buffer_info, &creation_info, &buf, &alloc, nullptr));
 
-    buffers_.emplace(id, Buffer{meta, buf, alloc, allocator_});
-    CHECK_ERR_RET(setDebugObjectId(buffers_.at(id).buf_, id));
+    CHECK_ERR_RET(create(buffers_, id, Buffer{meta, buf, alloc, allocator_}));
     DLOG("create buffer {}: {} bytes, {}", id, meta.size, buffers_.at(id).getMemProp());
     return MyErrCode::kOk;
 }
 
-Buffer& Context::getBuffer(Uid id)
-{
-    if (buffers_.find(id) == buffers_.end()) {
-        MY_THROW("buffer not exist: {}", id);
-    }
-    return buffers_.at(id);
-}
+Buffer& Context::getBuffer(Uid id) { return get(buffers_, id); }
 
-MyErrCode Context::destroyBuffer(Uid id)
-{
-    if (auto it = buffers_.find(id); it != buffers_.end()) {
-        vmaDestroyBuffer(it->second.allocator_, it->second.buf_, it->second.alloc_);
-        buffers_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("buffer not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyBuffer(Uid id) { return destroy(buffers_, id); }
 
 MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                                VmaAllocationCreateFlags flags)
 {
-    if (images_.find(id) != images_.end()) {
-        CHECK_ERR_RET(destroyImage(id));
-    }
-
     vk::ImageCreateInfo image_info(vk::ImageCreateFlags(), meta.type, meta.format, meta.extent,
                                    meta.mip_levels, meta.layers, meta.samples, meta.tiling,
                                    meta.usages, vk::SharingMode::eExclusive, {}, meta.init_layout);
@@ -626,280 +708,114 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
     VmaAllocation alloc;
     CHECK_VK_RET(vmaCreateImage(allocator_, image_info, &vma_info, &img, &alloc, nullptr));
 
-    images_.emplace(id, Image{meta, img, alloc, allocator_});
-    CHECK_ERR_RET(setDebugObjectId(images_.at(id).img_, id));
-    return MyErrCode::kOk;
+    return create(images_, id, Image{meta, img, alloc, allocator_});
 }
 
-Image& Context::getImage(Uid id)
-{
-    if (images_.find(id) == images_.end()) {
-        MY_THROW("image not exist: {}", id);
-    }
-    return images_.at(id);
-}
+Image& Context::getImage(Uid id) { return get(images_, id); }
 
-MyErrCode Context::destroyImage(Uid id)
-{
-    if (auto it = images_.find(id); it != images_.end()) {
-        if (it->second.alloc_) {
-            vmaDestroyImage(it->second.allocator_, it->second.img_, it->second.alloc_);
-        }
-        images_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("image not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyImage(Uid id) { return destroy(images_, id); }
 
 MyErrCode Context::createImageView(Uid id, Uid image_id, ImageViewMeta const& meta)
 {
-    if (image_views_.find(id) != image_views_.end()) {
-        CHECK_ERR_RET(destroyImageView(id));
-    }
     auto& image = getImage(image_id);
     vk::ImageViewCreateInfo view_info({}, image.img_, meta.type, image.getMeta().format,
                                       meta.swizzle,
                                       {image.getMeta().aspects, meta.base_level, meta.num_levels,
                                        meta.base_layer, meta.num_layers});
     vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
-    image_views_.emplace(id, ImageView{meta, image.getMeta(), img_view});
-    CHECK_ERR_RET(setDebugObjectId(img_view, id));
+    return create(image_views_, id, ImageView{meta, image.getMeta(), img_view});
+}
+
+ImageView& Context::getImageView(Uid id) { return get(image_views_, id); }
+
+MyErrCode Context::destroyImageView(Uid id) { return destroy(image_views_, id); }
+
+MyErrCode Context::createSampler(Uid id, SamplerMeta const& meta)
+{
+    ;
     return MyErrCode::kOk;
 }
 
-ImageView& Context::getImageView(Uid id)
-{
-    if (image_views_.find(id) == image_views_.end()) {
-        MY_THROW("image view not exist: {}", id);
-    }
-    return image_views_.at(id);
-}
+vk::Sampler& Context::getSampler(Uid id) { return get(samplers_, id); }
 
-MyErrCode Context::destroyImageView(Uid id)
-{
-    if (auto it = image_views_.find(id); it != image_views_.end()) {
-        device_.destroy(it->second.view_);
-        image_views_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("image view not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
-
-MyErrCode Context::createSampler() { return MyErrCode::kOk; }
-
-vk::Sampler& Context::getSampler(Uid id)
-{
-    if (samplers_.find(id) == samplers_.end()) {
-        MY_THROW("sampler not exist: {}", id);
-    }
-    return samplers_.at(id);
-}
-
-MyErrCode Context::destroySampler(Uid id)
-{
-    if (auto it = samplers_.find(id); it != samplers_.end()) {
-        device_.destroy(it->second);
-        samplers_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("sampler not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroySampler(Uid id) { return destroy(samplers_, id); }
 
 MyErrCode Context::createCommandBuffer(Uid id, Uid command_pool_id)
 {
-    if (command_buffers_.find(id) != command_buffers_.end()) {
-        CHECK_ERR_RET(destroyDescriptorSet(id));
-    }
     auto& pool = getCommandPool(command_pool_id);
     auto bufs = CHECK_VKHPP_VAL(
         device_.allocateCommandBuffers({pool, vk::CommandBufferLevel::ePrimary, 1}));
-    command_buffers_.emplace(id, CommandBuffer{bufs.front(), pool, *this});
-    CHECK_ERR_RET(setDebugObjectId(bufs.front(), id));
-    return MyErrCode::kOk;
+    return create(command_buffers_, id, CommandBuffer{bufs.front(), pool, *this});
 }
 
-CommandBuffer& Context::getCommandBuffer(Uid id)
-{
-    if (command_buffers_.find(id) == command_buffers_.end()) {
-        MY_THROW("command buffer not exist: {}", id);
-    }
-    return command_buffers_.at(id);
-}
+CommandBuffer& Context::getCommandBuffer(Uid id) { return get(command_buffers_, id); }
 
-MyErrCode Context::destroyCommandBuffer(Uid id)
-{
-    if (auto it = command_buffers_.find(id); it != command_buffers_.end()) {
-        device_.freeCommandBuffers(it->second.pool_, it->second);
-        command_buffers_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("command buffer not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyCommandBuffer(Uid id) { return destroy(command_buffers_, id); }
 
 MyErrCode Context::createBinarySemaphore(Uid id)
 {
-    if (semaphores_.find(id) != semaphores_.end()) {
-        CHECK_ERR_RET(destroySemaphore(id));
-    }
     auto sem = CHECK_VKHPP_VAL(device_.createSemaphore({}));
-    semaphores_.emplace(id, Semaphore{vk::SemaphoreType::eBinary, sem});
-    CHECK_ERR_RET(setDebugObjectId(sem, id));
-    return MyErrCode::kOk;
+    return create(semaphores_, id, Semaphore{vk::SemaphoreType::eBinary, sem});
 }
 
 MyErrCode Context::createTimelineSemaphore(Uid id, uint64_t init_val)
 {
-    if (semaphores_.find(id) != semaphores_.end()) {
-        CHECK_ERR_RET(destroySemaphore(id));
-    }
     vk::StructureChain<vk::SemaphoreCreateInfo, vk::SemaphoreTypeCreateInfo> c{
         vk::SemaphoreCreateInfo{},
         vk::SemaphoreTypeCreateInfo{vk::SemaphoreType::eTimeline, init_val},
     };
     auto sem = CHECK_VKHPP_VAL(device_.createSemaphore(c.get<vk::SemaphoreCreateInfo>()));
-    semaphores_.emplace(id, Semaphore{vk::SemaphoreType::eTimeline, sem});
-    CHECK_ERR_RET(setDebugObjectId(sem, id));
-    return MyErrCode::kOk;
+    return create(semaphores_, id, Semaphore{vk::SemaphoreType::eTimeline, sem});
 }
 
-Semaphore& Context::getSemaphore(Uid id)
-{
-    if (semaphores_.find(id) == semaphores_.end()) {
-        MY_THROW("semaphore not exist: {}", id);
-    }
-    return semaphores_.at(id);
-}
+Semaphore& Context::getSemaphore(Uid id) { return get(semaphores_, id); }
 
-MyErrCode Context::destroySemaphore(Uid id)
-{
-    if (auto it = semaphores_.find(id); it != semaphores_.end()) {
-        device_.destroy(it->second.sem_);
-        semaphores_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("semaphore not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroySemaphore(Uid id) { return destroy(semaphores_, id); }
 
 MyErrCode Context::createFence(Uid id, bool init_signaled)
 {
-    if (fences_.find(id) != fences_.end()) {
-        CHECK_ERR_RET(destroyFence(id));
-    }
     auto fence = CHECK_VKHPP_VAL(device_.createFence(
         {init_signaled ? vk::FenceCreateFlagBits::eSignaled : vk::FenceCreateFlags{}}));
-    fences_.emplace(id, fence);
-    CHECK_ERR_RET(setDebugObjectId(fence, id));
-    return MyErrCode::kOk;
+    return create(fences_, id, fence);
 }
 
-vk::Fence& Context::getFence(Uid id)
-{
-    if (fences_.find(id) == fences_.end()) {
-        MY_THROW("fence not exist: {}", id);
-    }
-    return fences_.at(id);
-}
+vk::Fence& Context::getFence(Uid id) { return get(fences_, id); }
 
-MyErrCode Context::destroyFence(Uid id)
-{
-    if (auto it = fences_.find(id); it != fences_.end()) {
-        device_.destroy(it->second);
-        fences_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("fence not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyFence(Uid id) { return destroy(fences_, id); }
 
 MyErrCode Context::createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids,
                                         std::vector<vk::PushConstantRange> const& push_ranges)
 {
-    if (pipeline_layouts_.find(id) != pipeline_layouts_.end()) {
-        CHECK_ERR_RET(destroyPipelineLayout(id));
-    }
     std::vector<vk::DescriptorSetLayout> set_layouts;
     for (auto id: set_layout_ids) {
         set_layouts.push_back(getDescriptorSetLayout(id));
     }
     auto layout = CHECK_VKHPP_VAL(device_.createPipelineLayout({{}, set_layouts, push_ranges}));
-    pipeline_layouts_.emplace(id, layout);
-    CHECK_ERR_RET(setDebugObjectId(layout, id));
-    return MyErrCode::kOk;
+    return create(pipeline_layouts_, id, layout);
 }
 
-vk::PipelineLayout& Context::getPipelineLayout(Uid id)
-{
-    if (pipeline_layouts_.find(id) == pipeline_layouts_.end()) {
-        MY_THROW("pipeline layout not exist: {}", id);
-    }
-    return pipeline_layouts_.at(id);
-}
+vk::PipelineLayout& Context::getPipelineLayout(Uid id) { return get(pipeline_layouts_, id); }
 
-MyErrCode Context::destroyPipelineLayout(Uid id)
-{
-    if (auto it = pipeline_layouts_.find(id); it != pipeline_layouts_.end()) {
-        device_.destroy(it->second);
-        pipeline_layouts_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("pipeline layout not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyPipelineLayout(Uid id) { return destroy(pipeline_layouts_, id); }
 
 MyErrCode Context::createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id)
 {
-    if (pipelines_.find(id) != pipelines_.end()) {
-        CHECK_ERR_RET(destroyPipeline(id));
-    }
     vk::PipelineShaderStageCreateInfo shader_info(vk::PipelineShaderStageCreateFlags(),
                                                   vk::ShaderStageFlagBits::eCompute,
                                                   getShaderModule(shader_id), "main");
     vk::ComputePipelineCreateInfo create_info(vk::PipelineCreateFlags(), shader_info,
                                               getPipelineLayout(pipeline_layout_id));
     auto pipeline = CHECK_VKHPP_VAL(device_.createComputePipeline({}, create_info));
-    pipelines_.emplace(id, pipeline);
-    CHECK_ERR_RET(setDebugObjectId(pipeline, id));
-    return MyErrCode::kOk;
+    return create(pipelines_, id, pipeline);
 }
 
-vk::Pipeline& Context::getPipeline(Uid id)
-{
-    if (pipelines_.find(id) == pipelines_.end()) {
-        MY_THROW("pipeline not exist: {}", id);
-    }
-    return pipelines_.at(id);
-}
+vk::Pipeline& Context::getPipeline(Uid id) { return get(pipelines_, id); }
 
-MyErrCode Context::destroyPipeline(Uid id)
-{
-    if (auto it = pipelines_.find(id); it != pipelines_.end()) {
-        device_.destroy(it->second);
-        pipelines_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("pipeline not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyPipeline(Uid id) { return destroy(pipelines_, id); }
 
 MyErrCode Context::createDescriptorSetLayout(
     Uid id, std::vector<DescriptorSetLayoutBinding> const& bindings)
 {
-    if (descriptor_set_layouts_.find(id) != descriptor_set_layouts_.end()) {
-        CHECK_ERR_RET(destroyDescriptorSetLayout(id));
-    }
     std::vector<vk::DescriptorSetLayoutBinding> layout_bindings;
     for (int i = 0; i < bindings.size(); ++i) {
         vk::DescriptorSetLayoutBinding b = bindings[i];
@@ -908,66 +824,33 @@ MyErrCode Context::createDescriptorSetLayout(
     }
     auto layout = CHECK_VKHPP_VAL(
         device_.createDescriptorSetLayout({vk::DescriptorSetLayoutCreateFlags(), layout_bindings}));
-    descriptor_set_layouts_.emplace(id, DescriptorSetLayout{layout, layout_bindings});
-    CHECK_ERR_RET(setDebugObjectId(layout, id));
-    return MyErrCode::kOk;
+    return create(descriptor_set_layouts_, id, DescriptorSetLayout{layout, layout_bindings});
 }
 
 DescriptorSetLayout& Context::getDescriptorSetLayout(Uid id)
 {
-    if (descriptor_set_layouts_.find(id) == descriptor_set_layouts_.end()) {
-        MY_THROW("descriptor set layout not exist: {}", id);
-    }
-    return descriptor_set_layouts_.at(id);
+    return get(descriptor_set_layouts_, id);
 }
 
 MyErrCode Context::destroyDescriptorSetLayout(Uid id)
 {
-    if (auto it = descriptor_set_layouts_.find(id); it != descriptor_set_layouts_.end()) {
-        device_.destroy(it->second);
-        descriptor_set_layouts_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("descriptor set layout not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
+    return destroy(descriptor_set_layouts_, id);
 }
 
 MyErrCode Context::createDescriptorSet(Uid id, Uid set_layout_id, Uid descriptor_pool_id)
 {
-    if (descriptor_sets_.find(id) != descriptor_sets_.end()) {
-        CHECK_ERR_RET(destroyDescriptorSet(id));
-    }
     auto& pool = getDescriptorPool(descriptor_pool_id);
     DescriptorSetLayout& layout = getDescriptorSetLayout(set_layout_id);
     auto sets = CHECK_VKHPP_VAL(device_.allocateDescriptorSets({pool, layout.layout_}));
-    descriptor_sets_.emplace(id, DescriptorSet{sets.front(), pool, layout.bindings_});
-    CHECK_ERR_RET(setDebugObjectId(sets.front(), id));
-    return MyErrCode::kOk;
+    return create(descriptor_sets_, id, DescriptorSet{sets.front(), pool, layout.bindings_});
 }
 
-DescriptorSet& Context::getDescriptorSet(Uid id)
-{
-    if (descriptor_sets_.find(id) == descriptor_sets_.end()) {
-        MY_THROW("descriptor set not exist: {}", id);
-    }
-    return descriptor_sets_.at(id);
-}
+DescriptorSet& Context::getDescriptorSet(Uid id) { return get(descriptor_sets_, id); }
 
-MyErrCode Context::destroyDescriptorSet(Uid id)
-{
-    if (auto it = descriptor_sets_.find(id); it != descriptor_sets_.end()) {
-        device_.freeDescriptorSets(it->second.pool_, {it->second.set_});
-        descriptor_sets_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("descriptor set not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyDescriptorSet(Uid id) { return destroy(descriptor_sets_, id); }
 
 CommandBuffer::CommandBuffer(vk::CommandBuffer buf, vk::CommandPool pool, Context& ctx)
-    : vk::CommandBuffer(buf), pool_(pool), ctx_(ctx)
+    : vk::CommandBuffer(buf), pool_(pool), ctx_(&ctx)
 {
 }
 
@@ -975,8 +858,8 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
                                             vk::DeviceSize src_offset, vk::DeviceSize dst_offset,
                                             vk::DeviceSize size)
 {
-    Buffer& dst_buf = ctx_.getBuffer(dst_buf_id);
-    Buffer& src_buf = ctx_.getBuffer(src_buf_id);
+    Buffer& dst_buf = ctx_->getBuffer(dst_buf_id);
+    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
     if (src_offset + size > src_buf.getMeta().size || dst_offset + size > dst_buf.getMeta().size) {
         ELOG("invalid buffer size for copy");
         return MyErrCode::kFailed;
@@ -990,8 +873,8 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
 MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id,
                                            vk::ImageLayout dst_img_layout, uint32_t dst_img_layer)
 {
-    Image& dst_img = ctx_.getImage(dst_img_id);
-    Buffer& src_buf = ctx_.getBuffer(src_buf_id);
+    Image& dst_img = ctx_->getImage(dst_img_id);
+    Buffer& src_buf = ctx_->getBuffer(src_buf_id);
     vk::BufferImageCopy region(
         0, 0, 0, vk::ImageSubresourceLayers{dst_img.getMeta().aspects, 0, dst_img_layer, 1},
         {0, 0, 0}, dst_img.getMeta().extent);
@@ -1016,7 +899,7 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_
                                               vk::PipelineStageFlags2 dst_stage,
                                               vk::AccessFlags2 dst_access)
 {
-    Image image = ctx_.getImage(image_id);
+    Image image = ctx_->getImage(image_id);
     vk::ImageMemoryBarrier2 barrier(
         src_stage, src_access, dst_stage, dst_access, old_layout, new_layout,
         vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
@@ -1028,13 +911,13 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_
 MyErrCode CommandBuffer::pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages,
                                        uint32_t offset, uint32_t size, void const* data)
 {
-    pushConstants(ctx_.getPipelineLayout(pipeline_layout_id), stages, offset, size, data);
+    pushConstants(ctx_->getPipelineLayout(pipeline_layout_id), stages, offset, size, data);
     return MyErrCode::kOk;
 }
 
 MyErrCode CommandBuffer::bindComputePipeline(Uid pipeline_id)
 {
-    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_.getPipeline(pipeline_id));
+    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_->getPipeline(pipeline_id));
     return MyErrCode::kOk;
 }
 
@@ -1043,9 +926,9 @@ MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
 {
     std::vector<vk::DescriptorSet> sets;
     for (auto id: set_ids) {
-        sets.push_back(ctx_.getDescriptorSet(id));
+        sets.push_back(ctx_->getDescriptorSet(id));
     }
-    bindDescriptorSets(bind_point, ctx_.getPipelineLayout(pipeline_layout_id), 0, sets, {});
+    bindDescriptorSets(bind_point, ctx_->getPipelineLayout(pipeline_layout_id), 0, sets, {});
     return MyErrCode::kOk;
 }
 
@@ -1171,7 +1054,7 @@ MyErrCode Context::updateDescriptorSet(
 
     std::vector<vk::WriteDescriptorSet> set_writes;
     for (auto& [binding, write]: write_bindings) {
-        vk::DescriptorType type = set.layout_bindings_.at(binding).descriptorType;
+        vk::DescriptorType type = set.layout_bindings_->at(binding).descriptorType;
         switch (type) {
             case vk::DescriptorType::eStorageBuffer: {
                 auto& buffer = getBuffer(write.id_0_);
@@ -1198,10 +1081,6 @@ MyErrCode Context::updateDescriptorSet(
 
 MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& meta)
 {
-    if (swapchains_.find(id) != swapchains_.end()) {
-        CHECK_ERR_RET(destroySwapchain(id));
-    }
-
     auto& surface = getSurface(surface_id);
 
     bool format_found = false;
@@ -1256,8 +1135,8 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
     std::vector<Uid> view_ids;
     for (auto& image: images) {
         Uid image_id = Uid::temp();
-        images_.emplace(image_id, Image{image_meta, image, VK_NULL_HANDLE, VK_NULL_HANDLE});
-        CHECK_ERR_RET(setDebugObjectId(image, image_id));
+        CHECK_ERR_RET(
+            create(images_, image_id, Image{image_meta, image, VK_NULL_HANDLE, VK_NULL_HANDLE}));
         image_ids.push_back(image_id);
 
         Uid view_id = Uid::temp();
@@ -1265,80 +1144,37 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
         view_ids.push_back(view_id);
     }
 
-    Swapchain swapchain{meta, swap, image_ids, view_ids};
-    swapchains_.emplace(id, std::move(swapchain));
-    CHECK_ERR_RET(setDebugObjectId(swap, id));
-    return MyErrCode::kOk;
+    return create(swapchains_, id, Swapchain{meta, swap, image_ids, view_ids});
 }
 
-Swapchain& Context::getSwapchain(Uid id)
-{
-    if (swapchains_.find(id) == swapchains_.end()) {
-        MY_THROW("swapchain not exist: {}", id);
-    }
-    return swapchains_.at(id);
-}
+Swapchain& Context::getSwapchain(Uid id) { return get(swapchains_, id); }
 
-MyErrCode Context::destroySwapchain(Uid id)
-{
-    if (auto it = swapchains_.find(id); it != swapchains_.end()) {
-        device_.destroy(it->second.swapchain_);
-        swapchains_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("swapchain not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroySwapchain(Uid id) { return destroy(swapchains_, id); }
 
 MyErrCode Context::createRenderPass(Uid id, RenderPassMeta const& meta)
 {
-    if (render_passes_.find(id) != render_passes_.end()) {
-        CHECK_ERR_RET(destroyRenderPass(id));
-    }
     auto render_pass = CHECK_VKHPP_VAL(
         device_.createRenderPass({{}, meta.attachments, meta.subpasses, meta.dependencies}));
-    render_passes_.emplace(id, render_pass);
-    CHECK_ERR_RET(setDebugObjectId(render_pass, id));
-    return MyErrCode::kOk;
+    return create(render_passes_, id, render_pass);
 }
 
-vk::RenderPass& Context::getRenderPass(Uid id)
-{
-    if (render_passes_.find(id) == render_passes_.end()) {
-        MY_THROW("render pass not exist: {}", id);
-    }
-    return render_passes_.at(id);
-}
+vk::RenderPass& Context::getRenderPass(Uid id) { return get(render_passes_, id); }
 
-MyErrCode Context::destroyRenderPass(Uid id)
-{
-    if (auto it = render_passes_.find(id); it != render_passes_.end()) {
-        device_.destroy(it->second);
-        render_passes_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("render pass not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyRenderPass(Uid id) { return destroy(render_passes_, id); }
 
 MyErrCode Context::createFramebuffer(Uid id, Uid render_pass_id,
                                      std::vector<Uid> const& image_view_ids)
 {
-    if (framebuffers_.find(id) != framebuffers_.end()) {
-        CHECK_ERR_RET(destroyFramebuffer(id));
-    }
     std::vector<vk::ImageView> attachments;
     vk::Extent3D extent = {0, 0, 0};
     uint32_t layers = 0;
     for (auto view_id: image_view_ids) {
         ImageView& view = getImageView(view_id);
-        if (extent.width != 0 && extent != view.img_meta_.extent) {
+        if (extent.width != 0 && extent != view.img_meta_->extent) {
             ELOG("inconsistent image extent: {}", view_id);
             return MyErrCode::kFailed;
         }
-        extent = view.img_meta_.extent;
+        extent = view.img_meta_->extent;
         if (layers != 0 && layers != view.meta_.num_layers) {
             ELOG("inconsistent image layers: {}", view_id);
             return MyErrCode::kFailed;
@@ -1348,30 +1184,12 @@ MyErrCode Context::createFramebuffer(Uid id, Uid render_pass_id,
     }
     auto framebuffer = CHECK_VKHPP_VAL(device_.createFramebuffer(
         {{}, getRenderPass(render_pass_id), attachments, extent.width, extent.height, layers}));
-    framebuffers_.emplace(id, framebuffer);
-    CHECK_ERR_RET(setDebugObjectId(framebuffer, id));
-    return MyErrCode::kOk;
+    return create(framebuffers_, id, framebuffer);
 }
 
-vk::Framebuffer& Context::getFramebuffer(Uid id)
-{
-    if (framebuffers_.find(id) == framebuffers_.end()) {
-        MY_THROW("framebuffer not exist: {}", id);
-    }
-    return framebuffers_.at(id);
-}
+vk::Framebuffer& Context::getFramebuffer(Uid id) { return get(framebuffers_, id); }
 
-MyErrCode Context::destroyFramebuffer(Uid id)
-{
-    if (auto it = framebuffers_.find(id); it != framebuffers_.end()) {
-        device_.destroy(it->second);
-        framebuffers_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("framebuffer not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroyFramebuffer(Uid id) { return destroy(framebuffers_, id); }
 
 MyErrCode Context::waitQueueIdle(Uid queue_id)
 {
@@ -1465,57 +1283,27 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
 MyErrCode Context::destroy()
 {
     CHECK_VKHPP_RET(device_.waitIdle());
-    while (!render_passes_.empty()) {
-        CHECK_ERR_RET(destroyRenderPass(render_passes_.begin()->first));
-    }
-    while (!pipelines_.empty()) {
-        CHECK_ERR_RET(destroyPipeline(pipelines_.begin()->first));
-    }
-    while (!pipeline_layouts_.empty()) {
-        CHECK_ERR_RET(destroyPipelineLayout(pipeline_layouts_.begin()->first));
-    }
-    while (!descriptor_sets_.empty()) {
-        CHECK_ERR_RET(destroyDescriptorSet(descriptor_sets_.begin()->first));
-    }
-    while (!descriptor_set_layouts_.empty()) {
-        CHECK_ERR_RET(destroyDescriptorSetLayout(descriptor_set_layouts_.begin()->first));
-    }
-    while (!fences_.empty()) {
-        CHECK_ERR_RET(destroyFence(fences_.begin()->first));
-    }
-    while (!semaphores_.empty()) {
-        CHECK_ERR_RET(destroySemaphore(semaphores_.begin()->first));
-    }
-    while (!command_buffers_.empty()) {
-        CHECK_ERR_RET(destroyCommandBuffer(command_buffers_.begin()->first));
-    }
-    while (!image_views_.empty()) {
-        CHECK_ERR_RET(destroyImageView(image_views_.begin()->first));
-    }
-    while (!images_.empty()) {
-        CHECK_ERR_RET(destroyImage(images_.begin()->first));
-    }
-    while (!swapchains_.empty()) {
-        CHECK_ERR_RET(destroySwapchain(swapchains_.begin()->first));
-    }
-    while (!buffers_.empty()) {
-        CHECK_ERR_RET(destroyBuffer(buffers_.begin()->first));
-    }
-    while (!samplers_.empty()) {
-        CHECK_ERR_RET(destroySampler(samplers_.begin()->first));
-    }
-    while (!shader_modules_.empty()) {
-        CHECK_ERR_RET(destroyShaderModule(shader_modules_.begin()->first));
-    }
-    while (!descriptor_pools_.empty()) {
-        CHECK_ERR_RET(destroyDescriptorPool(descriptor_pools_.begin()->first));
-    }
-    while (!command_pools_.empty()) {
-        CHECK_ERR_RET(destroyCommandPool(command_pools_.begin()->first));
-    }
-    while (!surfaces_.empty()) {
-        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first));
-    }
+
+    CHECK_ERR_RET(destroy(framebuffers_));
+    CHECK_ERR_RET(destroy(render_passes_));
+    CHECK_ERR_RET(destroy(pipelines_));
+    CHECK_ERR_RET(destroy(pipeline_layouts_));
+    CHECK_ERR_RET(destroy(descriptor_sets_));
+    CHECK_ERR_RET(destroy(descriptor_set_layouts_));
+    CHECK_ERR_RET(destroy(fences_));
+    CHECK_ERR_RET(destroy(semaphores_));
+    CHECK_ERR_RET(destroy(command_buffers_));
+    CHECK_ERR_RET(destroy(image_views_));
+    CHECK_ERR_RET(destroy(images_));
+    CHECK_ERR_RET(destroy(swapchains_));
+    CHECK_ERR_RET(destroy(buffers_));
+    CHECK_ERR_RET(destroy(samplers_));
+    CHECK_ERR_RET(destroy(shader_modules_));
+    CHECK_ERR_RET(destroy(descriptor_pools_));
+    CHECK_ERR_RET(destroy(command_pools_));
+    CHECK_ERR_RET(destroy(surfaces_));
+    CHECK_ERR_RET(destroy(queues_));
+
     if (allocator_) {
         vmaDestroyAllocator(allocator_);
     }

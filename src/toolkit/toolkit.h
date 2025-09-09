@@ -39,6 +39,7 @@ public:
     std::string toStr() const;
     static Uid const kNull;
     static Uid temp();
+    friend size_t hash_value(Uid const& id);  // NOLINT
 
 private:
     int id_;
