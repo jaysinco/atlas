@@ -456,7 +456,6 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
     auto device_limits = device_props.limits;
     auto memory_props = physical_device.getMemoryProperties();
     auto queue_families = physical_device.getQueueFamilyProperties();
-    auto device_features = physical_device.getFeatures();
     auto extensions = CHECK_VKHPP_VAL(physical_device.enumerateDeviceExtensionProperties());
 
     // basic device
@@ -516,11 +515,11 @@ MyErrCode Context::logDeviceInfo(vk::PhysicalDevice const& physical_device)
     return MyErrCode::kOk;
 }
 
-int Context::defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
-                                vk::PhysicalDeviceFeatures const& feat)
+int Context::defaultDeviceRater(vk::PhysicalDevice const& dev)
 {
+    auto props = dev.getProperties();
     int score = 0;
-    switch (prop.deviceType) {
+    switch (props.deviceType) {
         case vk::PhysicalDeviceType::eOther:
             score += 1;
             break;
@@ -547,7 +546,7 @@ MyErrCode Context::createPhysicalDevice(DeviceRater const& device_rater)
     auto physical_devices = CHECK_VKHPP_VAL(instance_.enumeratePhysicalDevices());
     int best_score = 0;
     for (auto& d: physical_devices) {
-        int score = device_rater(d.getProperties(), d.getFeatures());
+        int score = device_rater(d);
         if (score > best_score) {
             physical_device_ = d;
             best_score = score;
@@ -585,6 +584,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         queue_infos.emplace_back(vk::DeviceQueueCreateFlags(), family, ids.size(), &queue_priority);
     }
 
+    vk::PhysicalDeviceFeatures2 feat_10;
     vk::PhysicalDeviceVulkan11Features feat_11;
     vk::PhysicalDeviceVulkan12Features feat_12;
     vk::PhysicalDeviceVulkan13Features feat_13;
@@ -592,10 +592,11 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     feat_12.timelineSemaphore = true;
     feat_13.synchronization2 = true;
 
-    vk::StructureChain<vk::DeviceCreateInfo, vk::PhysicalDeviceVulkan11Features,
-                       vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features>
-        c = {vk::DeviceCreateInfo{vk::DeviceCreateFlags(), queue_infos, {}, extensions}, feat_11,
-             feat_12, feat_13};
+    vk::StructureChain<vk::DeviceCreateInfo, vk::PhysicalDeviceFeatures2,
+                       vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan12Features,
+                       vk::PhysicalDeviceVulkan13Features>
+        c = {vk::DeviceCreateInfo{vk::DeviceCreateFlags(), queue_infos, {}, extensions}, feat_10,
+             feat_11, feat_12, feat_13};
 
     device_ = CHECK_VKHPP_VAL(physical_device_.createDevice(c.get<vk::DeviceCreateInfo>()));
 

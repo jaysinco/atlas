@@ -69,8 +69,7 @@ using Uid = toolkit::Uid;
 template <typename T>
 using UidMap = phmap::parallel_node_hash_map_m<Uid, T>;
 
-using DeviceRater =
-    std::function<int(vk::PhysicalDeviceProperties const&, vk::PhysicalDeviceFeatures const&)>;
+using DeviceRater = std::function<int(vk::PhysicalDevice const&)>;
 
 using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyProperties const&)>;
 
@@ -445,8 +444,7 @@ public:
     MyErrCode destroyFramebuffer(Uid id);
     MyErrCode destroy();
 
-    static int defaultDeviceRater(vk::PhysicalDeviceProperties const& prop,
-                                  vk::PhysicalDeviceFeatures const& feat);
+    static int defaultDeviceRater(vk::PhysicalDevice const& dev);
 
 private:
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
