@@ -122,9 +122,10 @@ MY_MAIN
                                {UID_vkDescriptorSet_square});
         cmd.dispatch(num_elements, 1, 1);
 
-        cmd.pipelineMemoryBarrier(
-            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
-            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderRead);
+        cmd.pipelineMemoryBarrier({.src_stage = vk::PipelineStageFlagBits2::eComputeShader,
+                                   .src_access = vk::AccessFlagBits2::eShaderWrite,
+                                   .dst_stage = vk::PipelineStageFlagBits2::eComputeShader,
+                                   .dst_access = vk::AccessFlagBits2::eShaderRead});
 
         cmd.bindComputePipeline(UID_vkPipeline_mul2);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, UID_vkPipelineLayout_compute,

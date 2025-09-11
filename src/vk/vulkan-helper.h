@@ -95,13 +95,28 @@ struct ImageMeta
     vk::ImageUsageFlags usages;
 };
 
-struct ImageViewMeta
+struct ImageSubLayers
+{
+    uint32_t base_level = 0;
+    uint32_t base_layer = 0;
+    uint32_t num_layers = 0;
+    vk::ImageAspectFlags aspects = vk::ImageAspectFlagBits::eNone;
+};
+
+struct ImageSubRange: ImageSubLayers
+{
+    uint32_t num_levels = 0;
+};
+
+struct ImageSubArea: ImageSubRange
+{
+    vk::Offset3D offset_min = {0, 0, 0};
+    vk::Offset3D offset_max = {0, 0, 0};
+};
+
+struct ImageViewMeta: ImageSubRange
 {
     vk::ImageViewType type;
-    uint32_t base_level;
-    uint32_t num_levels;
-    uint32_t base_layer;
-    uint32_t num_layers;
     vk::ComponentMapping swizzle;
 };
 
@@ -129,6 +144,20 @@ struct SamplerMeta
     vk::BorderColor border_color;
     float min_lod;
     float max_lod;
+};
+
+struct MemoryBarrierMeta
+{
+    vk::PipelineStageFlags2 src_stage;
+    vk::AccessFlags2 src_access;
+    vk::PipelineStageFlags2 dst_stage;
+    vk::AccessFlags2 dst_access;
+};
+
+struct ImageBarrierMeta: MemoryBarrierMeta
+{
+    vk::ImageLayout old_layout;
+    vk::ImageLayout new_layout;
 };
 
 class Allocation
@@ -171,8 +200,10 @@ class Image: public Allocation
 public:
     Image(ImageMeta const& meta, vk::Image img, VmaAllocation alloc, VmaAllocator allocator);
     ImageMeta const& getMeta() const;
+    vk::Extent3D getMipExtent(uint32_t mip_level) const;
     operator vk::Image() const;
     operator bool() const;
+    static uint32_t getMaxMipLevels(vk::Extent3D const& base);
 
 private:
     friend class Context;
@@ -317,13 +348,13 @@ public:
                                  vk::DeviceSize dst_offset = 0,
                                  vk::DeviceSize size = vk::WholeSize);
     MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                                uint32_t dst_img_layer);
-    MyErrCode pipelineMemoryBarrier(vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
-                                    vk::PipelineStageFlags2 dst_stage, vk::AccessFlags2 dst_access);
-    MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
-                                   vk::ImageLayout new_layout, vk::PipelineStageFlags2 src_stage,
-                                   vk::AccessFlags2 src_access, vk::PipelineStageFlags2 dst_stage,
-                                   vk::AccessFlags2 dst_access);
+                                ImageSubLayers layers = {});
+    MyErrCode blitImage(Uid src_img_id, vk::ImageLayout src_img_layout, Uid dst_img_id,
+                        vk::ImageLayout dst_img_layout, uint32_t src_mip_level = 0,
+                        uint32_t dst_mip_level = 0);
+    MyErrCode pipelineMemoryBarrier(MemoryBarrierMeta const& meta);
+    MyErrCode pipelineImageBarrier(Uid image_id, ImageBarrierMeta const& meta,
+                                   ImageSubRange range = {});
     MyErrCode pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages, uint32_t offset,
                             uint32_t size, void const* data);
     MyErrCode bindComputePipeline(Uid pipeline_id);
@@ -331,6 +362,7 @@ public:
                                  std::vector<Uid> const& set_ids);
 
     using vk::CommandBuffer::bindDescriptorSets;
+    using vk::CommandBuffer::blitImage;
     using vk::CommandBuffer::copyBufferToImage;
     using vk::CommandBuffer::pushConstants;
 
@@ -400,14 +432,14 @@ public:
     MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
     MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
     MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id,
-                                vk::ImageLayout dst_img_layout, uint32_t dst_img_layer);
+                                vk::ImageLayout dst_img_layout, uint32_t dst_img_layer = 0);
     MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
                                Uid dst_buf_id);
     MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
                               Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                              uint32_t dst_img_layer);
-    MyErrCode transitionImageLayout(Uid queue_id, Uid command_pool_id, Uid image_id,
-                                    vk::ImageLayout old_layout, vk::ImageLayout new_layout);
+                              uint32_t dst_img_layer = 0);
+    MyErrCode generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_id,
+                              vk::ImageLayout image_layout);
     MyErrCode updateDescriptorSet(
         Uid set_id, std::map<uint32_t, WriteDescriptorSetBinding> const& write_bindings);
     MyErrCode waitQueueIdle(Uid queue_id);
@@ -447,7 +479,12 @@ public:
     static int defaultDeviceRater(vk::PhysicalDevice const& dev);
 
 private:
+    static void fillImageSubLayers(Image const& image, ImageSubLayers& layers);
+    static void fillImageSubRange(Image const& image, ImageSubRange& range);
+    static void fillImageSubArea(Image const& image, ImageSubArea& area);
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
+    static ImageBarrierMeta deduceImageBarrier(vk::ImageLayout old_layout,
+                                               vk::ImageLayout new_layout);
     static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
 
     template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
