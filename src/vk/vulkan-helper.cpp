@@ -730,13 +730,13 @@ Image& Context::getImage(Uid id) { return get(images_, id); }
 
 MyErrCode Context::destroyImage(Uid id) { return destroy(images_, id); }
 
-MyErrCode Context::createImageView(Uid id, Uid image_id, ImageViewMeta const& meta)
+MyErrCode Context::createImageView(Uid id, Uid image_id, ImageViewMeta meta)
 {
     auto& image = getImage(image_id);
-    vk::ImageViewCreateInfo view_info({}, image.img_, meta.type, image.getMeta().format,
-                                      meta.swizzle,
-                                      {image.getMeta().aspects, meta.base_level, meta.num_levels,
-                                       meta.base_layer, meta.num_layers});
+    CommandBuffer::completeImageSubRange(image, meta);
+    vk::ImageViewCreateInfo view_info(
+        {}, image.img_, meta.type, image.getMeta().format, meta.swizzle,
+        {meta.aspects, meta.base_level, meta.num_levels, meta.base_layer, meta.num_layers});
     vk::ImageView img_view = CHECK_VKHPP_VAL(device_.createImageView(view_info));
     return create(image_views_, id, ImageView{meta, image.getMeta(), img_view});
 }
@@ -891,57 +891,99 @@ MyErrCode CommandBuffer::copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id,
 {
     Buffer& dst_buf = ctx_->getBuffer(dst_buf_id);
     Buffer& src_buf = ctx_->getBuffer(src_buf_id);
-    if (src_offset + size > src_buf.getMeta().size || dst_offset + size > dst_buf.getMeta().size) {
+    BufferMeta const& dst_meta = dst_buf.getMeta();
+    BufferMeta const& src_meta = src_buf.getMeta();
+    if (size == kRemainingSize) {
+        size = dst_meta.size - dst_offset;
+    }
+    if (src_offset + size > src_meta.size || dst_offset + size > dst_meta.size) {
         ELOG("invalid buffer size for copy");
         return MyErrCode::kFailed;
     }
-    vk::BufferCopy region(src_offset, dst_offset,
-                          size == vk::WholeSize ? dst_buf.getMeta().size : size);
+    vk::BufferCopy region(src_offset, dst_offset, size);
     copyBuffer(src_buf, dst_buf, region);
     return MyErrCode::kOk;
 }
 
+void CommandBuffer::completeImageSubLayers(Image const& image, ImageSubLayers& layers)
+{
+    ImageMeta const& meta = image.getMeta();
+    if (layers.num_layers == vk::RemainingArrayLayers) {
+        layers.num_layers = meta.layers - layers.base_layer;
+    }
+    if (layers.aspects == kAllImageAspects) {
+        layers.aspects = meta.aspects;
+    }
+}
+
+void CommandBuffer::completeImageSubRange(Image const& image, ImageSubRange& range)
+{
+    ImageMeta const& meta = image.getMeta();
+    completeImageSubLayers(image, range);
+    if (range.num_levels == vk::RemainingMipLevels) {
+        range.num_levels = meta.mip_levels - range.base_level;
+    }
+}
+
+void CommandBuffer::completeImageSubArea(Image const& image, ImageSubArea& area)
+{
+    ImageMeta const& meta = image.getMeta();
+    completeImageSubLayers(image, area);
+    vk::Extent3D extent = image.getMipExtent(area.base_level);
+    if (area.extent == kRemainingExtend) {
+        area.extent = vk::Extent3D{extent.width - area.offset.x, extent.height - area.offset.y,
+                                   extent.depth - area.offset.z};
+    }
+}
+
 MyErrCode CommandBuffer::copyBufferToImage(Uid src_buf_id, Uid dst_img_id,
-                                           vk::ImageLayout dst_img_layout, uint32_t dst_img_layer)
+                                           vk::ImageLayout dst_img_layout,
+                                           BufferImageArea src_buf_area, ImageSubArea dst_img_area)
 {
     Image& dst_img = ctx_->getImage(dst_img_id);
     Buffer& src_buf = ctx_->getBuffer(src_buf_id);
+    completeImageSubArea(dst_img, dst_img_area);
+
     vk::BufferImageCopy region(
-        0, 0, 0, vk::ImageSubresourceLayers{dst_img.getMeta().aspects, 0, dst_img_layer, 1},
-        {0, 0, 0}, dst_img.getMeta().extent);
+        src_buf_area.offset, src_buf_area.width, src_buf_area.height,
+        vk::ImageSubresourceLayers{dst_img_area.aspects, dst_img_area.base_level,
+                                   dst_img_area.base_layer, dst_img_area.num_layers},
+        dst_img_area.offset, dst_img_area.extent);
+
     copyBufferToImage(src_buf, dst_img, dst_img_layout, region);
     return MyErrCode::kOk;
 }
 
 MyErrCode CommandBuffer::blitImage(Uid src_img_id, vk::ImageLayout src_img_layout, Uid dst_img_id,
-                                   vk::ImageLayout dst_img_layout, uint32_t src_mip_level,
-                                   uint32_t dst_mip_level)
+                                   vk::ImageLayout dst_img_layout, ImageSubArea src_img_area,
+                                   ImageSubArea dst_img_area)
 {
     Image& src_img = ctx_->getImage(src_img_id);
     Image& dst_img = ctx_->getImage(dst_img_id);
 
-    ImageMeta const& src_meta = src_img.getMeta();
-    ImageMeta const& dst_meta = dst_img.getMeta();
-
-    vk::Extent3D src_size = src_img.getMipExtent(src_mip_level);
-    vk::Extent3D dst_size = dst_img.getMipExtent(dst_mip_level);
+    completeImageSubArea(src_img, src_img_area);
+    completeImageSubArea(dst_img, dst_img_area);
 
     std::array<vk::Offset3D, 2> src_offsets;
-    src_offsets[0] = vk::Offset3D{0, 0, 0};
+    src_offsets[0] = src_img_area.offset;
     src_offsets[1] =
-        vk::Offset3D{static_cast<int>(src_size.width), static_cast<int>(src_size.height),
-                     static_cast<int>(src_size.depth)};
+        vk::Offset3D{static_cast<int>(src_img_area.offset.x + src_img_area.extent.width),
+                     static_cast<int>(src_img_area.offset.y + src_img_area.extent.height),
+                     static_cast<int>(src_img_area.offset.z + src_img_area.extent.depth)};
 
     std::array<vk::Offset3D, 2> dst_offsets;
-    dst_offsets[0] = vk::Offset3D{0, 0, 0};
+    dst_offsets[0] = dst_img_area.offset;
     dst_offsets[1] =
-        vk::Offset3D{static_cast<int>(dst_size.width), static_cast<int>(dst_size.height),
-                     static_cast<int>(dst_size.depth)};
+        vk::Offset3D{static_cast<int>(dst_img_area.offset.x + dst_img_area.extent.width),
+                     static_cast<int>(dst_img_area.offset.y + dst_img_area.extent.height),
+                     static_cast<int>(dst_img_area.offset.z + dst_img_area.extent.depth)};
 
     vk::ImageBlit region{
-        vk::ImageSubresourceLayers{src_meta.aspects, src_mip_level, 0, src_meta.layers},
+        vk::ImageSubresourceLayers{src_img_area.aspects, src_img_area.base_level,
+                                   src_img_area.base_layer, src_img_area.num_layers},
         src_offsets,
-        vk::ImageSubresourceLayers{dst_meta.aspects, dst_mip_level, 0, dst_meta.layers},
+        vk::ImageSubresourceLayers{dst_img_area.aspects, dst_img_area.base_level,
+                                   dst_img_area.base_layer, dst_img_area.num_layers},
         dst_offsets,
     };
 
@@ -957,16 +999,19 @@ MyErrCode CommandBuffer::pipelineMemoryBarrier(MemoryBarrierMeta const& meta)
 }
 
 MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, ImageBarrierMeta const& meta,
-                                              vk::ImageSubresourceRange const& range)
+                                              ImageSubRange range)
 {
     DLOG("transform image {} layout: {} -> {}", image_id, meta.old_layout, meta.new_layout);
     if (meta.old_layout == meta.new_layout) {
         return MyErrCode::kOk;
     }
     Image image = ctx_->getImage(image_id);
-    vk::ImageMemoryBarrier2 barrier(meta.src_stage, meta.src_access, meta.dst_stage,
-                                    meta.dst_access, meta.old_layout, meta.new_layout,
-                                    vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image, range);
+    completeImageSubRange(image, range);
+    vk::ImageMemoryBarrier2 barrier(
+        meta.src_stage, meta.src_access, meta.dst_stage, meta.dst_access, meta.old_layout,
+        meta.new_layout, vk::QueueFamilyIgnored, vk::QueueFamilyIgnored, image,
+        vk::ImageSubresourceRange{range.aspects, range.base_level, range.num_levels,
+                                  range.base_layer, range.num_layers});
     pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
     return MyErrCode::kOk;
 }
@@ -996,10 +1041,11 @@ MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
 }
 
 MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
-                                      Uid dst_buf_id)
+                                      Uid dst_buf_id, vk::DeviceSize src_offset,
+                                      vk::DeviceSize dst_offset, vk::DeviceSize size)
 {
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.copyBufferToBuffer(src_buf_id, dst_buf_id));
+        CHECK_ERR_RET(cmd.copyBufferToBuffer(src_buf_id, dst_buf_id, src_offset, dst_offset, size));
         return MyErrCode::kOk;
     }));
     return MyErrCode::kOk;
@@ -1007,10 +1053,11 @@ MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src
 
 MyErrCode Context::copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
                                      Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                                     uint32_t dst_img_layer)
+                                     BufferImageArea src_buf_area, ImageSubArea dst_img_area)
 {
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id, dst_img_layout, dst_img_layer));
+        CHECK_ERR_RET(cmd.copyBufferToImage(src_buf_id, dst_img_id, dst_img_layout, src_buf_area,
+                                            dst_img_area));
         return MyErrCode::kOk;
     }));
     return MyErrCode::kOk;
@@ -1077,9 +1124,10 @@ ImageBarrierMeta Context::deduceImageBarrier(vk::ImageLayout old_layout, vk::Ima
 
 MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
                                    Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                                   uint32_t dst_img_layer)
+                                   ImageSubArea dst_img_area)
 {
     Image& dst_img = getImage(dst_img_id);
+    CommandBuffer::completeImageSubArea(dst_img, dst_img_area);
     ImageMeta const& image_meta = dst_img.getMeta();
     if (dst_img.canBeMapped()) {
         ELOG("no need to call this function for image {} that can be mapped", dst_img_id);
@@ -1087,8 +1135,9 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const
     }
 
     Uid staging_buffer_id = Uid::temp();
-    uint64_t buffer_size = vk::blockSize(image_meta.format) * image_meta.extent.width *
-                           image_meta.extent.height * image_meta.extent.depth;
+    uint64_t buffer_size = vk::blockSize(image_meta.format) * dst_img_area.extent.width *
+                           dst_img_area.extent.height * dst_img_area.extent.depth *
+                           dst_img_area.num_layers;
 
     CHECK_ERR_RET(createBuffer(
         staging_buffer_id, {buffer_size, vk::BufferUsageFlagBits::eTransferSrc},
@@ -1100,8 +1149,8 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
         CHECK_ERR_RET(cmd.pipelineImageBarrier(
             dst_img_id, deduceImageBarrier(dst_img_layout, vk::ImageLayout::eTransferDstOptimal)));
-        CHECK_ERR_RET(cmd.copyBufferToImage(staging_buffer_id, dst_img_id,
-                                            vk::ImageLayout::eTransferDstOptimal, dst_img_layer));
+        CHECK_ERR_RET(cmd.copyBufferToImage(
+            staging_buffer_id, dst_img_id, vk::ImageLayout::eTransferDstOptimal, {}, dst_img_area));
         return MyErrCode::kOk;
     }));
     CHECK_ERR_RET(destroyBuffer(staging_buffer_id));
@@ -1267,13 +1316,6 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
                             .init_layout = vk::ImageLayout::eUndefined,
                             .usages = meta.usages};
 
-    ImageViewMeta view_meta = {.type = vk::ImageViewType::e2D,
-                               .base_level = 0,
-                               .num_levels = 1,
-                               .base_layer = 0,
-                               .num_layers = 1,
-                               .swizzle = {}};
-
     std::vector<Uid> image_ids;
     std::vector<Uid> view_ids;
     for (auto& image: images) {
@@ -1283,7 +1325,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
         image_ids.push_back(image_id);
 
         Uid view_id = Uid::temp();
-        CHECK_ERR_RET(createImageView(view_id, image_id, view_meta));
+        CHECK_ERR_RET(createImageView(view_id, image_id, {.type = vk::ImageViewType::e2D}));
         view_ids.push_back(view_id);
     }
 

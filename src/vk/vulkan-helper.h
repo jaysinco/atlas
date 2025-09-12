@@ -75,6 +75,12 @@ using QueuePicker = std::function<bool(uint32_t family_index, vk::QueueFamilyPro
 
 using CmdSubmitter = std::function<MyErrCode(CommandBuffer&)>;
 
+constexpr uint32_t kRemainingMipLevels = ~0U;
+constexpr uint32_t kRemainingArrayLayers = ~0U;
+constexpr vk::DeviceSize kRemainingSize = ~0ULL;
+constexpr vk::Extent3D kRemainingExtend = {~0U, ~0U, ~0U};
+constexpr vk::ImageAspectFlags kAllImageAspects = vk::ImageAspectFlagBits::eNone;
+
 struct BufferMeta
 {
     uint64_t size;
@@ -99,19 +105,26 @@ struct ImageSubLayers
 {
     uint32_t base_level = 0;
     uint32_t base_layer = 0;
-    uint32_t num_layers = 0;
-    vk::ImageAspectFlags aspects = vk::ImageAspectFlagBits::eNone;
+    uint32_t num_layers = kRemainingArrayLayers;
+    vk::ImageAspectFlags aspects = kAllImageAspects;
 };
 
 struct ImageSubRange: ImageSubLayers
 {
-    uint32_t num_levels = 0;
+    uint32_t num_levels = kRemainingMipLevels;
 };
 
-struct ImageSubArea: ImageSubRange
+struct ImageSubArea: ImageSubLayers
 {
-    vk::Offset3D offset_min = {0, 0, 0};
-    vk::Offset3D offset_max = {0, 0, 0};
+    vk::Offset3D offset = {0, 0, 0};
+    vk::Extent3D extent = kRemainingExtend;
+};
+
+struct BufferImageArea
+{
+    vk::DeviceSize offset = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
 };
 
 struct ImageViewMeta: ImageSubRange
@@ -346,12 +359,12 @@ public:
 
     MyErrCode copyBufferToBuffer(Uid src_buf_id, Uid dst_buf_id, vk::DeviceSize src_offset = 0,
                                  vk::DeviceSize dst_offset = 0,
-                                 vk::DeviceSize size = vk::WholeSize);
+                                 vk::DeviceSize size = kRemainingSize);
     MyErrCode copyBufferToImage(Uid src_buf_id, Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                                ImageSubLayers layers = {});
+                                BufferImageArea src_buf_area = {}, ImageSubArea dst_img_area = {});
     MyErrCode blitImage(Uid src_img_id, vk::ImageLayout src_img_layout, Uid dst_img_id,
-                        vk::ImageLayout dst_img_layout, uint32_t src_mip_level = 0,
-                        uint32_t dst_mip_level = 0);
+                        vk::ImageLayout dst_img_layout, ImageSubArea src_img_area = {},
+                        ImageSubArea dst_img_area = {});
     MyErrCode pipelineMemoryBarrier(MemoryBarrierMeta const& meta);
     MyErrCode pipelineImageBarrier(Uid image_id, ImageBarrierMeta const& meta,
                                    ImageSubRange range = {});
@@ -365,6 +378,11 @@ public:
     using vk::CommandBuffer::blitImage;
     using vk::CommandBuffer::copyBufferToImage;
     using vk::CommandBuffer::pushConstants;
+
+private:
+    static void completeImageSubLayers(Image const& image, ImageSubLayers& layers);
+    static void completeImageSubRange(Image const& image, ImageSubRange& range);
+    static void completeImageSubArea(Image const& image, ImageSubArea& area);
 
 private:
     friend class Context;
@@ -389,7 +407,7 @@ public:
                            VmaAllocationCreateFlags flags = 0);
     MyErrCode createImage(Uid id, ImageMeta const& meta, vk::MemoryPropertyFlags properties,
                           VmaAllocationCreateFlags flags = 0);
-    MyErrCode createImageView(Uid id, Uid image_id, ImageViewMeta const& meta);
+    MyErrCode createImageView(Uid id, Uid image_id, ImageViewMeta meta);
     MyErrCode createSampler(Uid id, SamplerMeta const& meta);
     MyErrCode createCommandBuffer(Uid id, Uid command_pool_id);
     MyErrCode createBinarySemaphore(Uid id);
@@ -430,14 +448,17 @@ public:
     vk::Framebuffer& getFramebuffer(Uid id);
 
     MyErrCode pickQueueFamily(QueuePicker const& queue_picker, uint32_t& family_index);
-    MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id);
+    MyErrCode copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_buf_id,
+                                 vk::DeviceSize src_offset = 0, vk::DeviceSize dst_offset = 0,
+                                 vk::DeviceSize size = kRemainingSize);
     MyErrCode copyBufferToImage(Uid queue_id, Uid command_pool_id, Uid src_buf_id, Uid dst_img_id,
-                                vk::ImageLayout dst_img_layout, uint32_t dst_img_layer = 0);
+                                vk::ImageLayout dst_img_layout, BufferImageArea src_buf_area = {},
+                                ImageSubArea dst_img_area = {});
     MyErrCode copyHostToBuffer(Uid queue_id, Uid command_pool_id, void const* src_host,
                                Uid dst_buf_id);
     MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
                               Uid dst_img_id, vk::ImageLayout dst_img_layout,
-                              uint32_t dst_img_layer = 0);
+                              ImageSubArea dst_img_area = {});
     MyErrCode generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_id,
                               vk::ImageLayout image_layout);
     MyErrCode updateDescriptorSet(
@@ -479,9 +500,6 @@ public:
     static int defaultDeviceRater(vk::PhysicalDevice const& dev);
 
 private:
-    static void fillImageSubLayers(Image const& image, ImageSubLayers& layers);
-    static void fillImageSubRange(Image const& image, ImageSubRange& range);
-    static void fillImageSubArea(Image const& image, ImageSubArea& area);
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
     static ImageBarrierMeta deduceImageBarrier(vk::ImageLayout old_layout,
                                                vk::ImageLayout new_layout);
