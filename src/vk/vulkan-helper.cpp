@@ -13,6 +13,34 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace myvk
 {
 
+ImageSubLayers::ImageSubLayers(uint32_t base_level, uint32_t base_layer, uint32_t num_layers,
+                               vk::ImageAspectFlags aspects)
+    : base_level(base_level), base_layer(base_layer), num_layers(num_layers), aspects(aspects)
+{
+}
+
+ImageSubRange::ImageSubRange(uint32_t base_level, uint32_t num_levels, uint32_t base_layer,
+                             uint32_t num_layers, vk::ImageAspectFlags aspects)
+    : num_levels(num_levels), ImageSubLayers(base_level, base_layer, num_layers, aspects)
+{
+}
+
+ImageSubArea::ImageSubArea(uint32_t base_level, vk::Offset3D const& offset,
+                           vk::Extent3D const& extent, uint32_t base_layer, uint32_t num_layers,
+                           vk::ImageAspectFlags aspects)
+    : offset(offset), extent(extent), ImageSubLayers(base_level, base_layer, num_layers, aspects)
+{
+}
+
+ImageViewMeta::ImageViewMeta(vk::ImageViewType type, vk::ComponentMapping swizzle,
+                             uint32_t base_level, uint32_t num_levels, uint32_t base_layer,
+                             uint32_t num_layers, vk::ImageAspectFlags aspects)
+    : type(type),
+      swizzle(swizzle),
+      ImageSubRange(base_level, num_levels, base_layer, num_layers, aspects)
+{
+}
+
 Allocation::Allocation(VmaAllocation alloc, VmaAllocator allocator)
     : alloc_(alloc), allocator_(allocator)
 {
@@ -1001,10 +1029,10 @@ MyErrCode CommandBuffer::pipelineMemoryBarrier(MemoryBarrierMeta const& meta)
 MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, ImageBarrierMeta const& meta,
                                               ImageSubRange range)
 {
-    DLOG("transform image {} layout: {} -> {}", image_id, meta.old_layout, meta.new_layout);
     if (meta.old_layout == meta.new_layout) {
         return MyErrCode::kOk;
     }
+    DLOG("transform image {} layout: {} -> {}", image_id, meta.old_layout, meta.new_layout);
     Image image = ctx_->getImage(image_id);
     completeImageSubRange(image, range);
     vk::ImageMemoryBarrier2 barrier(
@@ -1014,6 +1042,53 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, ImageBarrierMeta con
                                   range.base_layer, range.num_layers});
     pipelineBarrier2(vk::DependencyInfo{{}, {}, {}, barrier});
     return MyErrCode::kOk;
+}
+
+ImageBarrierMeta CommandBuffer::deduceImageBarrier(vk::ImageLayout old_layout,
+                                                   vk::ImageLayout new_layout)
+{
+    static std::map<vk::ImageLayout,
+                    std::pair<vk::PipelineStageFlagBits2, vk::AccessFlagBits2>> const kLayoutStage =
+        {
+            {vk::ImageLayout::eUndefined,
+             {vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone}},
+            {vk::ImageLayout::eTransferSrcOptimal,
+             {vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead}},
+            {vk::ImageLayout::eTransferDstOptimal,
+             {vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite}},
+            {vk::ImageLayout::eShaderReadOnlyOptimal,
+             {vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead}},
+        };
+
+    ImageBarrierMeta meta;
+    meta.old_layout = old_layout;
+    meta.new_layout = new_layout;
+
+    if (new_layout == vk::ImageLayout::eUndefined) {
+        MY_THROW("invalid layout: {} -> {}", old_layout, new_layout);
+    }
+
+    if (auto it = kLayoutStage.find(old_layout); it != kLayoutStage.end()) {
+        meta.src_stage = it->second.first;
+        meta.src_access = it->second.second;
+    } else {
+        MY_THROW("unsupported layout: {}", old_layout);
+    }
+
+    if (auto it = kLayoutStage.find(new_layout); it != kLayoutStage.end()) {
+        meta.dst_stage = it->second.first;
+        meta.dst_access = it->second.second;
+    } else {
+        MY_THROW("unsupported layout: {}", new_layout);
+    }
+
+    return meta;
+}
+
+MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
+                                              vk::ImageLayout new_layout, ImageSubRange range)
+{
+    return pipelineImageBarrier(image_id, deduceImageBarrier(old_layout, new_layout), range);
 }
 
 MyErrCode CommandBuffer::pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages,
@@ -1086,42 +1161,6 @@ MyErrCode Context::copyHostToBuffer(Uid queue_id, Uid command_pool_id, void cons
     return MyErrCode::kOk;
 }
 
-ImageBarrierMeta Context::deduceImageBarrier(vk::ImageLayout old_layout, vk::ImageLayout new_layout)
-{
-    static std::map<vk::ImageLayout,
-                    std::pair<vk::PipelineStageFlagBits2, vk::AccessFlagBits2>> const kLayoutStage =
-        {
-            {vk::ImageLayout::eUndefined,
-             {vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone}},
-            {vk::ImageLayout::eTransferSrcOptimal,
-             {vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead}},
-            {vk::ImageLayout::eTransferDstOptimal,
-             {vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite}},
-            {vk::ImageLayout::eShaderReadOnlyOptimal,
-             {vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead}},
-        };
-
-    ImageBarrierMeta meta;
-    meta.old_layout = old_layout;
-    meta.new_layout = new_layout;
-
-    if (auto it = kLayoutStage.find(old_layout); it != kLayoutStage.end()) {
-        meta.src_stage = it->second.first;
-        meta.src_access = it->second.second;
-    } else {
-        MY_THROW("unsupported layout: {}", old_layout);
-    }
-
-    if (auto it = kLayoutStage.find(new_layout); it != kLayoutStage.end()) {
-        meta.dst_stage = it->second.first;
-        meta.dst_access = it->second.second;
-    } else {
-        MY_THROW("unsupported layout: {}", new_layout);
-    }
-
-    return meta;
-}
-
 MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
                                    Uid dst_img_id, vk::ImageLayout dst_img_layout,
                                    ImageSubArea dst_img_area)
@@ -1147,8 +1186,8 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const
     memcpy(getBuffer(staging_buffer_id).getMappedData(), src_host, buffer_size);
 
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        CHECK_ERR_RET(cmd.pipelineImageBarrier(
-            dst_img_id, deduceImageBarrier(dst_img_layout, vk::ImageLayout::eTransferDstOptimal)));
+        CHECK_ERR_RET(cmd.pipelineImageBarrier(dst_img_id, dst_img_layout,
+                                               vk::ImageLayout::eTransferDstOptimal));
         CHECK_ERR_RET(cmd.copyBufferToImage(
             staging_buffer_id, dst_img_id, vk::ImageLayout::eTransferDstOptimal, {}, dst_img_area));
         return MyErrCode::kOk;
@@ -1162,75 +1201,23 @@ MyErrCode Context::generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_
 {
     Image& image = getImage(image_id);
     ImageMeta const& meta = image.getMeta();
+    if (meta.mip_levels <= 1) {
+        return MyErrCode::kOk;
+    }
 
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
+        cmd.pipelineImageBarrier(image_id, image_layout, vk::ImageLayout::eTransferDstOptimal);
         for (uint32_t i = 1; i < meta.mip_levels; ++i) {
-            cmd.pipelineImageBarrier(
-                image_id, i - 1,
-                deduceImageBarrier(image_layout, vk::ImageLayout::eTransferSrcOptimal));
+            cmd.pipelineImageBarrier(image_id, vk::ImageLayout::eTransferDstOptimal,
+                                     vk::ImageLayout::eTransferSrcOptimal, {i - 1, 1});
+            cmd.blitImage(image_id, vk::ImageLayout::eTransferSrcOptimal, image_id,
+                          vk::ImageLayout::eTransferDstOptimal, {i - 1}, {i});
         }
-
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.image = image;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.subresourceRange.levelCount = 1;
-
-        int32_t mip_width = width;
-        int32_t mip_height = height;
-        for (uint32_t i = 1; i < mip_levels; i++) {
-            barrier.subresourceRange.baseMipLevel = i - 1;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                                 &barrier);
-
-            VkImageBlit blit{};
-            blit.srcOffsets[0] = {0, 0, 0};
-            blit.srcOffsets[1] = {mip_width, mip_height, 1};
-            blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            blit.srcSubresource.mipLevel = i - 1;
-            blit.srcSubresource.baseArrayLayer = 0;
-            blit.srcSubresource.layerCount = 1;
-            blit.dstOffsets[0] = {0, 0, 0};
-            blit.dstOffsets[1] = {mip_width > 1 ? mip_width / 2 : 1,
-                                  mip_height > 1 ? mip_height / 2 : 1, 1};
-            blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            blit.dstSubresource.mipLevel = i;
-            blit.dstSubresource.baseArrayLayer = 0;
-            blit.dstSubresource.layerCount = 1;
-            vkCmdBlitImage(cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
-
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr,
-                                 1, &barrier);
-
-            mip_width = mip_width > 1 ? mip_width / 2 : mip_width;
-            mip_height = mip_height > 1 ? mip_height / 2 : mip_height;
-        }
-
-        barrier.subresourceRange.baseMipLevel = mip_levels - 1;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                             &barrier);
+        cmd.pipelineImageBarrier(image_id, vk::ImageLayout::eTransferDstOptimal,
+                                 vk::ImageLayout::eTransferSrcOptimal, {meta.mip_levels - 1, 1});
         return MyErrCode::kOk;
     }));
+
     return MyErrCode::kOk;
 }
 
@@ -1325,7 +1312,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
         image_ids.push_back(image_id);
 
         Uid view_id = Uid::temp();
-        CHECK_ERR_RET(createImageView(view_id, image_id, {.type = vk::ImageViewType::e2D}));
+        CHECK_ERR_RET(createImageView(view_id, image_id, {vk::ImageViewType::e2D}));
         view_ids.push_back(view_id);
     }
 

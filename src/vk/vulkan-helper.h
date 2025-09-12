@@ -103,21 +103,34 @@ struct ImageMeta
 
 struct ImageSubLayers
 {
-    uint32_t base_level = 0;
-    uint32_t base_layer = 0;
-    uint32_t num_layers = kRemainingArrayLayers;
-    vk::ImageAspectFlags aspects = kAllImageAspects;
+    ImageSubLayers(uint32_t base_level = 0, uint32_t base_layer = 0,
+                   uint32_t num_layers = kRemainingArrayLayers,
+                   vk::ImageAspectFlags aspects = kAllImageAspects);
+
+    uint32_t base_level;
+    uint32_t base_layer;
+    uint32_t num_layers;
+    vk::ImageAspectFlags aspects;
 };
 
 struct ImageSubRange: ImageSubLayers
 {
-    uint32_t num_levels = kRemainingMipLevels;
+    ImageSubRange(uint32_t base_level = 0, uint32_t num_levels = kRemainingMipLevels,
+                  uint32_t base_layer = 0, uint32_t num_layers = kRemainingArrayLayers,
+                  vk::ImageAspectFlags aspects = kAllImageAspects);
+
+    uint32_t num_levels;
 };
 
 struct ImageSubArea: ImageSubLayers
 {
-    vk::Offset3D offset = {0, 0, 0};
-    vk::Extent3D extent = kRemainingExtend;
+    ImageSubArea(uint32_t base_level = 0, vk::Offset3D const& offset = {0, 0, 0},
+                 vk::Extent3D const& extent = kRemainingExtend, uint32_t base_layer = 0,
+                 uint32_t num_layers = kRemainingArrayLayers,
+                 vk::ImageAspectFlags aspects = kAllImageAspects);
+
+    vk::Offset3D offset;
+    vk::Extent3D extent;
 };
 
 struct BufferImageArea
@@ -129,6 +142,11 @@ struct BufferImageArea
 
 struct ImageViewMeta: ImageSubRange
 {
+    ImageViewMeta(vk::ImageViewType type, vk::ComponentMapping swizzle = {},
+                  uint32_t base_level = 0, uint32_t num_levels = kRemainingMipLevels,
+                  uint32_t base_layer = 0, uint32_t num_layers = kRemainingArrayLayers,
+                  vk::ImageAspectFlags aspects = kAllImageAspects);
+
     vk::ImageViewType type;
     vk::ComponentMapping swizzle;
 };
@@ -368,6 +386,8 @@ public:
     MyErrCode pipelineMemoryBarrier(MemoryBarrierMeta const& meta);
     MyErrCode pipelineImageBarrier(Uid image_id, ImageBarrierMeta const& meta,
                                    ImageSubRange range = {});
+    MyErrCode pipelineImageBarrier(Uid image_id, vk::ImageLayout old_layout,
+                                   vk::ImageLayout new_layout, ImageSubRange range = {});
     MyErrCode pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages, uint32_t offset,
                             uint32_t size, void const* data);
     MyErrCode bindComputePipeline(Uid pipeline_id);
@@ -383,6 +403,8 @@ private:
     static void completeImageSubLayers(Image const& image, ImageSubLayers& layers);
     static void completeImageSubRange(Image const& image, ImageSubRange& range);
     static void completeImageSubArea(Image const& image, ImageSubArea& area);
+    static ImageBarrierMeta deduceImageBarrier(vk::ImageLayout old_layout,
+                                               vk::ImageLayout new_layout);
 
 private:
     friend class Context;
@@ -501,8 +523,6 @@ public:
 
 private:
     static vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerInfo();
-    static ImageBarrierMeta deduceImageBarrier(vk::ImageLayout old_layout,
-                                               vk::ImageLayout new_layout);
     static MyErrCode logDeviceInfo(vk::PhysicalDevice const& physical_device);
 
     template <typename T, typename = std::enable_if<vk::isVulkanHandleType<T>::value>>
