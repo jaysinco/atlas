@@ -1,6 +1,7 @@
 #include "scene.h"
 #include "toolkit/toolkit.h"
 #include "toolkit/logging.h"
+#include "keycode.h"
 #include <chrono>
 #include <glm/gtc/matrix_transform.hpp>
 #include <assimp/Importer.hpp>
@@ -8,12 +9,16 @@
 #include <assimp/postprocess.h>
 #include <linux/input.h>
 #include <imgui/imgui.h>
-#include "keycode.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 namespace glm
 {
 std::string toString(glm::vec3 const& v) { return FSTR("({}, {}, {})", v.x, v.y, v.z); }
 }  // namespace glm
+
+namespace scene
+{
 
 Camera::Camera(float aspect, glm::vec3 init_pos, glm::vec3 init_center, float near, float far,
                float fov)
@@ -35,7 +40,10 @@ void Camera::reset()
     yaw_ = glm::degrees(atan2(lookat.y, lookat.x));
 }
 
-void Camera::onScreenResize(int width, int height) { aspect_ = static_cast<float>(width) / height; }
+void Camera::onSurfaceResize(int width, int height)
+{
+    aspect_ = static_cast<float>(width) / height;
+}
 
 void Camera::move(Face face, float distance)
 {
@@ -68,7 +76,7 @@ void Camera::shake(float ddegree) { yaw_ += ddegree; }
 
 void Camera::nod(float ddegree) { pitch_ = std::max(std::min(pitch_ + ddegree, 89.0f), -89.0f); }
 
-Axis Camera::getAxis() const
+Camera::Axis Camera::getAxis() const
 {
     Axis axis;
     float x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
@@ -136,17 +144,17 @@ MyErrCode Model::visitNode(aiScene const* scene, aiNode const* node)
     return MyErrCode::kOk;
 }
 
-MyErrCode Model::load(std::string const& model_path)
+MyErrCode Model::load(std::filesystem::path const& file_path)
 {
     Assimp::Importer importer;
     aiScene const* scene = importer.ReadFile(
-        model_path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
+        file_path.string(), aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        ELOG("failed to import model {}: {}", model_path, importer.GetErrorString());
+        ELOG("failed to import model {}: {}", file_path, importer.GetErrorString());
         return MyErrCode::kFailed;
     }
 
-    ILOG("loading {}", model_path);
+    ILOG("loading {}", file_path);
     bbox_.lower = glm::vec3(std::numeric_limits<float>::max());
     bbox_.high = glm::vec3(std::numeric_limits<float>::min());
     CHECK_ERR_RET(visitNode(scene, scene->mRootNode));
@@ -162,13 +170,12 @@ MyErrCode Model::load(std::string const& model_path)
     return MyErrCode::kOk;
 }
 
-MyErrCode Model::unload()
+void Model::unload()
 {
     vertices_.clear();
     vertices_.shrink_to_fit();
     indices_.clear();
     indices_.shrink_to_fit();
-    return MyErrCode::kOk;
 }
 
 void Model::reset()
@@ -197,109 +204,135 @@ void Model::zoom(float dx, float dy, float dz)
 
 glm::mat4 Model::getModelMatrix() const { return translate_ * rotate_ * scale_ * init_; }
 
-std::pair<int, int> Scene::getScreenInitSize() const { return {350, 300}; }
+std::vector<Vertex> const& Model::getVertices() const { return vertices_; }
 
-std::filesystem::path Scene::getModelPath() const { return toolkit::getDataDir() / "lyran.obj"; }
+std::vector<uint32_t> const& Model::getIndices() const { return indices_; }
 
-std::filesystem::path Scene::getTextureImagePath() const
+uint32_t Model::getIndexSize() const { return index_size_; }
+
+MyErrCode Texture::load(std::filesystem::path const& file_path)
 {
-    return toolkit::getDataDir() / "lyran-diffuse.jpg";
-}
+    cv::Mat src = cv::imread(file_path, cv::IMREAD_COLOR);
+    if (src.data == nullptr) {
+        ELOG("failed to load image file: {}", file_path);
+        return MyErrCode::kFailed;
+    }
 
-std::filesystem::path Scene::getVertSpvPath() const
-{
-    return toolkit::getDataDir() / "vkwl.vert.spv";
-}
+    width_ = src.cols;
+    height_ = src.rows;
+    data_.resize(height_ * width_ * 4);
 
-std::filesystem::path Scene::getFragSpvPath() const
-{
-    return toolkit::getDataDir() / "vkwl.frag.spv";
-}
-
-MyErrCode Scene::load()
-{
-    gs_ = {};
-    CHECK_ERR_RET(model_.load(getModelPath().string()));
-    auto [width, height] = getScreenInitSize();
-    CHECK_ERR_RET(onScreenResize(width, height));
+    cv::Mat dst(height_, width_, CV_8UC4, data_.data());
+    cv::cvtColor(src, dst, cv::COLOR_BGR2BGRA);
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::unload()
+std::vector<uint8_t> const& Texture::getData() const { return data_; }
+
+std::pair<int, int> Texture::getSize() const { return {width_, height_}; }
+
+void Texture::unload()
 {
-    CHECK_ERR_RET(model_.unload());
+    data_.clear();
+    data_.shrink_to_fit();
+}
+
+MyErrCode Scene::createModel(Uid id, std::filesystem::path const& file_path)
+{
+    if (models_.find(id) != models_.end()) {
+        CHECK_ERR_RET(destroyModel(id));
+    }
+    models_[id] = {};
+    CHECK_ERR_RET(models_[id].load(file_path));
     return MyErrCode::kOk;
 }
 
-VkDeviceSize Scene::getVerticeDataSize() const
+Model& Scene::getModel(Uid id)
 {
-    return sizeof(model_.vertices_[0]) * model_.vertices_.size();
+    if (models_.find(id) == models_.end()) {
+        MY_THROW("model not exist: {}", id);
+    }
+    return models_.at(id);
 }
 
-void const* Scene::getVerticeData() const { return model_.vertices_.data(); }
-
-uint32_t Scene::getIndexSize() const { return model_.index_size_; }
-
-VkDeviceSize Scene::getIndexDataSize() const
+MyErrCode Scene::destroyModel(Uid id)
 {
-    return sizeof(model_.indices_[0]) * model_.indices_.size();
+    if (auto it = models_.find(id); it != models_.end()) {
+        models_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("model not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
 }
 
-void const* Scene::getIndexData() const { return model_.indices_.data(); }
-
-VkVertexInputBindingDescription Scene::getVertexBindingDesc() const
+MyErrCode Scene::createTexture(Uid id, std::filesystem::path const& file_path)
 {
-    VkVertexInputBindingDescription desc{};
-    desc.binding = 0;
-    desc.stride = sizeof(Vertex);
-    desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    return desc;
+    if (textures_.find(id) != textures_.end()) {
+        CHECK_ERR_RET(destroyTexture(id));
+    }
+    textures_[id] = {};
+    CHECK_ERR_RET(textures_[id].load(file_path));
+    return MyErrCode::kOk;
 }
 
-std::vector<VkVertexInputAttributeDescription> Scene::getVertexAttrDescs() const
+Texture& Scene::getTexture(Uid id)
 {
-    std::vector<VkVertexInputAttributeDescription> descs{3};
-    descs[0].binding = 0;
-    descs[0].location = 0;
-    descs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    descs[0].offset = offsetof(Vertex, pos);
-
-    descs[1].binding = 0;
-    descs[1].location = 1;
-    descs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    descs[1].offset = offsetof(Vertex, normal);
-
-    descs[2].binding = 0;
-    descs[2].location = 2;
-    descs[2].format = VK_FORMAT_R32G32_SFLOAT;
-    descs[2].offset = offsetof(Vertex, tex_coord);
-    return descs;
+    if (textures_.find(id) == textures_.end()) {
+        MY_THROW("texture not exist: {}", id);
+    }
+    return textures_.at(id);
 }
 
-VkDeviceSize Scene::getUniformDataSize() const { return sizeof(ubo_); }
+MyErrCode Scene::destroyTexture(Uid id)
+{
+    if (auto it = textures_.find(id); it != textures_.end()) {
+        textures_.erase(it);
+        return MyErrCode::kOk;
+    } else {
+        ELOG("texture not exist: {}", id);
+        return MyErrCode::kFailed;
+    }
+}
 
-void const* Scene::getUniformData() const { return &ubo_; }
+UniformBuffer Scene::getUniformBuffer(Uid model_id)
+{
+    Model& model = getModel(model_id);
+    UniformBuffer ubo;
+    ubo.model = model.getModelMatrix();
+    ubo.view = camera_.getViewMatrix();
+    ubo.proj = camera_.getProjectionMatrix();
+    ubo.light_pos = ubo.view * ubo.model * glm::vec4(3.0f, 3.0f, 5.0f, 1.0f);
+    ubo.light_color = glm::vec3(1.0f, 1.0f, 1.0f);
+    return ubo;
+}
+
+GuiState const& Scene::getGuiState() const { return gs_; }
+
+MyErrCode Scene::destroy()
+{
+    while (!models_.empty()) {
+        CHECK_ERR_RET(destroyModel(models_.begin()->first));
+    }
+    while (!textures_.empty()) {
+        CHECK_ERR_RET(destroyTexture(textures_.begin()->first));
+    }
+    return MyErrCode::kOk;
+}
 
 MyErrCode Scene::onFrameDraw(bool& recreate_pipeline)
 {
     CHECK_ERR_RET(drawGui(recreate_pipeline));
-
-    ubo_.model = model_.getModelMatrix();
-    ubo_.view = camera_.getViewMatrix();
-    ubo_.proj = camera_.getProjectionMatrix();
-    ubo_.light_pos = ubo_.view * ubo_.model * glm::vec4(3.0f, 3.0f, 5.0f, 1.0f);
-    ubo_.light_color = glm::vec3(1.0f, 1.0f, 1.0f);
-
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onScreenResize(int width, int height)
+MyErrCode Scene::onSurfaceResize(int width, int height)
 {
-    camera_.onScreenResize(width, height);
+    camera_.onSurfaceResize(width, height);
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onMouseMove(double xpos, double ypos)
+MyErrCode Scene::onPointerMove(double xpos, double ypos)
 {
     ImGuiIO& io = ImGui::GetIO();
     io.AddMousePosEvent(xpos, ypos);
@@ -317,14 +350,14 @@ MyErrCode Scene::onMouseMove(double xpos, double ypos)
         camera_.move(Camera::kUp, 0.01 * dy);
     } else if (gs_.right_mouse_pressed) {
         glm::vec3 spin_dir = camera_.getAxis().up;
-        model_.spin(dx, spin_dir.x, spin_dir.y, spin_dir.z);
+        models_.begin()->second.spin(dx, spin_dir.x, spin_dir.y, spin_dir.z);
     }
     gs_.last_mouse_x = xpos;
     gs_.last_mouse_y = ypos;
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onMousePress(int button, bool down)
+MyErrCode Scene::onPointerPress(int button, bool down)
 {
     ImGuiIO& io = ImGui::GetIO();
     io.AddMouseButtonEvent(button, down);
@@ -342,7 +375,7 @@ MyErrCode Scene::onMousePress(int button, bool down)
     return MyErrCode::kOk;
 }
 
-MyErrCode Scene::onMouseScroll(double xoffset, double yoffset)
+MyErrCode Scene::onPointerScroll(double xoffset, double yoffset)
 {
     ImGuiIO& io = ImGui::GetIO();
     io.AddMouseWheelEvent(0.0, yoffset / -10.0);
@@ -383,12 +416,10 @@ MyErrCode Scene::onKeyboardPress(int key, bool down, bool& need_quit)
         need_quit = true;
     } else if (key == KEY_R) {
         camera_.reset();
-        model_.reset();
+        models_.begin()->second.reset();
     }
     return MyErrCode::kOk;
 }
-
-GuiState const& Scene::getGuiState() const { return gs_; }
 
 MyErrCode Scene::drawGui(bool& recreate_pipeline)
 {
@@ -409,3 +440,5 @@ MyErrCode Scene::drawGui(bool& recreate_pipeline)
 
     return MyErrCode::kOk;
 }
+
+}  // namespace scene

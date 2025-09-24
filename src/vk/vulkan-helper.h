@@ -226,7 +226,6 @@ private:
 };
 
 class Image: public Allocation
-
 {
 public:
     Image(ImageMeta const& meta, vk::Image img, VmaAllocation alloc, VmaAllocator allocator);

@@ -42,29 +42,29 @@ target_compile_options(${TARGET_NAME} PRIVATE -Wno-deprecated)
 # vkwl
 ###############################################################################
 
-# add_executable(vkwl
-#     scene.cpp
-#     keycode.cpp
-#     vkwl.cpp
-# )
-#
-# target_glsl_shaders(vkwl
-#     PRIVATE
-#         data/vkwl.vert
-#         data/vkwl.frag
-#     COMPILE_OPTIONS
-#         --target-env=vulkan${MYVK_API_VERSION_MAJOR}.${MYVK_API_VERSION_MINOR}
-# )
-#
-# target_include_directories(vkwl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-#
-# target_link_libraries(vkwl
-#     ${TARGET_NAME} 
-#     opencv
-#     assimp
-#     easy-profiler 
-#     imgui
-# )
+add_executable(vkwl
+    keycode.cpp
+    scene.cpp
+    vkwl.cpp
+)
+
+target_glsl_shaders(vkwl
+    PRIVATE
+        data/vkwl.vert
+        data/vkwl.frag
+    COMPILE_OPTIONS
+        --target-env=vulkan${MYVK_API_VERSION_MAJOR}.${MYVK_API_VERSION_MINOR}
+)
+
+target_include_directories(vkwl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+target_link_libraries(vkwl
+    ${TARGET_NAME} 
+    opencv
+    assimp
+    easy-profiler 
+    imgui
+)
 
 ###############################################################################
 # vkcomp

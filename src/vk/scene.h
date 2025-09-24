@@ -1,14 +1,11 @@
 #pragma once
 #include "toolkit/error.h"
-#include "vulkan-helper.h"
+#include "toolkit/toolkit.h"
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <vector>
+#include <map>
 #include <filesystem>
-#define BUILD_WITH_EASY_PROFILER
-#define USING_EASY_PROFILER
-#include <easy/profiler.h>
-#include <easy/arbitrary_value.h>
 
 class aiScene;
 class aiNode;
@@ -19,12 +16,10 @@ namespace glm
 std::string toString(vec3 const& v);
 }  // namespace glm
 
-struct Axis
+namespace scene
 {
-    glm::vec3 front;
-    glm::vec3 right;
-    glm::vec3 up;
-};
+
+using Uid = toolkit::Uid;
 
 class Camera
 {
@@ -39,12 +34,19 @@ public:
         kDown,
     };
 
+    struct Axis
+    {
+        glm::vec3 front;
+        glm::vec3 right;
+        glm::vec3 up;
+    };
+
     // z is up, right hand
     Camera(float aspect = 1.0f, glm::vec3 init_pos = glm::vec3(0.6f, 3.0f, 0.0f),
            glm::vec3 init_center = glm::vec3(0.6f, 0.0f, 0.0f), float near = 0.1f,
            float far = 100.0f, float fov = 45.0f);
     void reset();
-    void onScreenResize(int width, int height);
+    void onSurfaceResize(int width, int height);
     void move(Face face, float distance);
     void move(float dx, float dy, float dz);
     void shake(float ddegree);
@@ -78,18 +80,23 @@ struct BoundingBox
 class Model
 {
 public:
-    MyErrCode load(std::string const& model_path);
-    MyErrCode unload();
-    void reset();
+    MyErrCode load(std::filesystem::path const& file_path);
     void move(float dx, float dy, float dz);
     void spin(float ddegree, float axis_x, float axis_y, float axis_z);
     void zoom(float dx, float dy, float dz);
+    void reset();
+    void unload();
+
     glm::mat4 getModelMatrix() const;
+    std::vector<Vertex> const& getVertices() const;
+    std::vector<uint32_t> const& getIndices() const;
+    uint32_t getIndexSize() const;
 
 private:
     MyErrCode visitNode(aiScene const* scene, aiNode const* node);
     MyErrCode visitMesh(aiMesh const* mesh);
 
+private:
     friend class Scene;
     uint32_t index_size_;
     std::vector<Vertex> vertices_;
@@ -98,7 +105,21 @@ private:
     glm::mat4 translate_, rotate_, scale_, init_;
 };
 
-struct UniformBufferObject
+class Texture
+{
+public:
+    MyErrCode load(std::filesystem::path const& file_path);
+    std::vector<uint8_t> const& getData() const;
+    std::pair<int, int> getSize() const;
+    void unload();
+
+private:
+    int width_;
+    int height_;
+    std::vector<uint8_t> data_;
+};
+
+struct UniformBuffer
 {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
@@ -124,42 +145,33 @@ struct GuiState
 class Scene
 {
 public:
-    std::pair<int, int> getScreenInitSize() const;
-    std::filesystem::path getModelPath() const;
-    std::filesystem::path getTextureImagePath() const;
-    std::filesystem::path getVertSpvPath() const;
-    std::filesystem::path getFragSpvPath() const;
-
-    MyErrCode load();
-    MyErrCode unload();
-
-    VkDeviceSize getUniformDataSize() const;
-    void const* getUniformData() const;
-
-    VkDeviceSize getVerticeDataSize() const;
-    void const* getVerticeData() const;
-    uint32_t getIndexSize() const;
-
-    VkDeviceSize getIndexDataSize() const;
-    void const* getIndexData() const;
-
-    VkVertexInputBindingDescription getVertexBindingDesc() const;
-    std::vector<VkVertexInputAttributeDescription> getVertexAttrDescs() const;
-
-    MyErrCode onFrameDraw(bool& recreate_pipeline);
-    MyErrCode onScreenResize(int width, int height);
-    MyErrCode onMouseMove(double xpos, double ypos);
-    MyErrCode onMousePress(int button, bool down);
-    MyErrCode onMouseScroll(double xoffset, double yoffset);
-    MyErrCode onKeyboardPress(int key, bool down, bool& need_quit);
+    MyErrCode createModel(Uid id, std::filesystem::path const& file_path);
+    MyErrCode createTexture(Uid id, std::filesystem::path const& file_path);
 
     GuiState const& getGuiState() const;
+    Model& getModel(Uid id);
+    Texture& getTexture(Uid id);
+    UniformBuffer getUniformBuffer(Uid model_id);
+
+    MyErrCode onFrameDraw(bool& recreate_pipeline);
+    MyErrCode onSurfaceResize(int width, int height);
+    MyErrCode onPointerMove(double xpos, double ypos);
+    MyErrCode onPointerPress(int button, bool down);
+    MyErrCode onPointerScroll(double xoffset, double yoffset);
+    MyErrCode onKeyboardPress(int key, bool down, bool& need_quit);
+
+    MyErrCode destroyModel(Uid id);
+    MyErrCode destroyTexture(Uid id);
+    MyErrCode destroy();
 
 private:
     MyErrCode drawGui(bool& recreate_pipeline);
 
+private:
     Camera camera_;
-    Model model_;
-    UniformBufferObject ubo_;
     GuiState gs_;
+    std::map<Uid, Model> models_;
+    std::map<Uid, Texture> textures_;
 };
+
+}  // namespace scene
