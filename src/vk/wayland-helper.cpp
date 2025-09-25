@@ -116,6 +116,12 @@ MyErrCode Context::destroySurface(Uid id)
     }
 }
 
+MyErrCode Context::dispatch()
+{
+    wl_display_roundtrip(display_);
+    return MyErrCode::kOk;
+}
+
 Uid Context::getSurfaceId(wl_surface* surface)
 {
     auto it = std::find_if(surfaces_.begin(), surfaces_.end(),

@@ -47,6 +47,7 @@ public:
     MyErrCode createSurface(Uid id, char const* app_id, char const* title);
     wl_display* getDisplay();
     Surface& getSurface(Uid id);
+    MyErrCode dispatch();
     MyErrCode destroySurface(Uid id);
     MyErrCode destroy();
 

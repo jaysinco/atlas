@@ -868,6 +868,93 @@ MyErrCode Context::createComputePipeline(Uid id, Uid pipeline_layout_id, Uid sha
     return create(pipelines_, id, pipeline);
 }
 
+MyErrCode Context::createGraphicPipeline(Uid id, GraphicPipelineMeta const& meta)
+{
+    std::vector<vk::PipelineShaderStageCreateInfo> shader_stages;
+    if (meta.vert_shader_id != Uid::kNull) {
+        shader_stages.emplace_back(vk::PipelineShaderStageCreateInfo{
+            {}, vk::ShaderStageFlagBits::eVertex, getShaderModule(meta.vert_shader_id), "main"});
+    }
+    if (meta.frag_shader_id != Uid::kNull) {
+        shader_stages.emplace_back(vk::PipelineShaderStageCreateInfo{
+            {}, vk::ShaderStageFlagBits::eFragment, getShaderModule(meta.frag_shader_id), "main"});
+    }
+
+    vk::PipelineDynamicStateCreateInfo dynamic_states{{}, meta.dynamic_states};
+
+    vk::PipelineVertexInputStateCreateInfo vert_input{
+        {}, meta.vert_input_binds, meta.vert_input_attrs};
+
+    vk::PipelineInputAssemblyStateCreateInfo input_assembly{
+        {}, meta.prmitive_topology, meta.enable_primitive_restart};
+
+    vk::PipelineViewportStateCreateInfo viewport_state{
+        {}, meta.viewport_count, {}, meta.scissor_count, {}};
+
+    vk::PipelineRasterizationStateCreateInfo raster_state{{},
+                                                          meta.enable_depth_clamp,
+                                                          meta.enable_raster_discard,
+                                                          meta.polygon_mode,
+                                                          meta.cull_mode,
+                                                          meta.front_face,
+                                                          false,
+                                                          0.0f,
+                                                          0.0f,
+                                                          0.0f,
+                                                          meta.raster_line_width};
+
+    vk::PipelineMultisampleStateCreateInfo multisample_state{
+        {}, meta.raster_samples, meta.enable_sample_shading, 1.0f, nullptr, false, false};
+
+    vk::PipelineColorBlendAttachmentState color_blend_attach{
+        meta.enable_blend,
+        vk::BlendFactor::eOne,
+        vk::BlendFactor::eZero,
+        vk::BlendOp::eAdd,
+        vk::BlendFactor::eOne,
+        vk::BlendFactor::eZero,
+        vk::BlendOp::eAdd,
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+
+    vk::PipelineColorBlendStateCreateInfo color_blending{
+        {}, false, vk::LogicOp::eCopy, color_blend_attach, {0.0f, 0.0f, 0.0f, 0.0f}};
+
+    vk::PipelineDepthStencilStateCreateInfo depth_stencil{{},
+                                                          meta.enable_depth_test,
+                                                          meta.enable_depth_write,
+                                                          meta.depth_compare_op,
+                                                          meta.enable_depth_bounds_test,
+                                                          false,
+                                                          {},
+                                                          {},
+                                                          meta.min_depth_bounds,
+                                                          meta.max_depth_bounds};
+
+    // VkGraphicsPipelineCreateInfo pipeline_info{};
+    // pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    // pipeline_info.stageCount = 2;
+    // pipeline_info.pStages = shader_stages_info;
+    // pipeline_info.pVertexInputState = &vert_input_info;
+    // pipeline_info.pInputAssemblyState = &input_assembly_info;
+    // pipeline_info.pViewportState = &viewport_state_info;
+    // pipeline_info.pRasterizationState = &rasterizer;
+    // pipeline_info.pMultisampleState = &multisampling;
+    // pipeline_info.pDepthStencilState = nullptr;
+    // pipeline_info.pColorBlendState = &color_blending;
+    // pipeline_info.pDepthStencilState = &depth_stencil;
+    // pipeline_info.pDynamicState = &dynamic_state_info;
+    // pipeline_info.layout = pipeline_layout;
+    // pipeline_info.renderPass = render_pass;
+    // pipeline_info.subpass = 0;
+    // pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+    // pipeline_info.basePipelineIndex = -1;
+    // CHECK_VK_RET(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
+    //                                        &graphics_pipeline));
+
+    return MyErrCode::kOk;
+}
+
 vk::Pipeline& Context::getPipeline(Uid id) { return get(pipelines_, id); }
 
 MyErrCode Context::destroyPipeline(Uid id) { return destroy(pipelines_, id); }
@@ -1363,6 +1450,12 @@ vk::Framebuffer& Context::getFramebuffer(Uid id) { return get(framebuffers_, id)
 
 MyErrCode Context::destroyFramebuffer(Uid id) { return destroy(framebuffers_, id); }
 
+MyErrCode Context::waitDeviceIdle()
+{
+    CHECK_VKHPP_RET(device_.waitIdle());
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::waitQueueIdle(Uid queue_id)
 {
     vk::Queue queue = getQueue(queue_id);
@@ -1377,6 +1470,16 @@ MyErrCode Context::waitFences(std::vector<Uid> const& fence_ids, bool wait_all, 
         fences.push_back(getFence(id));
     }
     CHECK_VKHPP_RET(device_.waitForFences(fences, wait_all, timeout));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::resetFences(std::vector<Uid> const& fence_ids)
+{
+    std::vector<vk::Fence> fences;
+    for (auto id: fence_ids) {
+        fences.push_back(getFence(id));
+    }
+    CHECK_VKHPP_RET(device_.resetFences(fences));
     return MyErrCode::kOk;
 }
 
@@ -1406,6 +1509,16 @@ MyErrCode Context::signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore)
         return MyErrCode::kFailed;
     }
     CHECK_VKHPP_RET(device_.signalSemaphore(vk::SemaphoreSignalInfo{sem, signal_semaphore.val_}));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::acquireNextImage(Uid swapchain_id, uint32_t& image_index, Uid semaphore_id,
+                                    Uid fence_id, uint64_t timeout)
+{
+    image_index = CHECK_VKHPP_VAL(device_.acquireNextImageKHR(
+        getSwapchain(swapchain_id), timeout,
+        semaphore_id != Uid::kNull ? getSemaphore(semaphore_id) : vk::Semaphore{},
+        fence_id != Uid::kNull ? getFence(fence_id) : vk::Fence{}));
     return MyErrCode::kOk;
 }
 

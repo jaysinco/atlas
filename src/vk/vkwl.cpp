@@ -31,6 +31,20 @@ enum AppUid : int
 
 // NOLINTEND
 
+struct AppState
+{
+    myvk::Context vk;
+    mywl::Context wl;
+};
+
+struct WinState
+{
+    int win_id;
+    scene::Scene sc;
+};
+
+MyErrCode recreateSwapchain(AppState& app, WinState& win);
+
 MY_MAIN
 {
     MY_TRY

@@ -83,22 +83,22 @@ constexpr vk::ImageAspectFlags kAllImageAspects = vk::ImageAspectFlagBits::eNone
 
 struct BufferMeta
 {
-    uint64_t size;
-    vk::BufferUsageFlags usages;
+    uint64_t size = 0;
+    vk::BufferUsageFlags usages = vk::BufferUsageFlagBits::eStorageBuffer;
 };
 
 struct ImageMeta
 {
-    vk::ImageType type;
-    vk::Format format;
-    vk::ImageAspectFlags aspects;
-    vk::Extent3D extent;
-    uint32_t layers;
-    uint32_t mip_levels;
-    vk::SampleCountFlagBits samples;
-    vk::ImageTiling tiling;
-    vk::ImageLayout init_layout;
-    vk::ImageUsageFlags usages;
+    vk::ImageType type = vk::ImageType::e2D;
+    vk::Format format = vk::Format::eB8G8R8A8Srgb;
+    vk::ImageAspectFlags aspects = vk::ImageAspectFlagBits::eColor;
+    vk::Extent3D extent = {0, 0, 0};
+    uint32_t layers = 1;
+    uint32_t mip_levels = 1;
+    vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
+    vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
+    vk::ImageLayout init_layout = vk::ImageLayout::eUndefined;
+    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eSampled;
 };
 
 struct ImageSubLayers
@@ -142,9 +142,10 @@ struct BufferImageArea
 
 struct ImageViewMeta: ImageSubRange
 {
-    ImageViewMeta(vk::ImageViewType type, vk::ComponentMapping swizzle = {},
-                  uint32_t base_level = 0, uint32_t num_levels = kRemainingMipLevels,
-                  uint32_t base_layer = 0, uint32_t num_layers = kRemainingArrayLayers,
+    ImageViewMeta(vk::ImageViewType type = vk::ImageViewType::e2D,
+                  vk::ComponentMapping swizzle = {}, uint32_t base_level = 0,
+                  uint32_t num_levels = kRemainingMipLevels, uint32_t base_layer = 0,
+                  uint32_t num_layers = kRemainingArrayLayers,
                   vk::ImageAspectFlags aspects = kAllImageAspects);
 
     vk::ImageViewType type;
@@ -153,11 +154,12 @@ struct ImageViewMeta: ImageSubRange
 
 struct SwapchainMeta
 {
-    uint32_t image_count;
-    vk::SurfaceFormatKHR surface_format;
-    vk::Extent2D extent;
-    vk::PresentModeKHR mode;
-    vk::ImageUsageFlags usages;
+    uint32_t image_count = 1;
+    vk::SurfaceFormatKHR surface_format = {vk::Format::eB8G8R8A8Srgb,
+                                           vk::ColorSpaceKHR::eSrgbNonlinear};
+    vk::Extent2D extent = {0, 0};
+    vk::PresentModeKHR mode = vk::PresentModeKHR::eMailbox;
+    vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eColorAttachment;
 };
 
 struct RenderPassMeta
@@ -170,11 +172,11 @@ struct RenderPassMeta
 
 struct SamplerMeta
 {
-    vk::Filter filter;
-    vk::SamplerAddressMode address_mode;
-    vk::BorderColor border_color;
-    float min_lod;
-    float max_lod;
+    vk::Filter filter = vk::Filter::eLinear;
+    vk::SamplerAddressMode address_mode = vk::SamplerAddressMode::eRepeat;
+    vk::BorderColor border_color = vk::BorderColor::eIntOpaqueBlack;
+    float min_lod = 0;
+    float max_lod = 1;
 };
 
 struct MemoryBarrierMeta
@@ -189,6 +191,35 @@ struct ImageBarrierMeta: MemoryBarrierMeta
 {
     vk::ImageLayout old_layout;
     vk::ImageLayout new_layout;
+};
+
+struct GraphicPipelineMeta
+{
+    Uid vert_shader_id = Uid::kNull;
+    Uid frag_shader_id = Uid::kNull;
+    uint32_t viewport_count = 1;
+    uint32_t scissor_count = 1;
+    bool enable_primitive_restart = false;
+    bool enable_depth_clamp = false;
+    bool enable_raster_discard = false;
+    bool enable_sample_shading = true;
+    bool enable_blend = false;
+    bool enable_depth_test = true;
+    bool enable_depth_write = true;
+    bool enable_depth_bounds_test = false;
+    float min_depth_bounds = 0.0f;
+    float max_depth_bounds = 1.0f;
+    float raster_line_width = 1.0f;
+    vk::PrimitiveTopology prmitive_topology = vk::PrimitiveTopology::eTriangleList;
+    vk::PolygonMode polygon_mode = vk::PolygonMode::eFill;
+    vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
+    vk::FrontFace front_face = vk::FrontFace::eClockwise;
+    vk::SampleCountFlagBits raster_samples = vk::SampleCountFlagBits::e1;
+    vk::CompareOp depth_compare_op = vk::CompareOp::eLess;
+    std::vector<vk::VertexInputBindingDescription> vert_input_binds;
+    std::vector<vk::VertexInputAttributeDescription> vert_input_attrs;
+    std::vector<vk::DynamicState> dynamic_states = {vk::DynamicState::eViewport,
+                                                    vk::DynamicState::eScissor};
 };
 
 class Allocation
@@ -441,6 +472,7 @@ public:
     MyErrCode createPipelineLayout(Uid id, std::vector<Uid> const& set_layout_ids,
                                    std::vector<vk::PushConstantRange> const& push_ranges = {});
     MyErrCode createComputePipeline(Uid id, Uid pipeline_layout_id, Uid shader_id);
+    MyErrCode createGraphicPipeline(Uid id, GraphicPipelineMeta const& meta);
     MyErrCode createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& meta);
     MyErrCode createRenderPass(Uid id, RenderPassMeta const& meta);
     MyErrCode createFramebuffer(Uid id, Uid render_pass_id, std::vector<Uid> const& image_view_ids);
@@ -484,12 +516,17 @@ public:
                               vk::ImageLayout image_layout);
     MyErrCode updateDescriptorSet(
         Uid set_id, std::map<uint32_t, WriteDescriptorSetBinding> const& write_bindings);
+    MyErrCode waitDeviceIdle();
     MyErrCode waitQueueIdle(Uid queue_id);
     MyErrCode waitFences(std::vector<Uid> const& fence_ids, bool wait_all = true,
                          uint64_t timeout = UINT64_MAX);
+    MyErrCode resetFences(std::vector<Uid> const& fence_ids);
     MyErrCode waitSemaphores(std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
                              uint64_t timeout = UINT64_MAX);
     MyErrCode signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore);
+    MyErrCode acquireNextImage(Uid swapchain_id, uint32_t& image_index,
+                               Uid semaphore_id = Uid::kNull, Uid fence_id = Uid::kNull,
+                               uint64_t timeout = UINT64_MAX);
     MyErrCode recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
                             CmdSubmitter const& submitter);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
