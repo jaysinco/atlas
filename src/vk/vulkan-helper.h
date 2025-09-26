@@ -195,8 +195,11 @@ struct ImageBarrierMeta: MemoryBarrierMeta
 
 struct GraphicPipelineMeta
 {
+    Uid pipeline_layout_id;
+    Uid render_pass_id;
     Uid vert_shader_id = Uid::kNull;
     Uid frag_shader_id = Uid::kNull;
+    uint32_t subpass = 0;
     uint32_t viewport_count = 1;
     uint32_t scissor_count = 1;
     bool enable_primitive_restart = false;
@@ -524,16 +527,18 @@ public:
     MyErrCode waitSemaphores(std::vector<SemaphoreSubmitInfo> const& wait_semaphores,
                              uint64_t timeout = UINT64_MAX);
     MyErrCode signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore);
-    MyErrCode acquireNextImage(Uid swapchain_id, uint32_t& image_index,
-                               Uid semaphore_id = Uid::kNull, Uid fence_id = Uid::kNull,
-                               uint64_t timeout = UINT64_MAX);
+    MyErrCode acquireNextImage(Uid swapchain_id, uint32_t& image_index, bool& recreate_swapchain,
+                               Uid signal_semaphore_id = Uid::kNull,
+                               Uid signal_fence_id = Uid::kNull, uint64_t timeout = UINT64_MAX);
     MyErrCode recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
-                            CmdSubmitter const& submitter);
+                            CmdSubmitter const& submitter, bool reset_command_buffer = false);
     MyErrCode oneTimeSubmit(Uid queue_id, Uid command_pool_id, CmdSubmitter const& submitter);
     MyErrCode submit(Uid queue_id, Uid command_buffer_id,
                      std::vector<SemaphoreSubmitInfo> const& wait_semaphores = {},
                      std::vector<SemaphoreSubmitInfo> const& signal_semaphores = {},
                      Uid fence_id = Uid::kNull);
+    MyErrCode present(Uid queue_id, Uid swapchain_id, uint32_t image_index,
+                      bool& recreate_swapchain, std::vector<Uid> const& wait_semaphores = {});
 
     MyErrCode destroySurface(Uid id);
     MyErrCode destroyCommandPool(Uid id);

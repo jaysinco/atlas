@@ -917,7 +917,7 @@ MyErrCode Context::createGraphicPipeline(Uid id, GraphicPipelineMeta const& meta
         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
             vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
 
-    vk::PipelineColorBlendStateCreateInfo color_blending{
+    vk::PipelineColorBlendStateCreateInfo color_blend{
         {}, false, vk::LogicOp::eCopy, color_blend_attach, {0.0f, 0.0f, 0.0f, 0.0f}};
 
     vk::PipelineDepthStencilStateCreateInfo depth_stencil{{},
@@ -931,28 +931,23 @@ MyErrCode Context::createGraphicPipeline(Uid id, GraphicPipelineMeta const& meta
                                                           meta.min_depth_bounds,
                                                           meta.max_depth_bounds};
 
-    // VkGraphicsPipelineCreateInfo pipeline_info{};
-    // pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    // pipeline_info.stageCount = 2;
-    // pipeline_info.pStages = shader_stages_info;
-    // pipeline_info.pVertexInputState = &vert_input_info;
-    // pipeline_info.pInputAssemblyState = &input_assembly_info;
-    // pipeline_info.pViewportState = &viewport_state_info;
-    // pipeline_info.pRasterizationState = &rasterizer;
-    // pipeline_info.pMultisampleState = &multisampling;
-    // pipeline_info.pDepthStencilState = nullptr;
-    // pipeline_info.pColorBlendState = &color_blending;
-    // pipeline_info.pDepthStencilState = &depth_stencil;
-    // pipeline_info.pDynamicState = &dynamic_state_info;
-    // pipeline_info.layout = pipeline_layout;
-    // pipeline_info.renderPass = render_pass;
-    // pipeline_info.subpass = 0;
-    // pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
-    // pipeline_info.basePipelineIndex = -1;
-    // CHECK_VK_RET(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
-    //                                        &graphics_pipeline));
+    vk::GraphicsPipelineCreateInfo pipeline_info{{},
+                                                 shader_stages,
+                                                 &vert_input,
+                                                 &input_assembly,
+                                                 nullptr,
+                                                 &viewport_state,
+                                                 &raster_state,
+                                                 &multisample_state,
+                                                 &depth_stencil,
+                                                 &color_blend,
+                                                 &dynamic_states,
+                                                 getPipelineLayout(meta.pipeline_layout_id),
+                                                 getRenderPass(meta.render_pass_id),
+                                                 meta.subpass};
 
-    return MyErrCode::kOk;
+    auto pipelines = CHECK_VKHPP_VAL(device_.createGraphicsPipelines({}, pipeline_info));
+    return create(pipelines_, id, pipelines.front());
 }
 
 vk::Pipeline& Context::getPipeline(Uid id) { return get(pipelines_, id); }
@@ -1512,20 +1507,31 @@ MyErrCode Context::signalSemaphore(SemaphoreSubmitInfo const& signal_semaphore)
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::acquireNextImage(Uid swapchain_id, uint32_t& image_index, Uid semaphore_id,
-                                    Uid fence_id, uint64_t timeout)
+MyErrCode Context::acquireNextImage(Uid swapchain_id, uint32_t& image_index,
+                                    bool& recreate_swapchain, Uid signal_semaphore_id,
+                                    Uid signal_fence_id, uint64_t timeout)
 {
-    image_index = CHECK_VKHPP_VAL(device_.acquireNextImageKHR(
+    recreate_swapchain = false;
+    auto res = device_.acquireNextImageKHR(
         getSwapchain(swapchain_id), timeout,
-        semaphore_id != Uid::kNull ? getSemaphore(semaphore_id) : vk::Semaphore{},
-        fence_id != Uid::kNull ? getFence(fence_id) : vk::Fence{}));
+        signal_semaphore_id != Uid::kNull ? getSemaphore(signal_semaphore_id) : vk::Semaphore{},
+        signal_fence_id != Uid::kNull ? getFence(signal_fence_id) : vk::Fence{});
+    if (res.result == vk::Result::eErrorOutOfDateKHR || res.result == vk::Result::eSuboptimalKHR) {
+        recreate_swapchain = true;
+    } else {
+        CHECK_VKHPP_RET(res.result);
+    }
+    image_index = res.value;
     return MyErrCode::kOk;
 }
 
 MyErrCode Context::recordCommand(Uid command_buffer_id, vk::CommandBufferUsageFlags usage,
-                                 CmdSubmitter const& submitter)
+                                 CmdSubmitter const& submitter, bool reset_command_buffer)
 {
     CommandBuffer& command_buffer = getCommandBuffer(command_buffer_id);
+    if (reset_command_buffer) {
+        CHECK_VKHPP_RET(command_buffer.reset());
+    }
     CHECK_VKHPP_RET(command_buffer.begin({usage}));
     CHECK_ERR_RET(submitter(command_buffer));
     CHECK_VKHPP_RET(command_buffer.end());
@@ -1562,6 +1568,25 @@ MyErrCode Context::submit(Uid queue_id, Uid command_buffer_id,
     vk::SubmitInfo2 submit_info = {vk::SubmitFlags{}, wait_sems, cmdbuf_info, signal_sems};
     CHECK_VKHPP_RET(
         queue.submit2(submit_info, fence_id != Uid::kNull ? getFence(fence_id) : vk::Fence{}));
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::present(Uid queue_id, Uid swapchain_id, uint32_t image_index,
+                           bool& recreate_swapchain, std::vector<Uid> const& wait_semaphores)
+{
+    recreate_swapchain = false;
+    vk::Queue queue = getQueue(queue_id);
+    std::vector<vk::Semaphore> sems;
+    for (auto id: wait_semaphores) {
+        sems.push_back(getSemaphore(id));
+    }
+    vk::PresentInfoKHR info{sems, getSwapchain(swapchain_id), image_index};
+    auto res = queue.presentKHR(info);
+    if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
+        recreate_swapchain = true;
+    } else {
+        CHECK_VKHPP_RET(res);
+    }
     return MyErrCode::kOk;
 }
 
