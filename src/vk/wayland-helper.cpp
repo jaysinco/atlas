@@ -215,7 +215,8 @@ void Context::handleShellSurfaceConfigure(void* data, xdg_surface* shell_surface
     xdg_surface_ack_configure(shell_surface, serial);
     if (surface.need_resize_) {
         surface.need_resize_ = false;
-        ctx->onSurfaceResize(surface_id, surface.width_, surface.height_);
+        Event event{.type = EventType::kSurfaceResize, .ia = surface.width_, .ib = surface.height_};
+        ctx->onEvent(surface_id, event);
     }
 }
 
@@ -354,6 +355,8 @@ void Context::handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_
                                       uint32_t mods_locked, uint32_t group)
 {
 }
+
+MyErrCode Context::onEvent(Uid surface_id, Event const& event) { return MyErrCode::kOk; }
 
 MyErrCode Context::onSurfaceClose(Uid surface_id) { return MyErrCode::kOk; }
 

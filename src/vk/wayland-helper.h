@@ -40,6 +40,25 @@ private:
     int height_;
 };
 
+enum class EventType
+{
+    kSurfaceClose,
+    kSurfaceResize,
+    kPointerMove,
+    kPointerPress,
+    kPointerScroll,
+    kKeyboardPress,
+};
+
+struct Event
+{
+    EventType type;
+    int ia;
+    int ib;
+    double da;
+    double db;
+};
+
 class Context
 {
 public:
@@ -52,12 +71,7 @@ public:
     MyErrCode destroy();
 
 protected:
-    virtual MyErrCode onSurfaceClose(Uid surface_id);
-    virtual MyErrCode onSurfaceResize(Uid surface_id, int width, int height);
-    virtual MyErrCode onPointerMove(Uid surface_id, double xpos, double ypos);
-    virtual MyErrCode onPointerPress(Uid surface_id, int button, bool down);
-    virtual MyErrCode onPointerScroll(Uid surface_id, double xoffset, double yoffset);
-    virtual MyErrCode onKeyboardPress(Uid surface_id, int key, bool down);
+    virtual MyErrCode onEvent(Uid surface_id, Event const& event);
 
 private:
     static void handleRegistry(void* data, wl_registry* registry, uint32_t name,
