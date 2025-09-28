@@ -4,6 +4,7 @@
 #include "toolkit/args.h"
 #include "toolkit/logging.h"
 #include <thread>
+#include <moodycamel/concurrentqueue.h>
 #define BUILD_WITH_EASY_PROFILER
 #define USING_EASY_PROFILER
 #include <easy/profiler.h>
@@ -68,19 +69,23 @@ enum AppUid : int
 // NOLINTEND
 
 using Uid = toolkit::Uid;
+using Event = mywl::EventData;
 
 class AppInstance
 {
 public:
-    AppInstance(int id, myvk::Context& vk, mywl::Context& wl): id_(id), vk_(vk), wl_(wl) {}
+    explicit AppInstance(int id): id_(id) {}
 
-    MyErrCode init(std::filesystem::path const& model_path,
+    MyErrCode init(wl_surface* wls, myvk::Context* vk, std::filesystem::path const& model_path,
                    std::filesystem::path const& texture_path)
     {
-        CHECK_ERR_RET(vk_.createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
-                                            vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
-                                                vk::CommandPoolCreateFlagBits::eTransient));
-        CHECK_ERR_RET(vk_.createDescriptorPool(
+        wls_ = wls;
+        vk_ = vk;
+
+        CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
+                                             vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
+                                                 vk::CommandPoolCreateFlagBits::eTransient));
+        CHECK_ERR_RET(vk_->createDescriptorPool(
             UID_vkDescriptorPool_0 + id_, 2, {{vk::DescriptorType::eStorageBuffer, 4}},
             vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
 
@@ -89,55 +94,42 @@ public:
 
     MyErrCode recreateSwapchain() { return MyErrCode::kOk; }
 
-    MyErrCode drawLoop() { return MyErrCode::kOk; }
+    MyErrCode drawLoop()
+    {
+        while (true) {
+            Event event;
+            while (evq_.try_dequeue(event)) {
+            }
+        }
+        return MyErrCode::kOk;
+    }
 
-    MyErrCode post(std::function<MyErrCode()> fn) { return MyErrCode::kOk; }
+    MyErrCode postEvent(Event const& event)
+    {
+        evq_.enqueue(event);
+        return MyErrCode::kOk;
+    }
 
 private:
     int id_;
+    wl_surface* wls_;
+    myvk::Context* vk_;
+    moodycamel::ConcurrentQueue<Event> evq_;
     scene::Scene sc_;
-    myvk::Context& vk_;
-    mywl::Context& wl_;
 };
 
-class WlContext: public mywl::Context
+class AppEventHandler: public mywl::EventHandler
 {
 public:
-    MyErrCode createSurface(AppInstance* app, Uid id, char const* app_id, char const* title)
+    MyErrCode onEvent(Uid surface_id, mywl::EventData const& event) override
     {
-        app_surfaces_[id] = app;
-        return mywl::Context::createSurface(id, app_id, title);
-    }
-
-protected:
-    MyErrCode onSurfaceClose(Uid surface_id) override
-    {
-        app_surfaces_.at(surface_id)->post();
+        CHECK_ERR_RET(app_surfaces_.at(surface_id)->postEvent(event));
         return MyErrCode::kOk;
     }
 
-    MyErrCode onSurfaceResize(Uid surface_id, int width, int height) override
+    MyErrCode registerAppSurface(Uid surface_id, AppInstance* app)
     {
-        return MyErrCode::kOk;
-    }
-
-    MyErrCode onPointerMove(Uid surface_id, double xpos, double ypos) override
-    {
-        return MyErrCode::kOk;
-    }
-
-    MyErrCode onPointerPress(Uid surface_id, int button, bool down) override
-    {
-        return MyErrCode::kOk;
-    }
-
-    MyErrCode onPointerScroll(Uid surface_id, double xoffset, double yoffset) override
-    {
-        return MyErrCode::kOk;
-    }
-
-    MyErrCode onKeyboardPress(Uid surface_id, int key, bool down) override
-    {
+        app_surfaces_[surface_id] = app;
         return MyErrCode::kOk;
     }
 
@@ -146,11 +138,23 @@ private:
 };
 
 MyErrCode run()
-{
-    WlContext wl;
-    CHECK_ERR_RET(wl.createDisplay("vkwl"));
 
+{
+    mywl::Context wl;
     myvk::Context vk;
+
+    std::vector<AppInstance> apps;
+    for (int i = 0; i < kMaxAppInstance; ++i) {
+        apps.emplace_back(i);
+    }
+
+    AppEventHandler app_event;
+    CHECK_ERR_RET(wl.createDisplay(&app_event));
+    for (int i = 0; i < kMaxAppInstance; ++i) {
+        CHECK_ERR_RET(app_event.registerAppSurface(UID_wlSurface_0 + i, &apps[i]));
+        CHECK_ERR_RET(wl.createSurface(UID_wlSurface_0 + i, FSTR("vkwl{}", i), FSTR("vkwl{}", i)));
+    }
+
     CHECK_ERR_RET(vk.createInstance("vkwl", {"VK_EXT_debug_utils"}));
     CHECK_ERR_RET(vk.createPhysicalDevice());
     uint32_t queue_family;
@@ -165,19 +169,21 @@ MyErrCode run()
     CHECK_ERR_RET(vk.createDeviceAndQueues({}, {{queue_family, queue_ids}}));
     CHECK_ERR_RET(vk.createAllocator());
 
-    AppInstance app0(0, vk, wl);
-    AppInstance app1(1, vk, wl);
-    CHECK_ERR_RET(app0.init("", ""));
-    CHECK_ERR_RET(app1.init("", ""));
-    std::thread t0([&] { app0.drawLoop(); });
-    std::thread t1([&] { app1.drawLoop(); });
+    std::vector<std::thread> app_threads;
+    for (int i = 0; i < kMaxAppInstance; ++i) {
+        wl_surface* surface = wl.getRawSurface(UID_wlSurface_0 + i);
+        CHECK_ERR_RET(apps[i].init(surface, &vk, "model_path", "texture_path"));
+        app_threads.emplace_back([&apps, i] { apps[i].drawLoop(); });
+    }
 
     while (true) {
         CHECK_ERR_RET(wl.dispatch());
     }
 
-    t0.join();
-    t1.join();
+    for (int i = 0; i < kMaxAppInstance; ++i) {
+        app_threads[i].join();
+    }
+
     CHECK_ERR_RET(vk.destroy());
     CHECK_ERR_RET(wl.destroy());
     return MyErrCode::kOk;

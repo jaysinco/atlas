@@ -16,13 +16,14 @@ Surface::operator wl_surface*() const { return surface_; }
 
 Surface::operator bool() const { return surface_ != nullptr; }
 
-MyErrCode Context::createDisplay(char const* name)
+MyErrCode Context::createDisplay(EventHandler* event_handler, char const* name)
 {
     CHECK_WL_RET(display_ = wl_display_connect(name));
     CHECK_WL_RET(registry_ = wl_display_get_registry(display_));
     wl_registry_add_listener(registry_, &registry_listener, this);
     wl_display_roundtrip(display_);
     CHECK_WL_RET(cursor_surface_ = wl_compositor_create_surface(compositor_));
+    event_handler_ = event_handler;
     return MyErrCode::kOk;
 }
 
@@ -66,7 +67,7 @@ MyErrCode Context::destroy()
     return MyErrCode::kOk;
 }
 
-MyErrCode Context::createSurface(Uid id, char const* app_id, char const* title)
+MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string const& title)
 {
     if (surfaces_.find(id) != surfaces_.end()) {
         CHECK_ERR_RET(destroySurface(id));
@@ -83,8 +84,8 @@ MyErrCode Context::createSurface(Uid id, char const* app_id, char const* title)
     xdg_surface_add_listener(shell_surface, &shell_surface_listener, this);
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, this);
 
-    xdg_toplevel_set_app_id(toplevel, app_id);
-    xdg_toplevel_set_title(toplevel, title);
+    xdg_toplevel_set_app_id(toplevel, app_id.c_str());
+    xdg_toplevel_set_title(toplevel, title.c_str());
 
     wl_surface_commit(surface);
     wl_display_roundtrip(display_);
@@ -101,6 +102,8 @@ Surface& Context::getSurface(Uid id)
     }
     return surfaces_.at(id);
 }
+
+wl_surface* Context::getRawSurface(Uid id) { return getSurface(id).surface_; }
 
 MyErrCode Context::destroySurface(Uid id)
 {
@@ -215,8 +218,9 @@ void Context::handleShellSurfaceConfigure(void* data, xdg_surface* shell_surface
     xdg_surface_ack_configure(shell_surface, serial);
     if (surface.need_resize_) {
         surface.need_resize_ = false;
-        Event event{.type = EventType::kSurfaceResize, .ia = surface.width_, .ib = surface.height_};
-        ctx->onEvent(surface_id, event);
+        ctx->event_handler_->onEvent(
+            surface_id,
+            {.type = EventType::kSurfaceResize, .ix = surface.width_, .iy = surface.height_});
     }
 }
 
@@ -237,7 +241,7 @@ void Context::handleToplevelClose(void* data, xdg_toplevel* toplevel)
 {
     Context* ctx = static_cast<Context*>(data);
     Uid surface_id = ctx->getSurfaceId(toplevel);
-    ctx->onSurfaceClose(surface_id);
+    ctx->event_handler_->onEvent(surface_id, {.type = EventType::kSurfaceClose});
 }
 
 void Context::handleSeatCapabilities(void* data, wl_seat* seat, uint32_t caps)
@@ -295,7 +299,8 @@ void Context::handlePointerMotion(void* data, wl_pointer* pointer, uint32_t time
     Context* ctx = static_cast<Context*>(data);
     double x = wl_fixed_to_double(sx);
     double y = wl_fixed_to_double(sy);
-    ctx->onPointerMove(ctx->pointer_surface_id_, x, y);
+    ctx->event_handler_->onEvent(ctx->pointer_surface_id_,
+                                 {.type = EventType::kPointerMove, .dx = x, .dy = y});
 }
 
 void Context::handlePointerButton(void* data, wl_pointer* pointer, uint32_t serial, uint32_t time,
@@ -311,7 +316,8 @@ void Context::handlePointerButton(void* data, wl_pointer* pointer, uint32_t seri
         btn = 2;
     }
     bool down = state == WL_POINTER_BUTTON_STATE_PRESSED;
-    ctx->onPointerPress(ctx->pointer_surface_id_, btn, down);
+    ctx->event_handler_->onEvent(ctx->pointer_surface_id_,
+                                 {.type = EventType::kPointerPress, .ix = btn, .iy = down});
 }
 
 void Context::handlePointerAxis(void* data, wl_pointer* pointer, uint32_t time, uint32_t axis,
@@ -320,7 +326,8 @@ void Context::handlePointerAxis(void* data, wl_pointer* pointer, uint32_t time, 
     Context* ctx = static_cast<Context*>(data);
     if (axis == 0) {
         double yoffset = wl_fixed_to_double(value);
-        ctx->onPointerScroll(ctx->pointer_surface_id_, 0.0, yoffset);
+        ctx->event_handler_->onEvent(ctx->pointer_surface_id_,
+                                     {.type = EventType::kPointerScroll, .dx = 0.0, .dy = yoffset});
     }
 }
 
@@ -347,7 +354,8 @@ void Context::handleKeyboardKey(void* data, wl_keyboard* keyboard, uint32_t seri
 {
     Context* ctx = static_cast<Context*>(data);
     bool down = state == 1;
-    ctx->onKeyboardPress(ctx->keyboard_surface_id_, key, down);
+    ctx->event_handler_->onEvent(ctx->keyboard_surface_id_,
+                                 {.type = EventType::kKeyboardPress, .ux = key, .ix = down});
 }
 
 void Context::handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_t serial,
@@ -355,25 +363,5 @@ void Context::handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_
                                       uint32_t mods_locked, uint32_t group)
 {
 }
-
-MyErrCode Context::onEvent(Uid surface_id, Event const& event) { return MyErrCode::kOk; }
-
-MyErrCode Context::onSurfaceClose(Uid surface_id) { return MyErrCode::kOk; }
-
-MyErrCode Context::onSurfaceResize(Uid surface_id, int width, int height) { return MyErrCode::kOk; }
-
-MyErrCode Context::onPointerMove(Uid surface_id, double xpos, double ypos)
-{
-    return MyErrCode::kOk;
-}
-
-MyErrCode Context::onPointerPress(Uid surface_id, int button, bool down) { return MyErrCode::kOk; }
-
-MyErrCode Context::onPointerScroll(Uid surface_id, double xoffset, double yoffset)
-{
-    return MyErrCode::kOk;
-}
-
-MyErrCode Context::onKeyboardPress(Uid surface_id, int key, bool down) { return MyErrCode::kOk; }
 
 };  // namespace mywl

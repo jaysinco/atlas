@@ -50,28 +50,33 @@ enum class EventType
     kKeyboardPress,
 };
 
-struct Event
+struct EventData
 {
     EventType type;
-    int ia;
-    int ib;
-    double da;
-    double db;
+    uint32_t ux;
+    int32_t ix;
+    int32_t iy;
+    double dx;
+    double dy;
+};
+
+class EventHandler
+{
+public:
+    virtual MyErrCode onEvent(Uid surface_id, EventData const& event) = 0;
 };
 
 class Context
 {
 public:
-    MyErrCode createDisplay(char const* name = nullptr);
-    MyErrCode createSurface(Uid id, char const* app_id, char const* title);
+    MyErrCode createDisplay(EventHandler* event_handler, char const* name = nullptr);
+    MyErrCode createSurface(Uid id, std::string const& app_id, std::string const& title);
     wl_display* getDisplay();
     Surface& getSurface(Uid id);
+    wl_surface* getRawSurface(Uid id);
     MyErrCode dispatch();
     MyErrCode destroySurface(Uid id);
     MyErrCode destroy();
-
-protected:
-    virtual MyErrCode onEvent(Uid surface_id, Event const& event);
 
 private:
     static void handleRegistry(void* data, wl_registry* registry, uint32_t name,
@@ -122,6 +127,7 @@ private:
     wl_cursor* cursor_;
     wl_surface* cursor_surface_;
 
+    EventHandler* event_handler_;
     std::map<Uid, Surface> surfaces_;
 
     Uid pointer_surface_id_ = Uid::kNull;

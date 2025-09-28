@@ -1580,7 +1580,8 @@ MyErrCode Context::present(Uid queue_id, Uid swapchain_id, uint32_t image_index,
     for (auto id: wait_semaphores) {
         sems.push_back(getSemaphore(id));
     }
-    vk::PresentInfoKHR info{sems, getSwapchain(swapchain_id), image_index};
+    vk::SwapchainKHR swapchain = getSwapchain(swapchain_id);
+    vk::PresentInfoKHR info{sems, swapchain, image_index};
     auto res = queue.presentKHR(info);
     if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
         recreate_swapchain = true;
