@@ -87,7 +87,10 @@ private:
     static void handleToplevelConfigure(void* data, xdg_toplevel* toplevel, int32_t width,
                                         int32_t height, wl_array* states);
     static void handleToplevelClose(void* data, xdg_toplevel* toplevel);
+    static void handleToplevelCapabilities(void* data, xdg_toplevel* xdg_toplevel,
+                                           wl_array* capabilities);
     static void handleSeatCapabilities(void* data, wl_seat* seat, uint32_t caps);
+    static void handleSeatName(void* data, wl_seat* wl_seat, char const* name);
     static void handlePointerEnter(void* data, wl_pointer* pointer, uint32_t serial,
                                    wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy);
     static void handlePointerLeave(void* data, wl_pointer* pointer, uint32_t serial,
@@ -109,6 +112,8 @@ private:
     static void handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_t serial,
                                         uint32_t mods_depressed, uint32_t mods_latched,
                                         uint32_t mods_locked, uint32_t group);
+    static void handleKeyboardRepeat(void* data, wl_keyboard* wl_keyboard, int32_t rate,
+                                     int32_t delay);
 
     Uid getSurfaceId(wl_surface* surface);
     Uid getSurfaceId(xdg_surface* shell_surface);

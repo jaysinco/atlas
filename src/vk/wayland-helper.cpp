@@ -80,6 +80,7 @@ MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string 
     CHECK_WL_RET(surface = wl_compositor_create_surface(compositor_));
     CHECK_WL_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell_, surface));
     CHECK_WL_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
+    surfaces_[id] = {surface, shell_surface, toplevel};
 
     xdg_surface_add_listener(shell_surface, &shell_surface_listener, this);
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, this);
@@ -91,7 +92,6 @@ MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string 
     wl_display_roundtrip(display_);
     wl_surface_commit(surface);
 
-    surfaces_[id] = {surface, shell_surface, toplevel};
     return MyErrCode::kOk;
 }
 
@@ -161,10 +161,12 @@ xdg_surface_listener Context::shell_surface_listener = {
 xdg_toplevel_listener Context::toplevel_listener = {
     .configure = handleToplevelConfigure,
     .close = handleToplevelClose,
+    .wm_capabilities = handleToplevelCapabilities,
 };
 
 wl_seat_listener Context::seat_listener = {
     .capabilities = handleSeatCapabilities,
+    .name = handleSeatName,
 };
 
 wl_pointer_listener Context::pointer_listener = {
@@ -181,6 +183,7 @@ wl_keyboard_listener Context::keyboard_listener = {
     .leave = handleKeyboardLeave,
     .key = handleKeyboardKey,
     .modifiers = handleKeyboardModifiers,
+    .repeat_info = handleKeyboardRepeat,
 };
 
 void Context::handleRegistry(void* data, wl_registry* registry, uint32_t name,
@@ -244,6 +247,11 @@ void Context::handleToplevelClose(void* data, xdg_toplevel* toplevel)
     ctx->event_handler_->onEvent(surface_id, {.type = EventType::kSurfaceClose});
 }
 
+void Context::handleToplevelCapabilities(void* data, xdg_toplevel* xdg_toplevel,
+                                         wl_array* capabilities)
+{
+}
+
 void Context::handleSeatCapabilities(void* data, wl_seat* seat, uint32_t caps)
 {
     Context* ctx = static_cast<Context*>(data);
@@ -263,6 +271,8 @@ void Context::handleSeatCapabilities(void* data, wl_seat* seat, uint32_t caps)
         ctx->keyboard_ = nullptr;
     }
 }
+
+void Context::handleSeatName(void* data, wl_seat* wl_seat, char const* name) {}
 
 void Context::handlePointerEnter(void* data, wl_pointer* pointer, uint32_t serial,
                                  wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy)
@@ -364,4 +374,8 @@ void Context::handleKeyboardModifiers(void* data, wl_keyboard* keyboard, uint32_
 {
 }
 
+void Context::handleKeyboardRepeat(void* data, wl_keyboard* wl_keyboard, int32_t rate,
+                                   int32_t delay)
+{
+}
 };  // namespace mywl

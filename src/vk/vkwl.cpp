@@ -14,6 +14,12 @@ static constexpr int kMaxAppInstance = 2;
 static constexpr int kMaxSwapchainImage = 10;
 static constexpr int kMaxFrameInfight = 2;
 
+using Uid = toolkit::Uid;
+using Event = mywl::EventData;
+using EventType = mywl::EventType;
+
+static std::atomic<int> g_app_still_run = kMaxAppInstance;
+
 // NOLINTBEGIN
 enum AppUid : int
 {
@@ -68,9 +74,6 @@ enum AppUid : int
 
 // NOLINTEND
 
-using Uid = toolkit::Uid;
-using Event = mywl::EventData;
-
 class AppInstance
 {
 public:
@@ -92,13 +95,60 @@ public:
         return MyErrCode::kOk;
     }
 
+    MyErrCode destroy()
+    {
+        CHECK_ERR_RET(sc_.destroy());
+        return MyErrCode::kOk;
+    }
+
     MyErrCode recreateSwapchain() { return MyErrCode::kOk; }
 
     MyErrCode drawLoop()
     {
-        while (true) {
-            Event event;
-            while (evq_.try_dequeue(event)) {
+        auto exit_guard = toolkit::scopeExit([] { g_app_still_run -= 1; });
+        quit_ = false;
+        while (!quit_) {
+            // vk render...
+            // ...
+            // ...
+            CHECK_ERR_RET(handleEvent());
+        }
+
+        return MyErrCode::kOk;
+    }
+
+    MyErrCode handleEvent()
+    {
+        Event ev;
+        while (evq_.try_dequeue(ev)) {
+            ILOG("{} receive event {}", id_, static_cast<int>(ev.type));
+            switch (ev.type) {
+                case EventType::kSurfaceClose: {
+                    quit_ = true;
+                    break;
+                }
+                case EventType::kSurfaceResize: {
+                    CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
+                    break;
+                }
+                case EventType::kPointerMove: {
+                    CHECK_ERR_RET(sc_.onPointerMove(ev.dx, ev.dy));
+                    break;
+                }
+                case EventType::kPointerPress: {
+                    CHECK_ERR_RET(sc_.onPointerPress(ev.ix, ev.iy));
+                    break;
+                }
+                case EventType::kPointerScroll: {
+                    CHECK_ERR_RET(sc_.onPointerScroll(ev.dx, ev.dy));
+                    break;
+                }
+                case EventType::kKeyboardPress: {
+                    CHECK_ERR_RET(sc_.onKeyboardPress(ev.ux, ev.ix, quit_));
+                    break;
+                }
+                default:
+                    break;
             }
         }
         return MyErrCode::kOk;
@@ -116,6 +166,7 @@ private:
     myvk::Context* vk_;
     moodycamel::ConcurrentQueue<Event> evq_;
     scene::Scene sc_;
+    bool quit_;
 };
 
 class AppEventHandler: public mywl::EventHandler
@@ -123,6 +174,7 @@ class AppEventHandler: public mywl::EventHandler
 public:
     MyErrCode onEvent(Uid surface_id, mywl::EventData const& event) override
     {
+        ILOG("on event {} {}", surface_id, static_cast<int>(event.type));
         CHECK_ERR_RET(app_surfaces_.at(surface_id)->postEvent(event));
         return MyErrCode::kOk;
     }
@@ -176,12 +228,13 @@ MyErrCode run()
         app_threads.emplace_back([&apps, i] { apps[i].drawLoop(); });
     }
 
-    while (true) {
+    while (g_app_still_run > 0) {
         CHECK_ERR_RET(wl.dispatch());
     }
 
     for (int i = 0; i < kMaxAppInstance; ++i) {
         app_threads[i].join();
+        CHECK_ERR_RET(apps[i].destroy());
     }
 
     CHECK_ERR_RET(vk.destroy());
