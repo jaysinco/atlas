@@ -23,6 +23,8 @@ static std::atomic<int> g_app_still_run = kMaxAppInstance;
 // NOLINTBEGIN
 enum AppUid : int
 {
+    UID_vkShader_vert,
+    UID_vkShader_frag,
 
     UID_vkQueue_0,
     UID_vkQueue_end = UID_vkQueue_0 + kMaxAppInstance,
@@ -38,6 +40,20 @@ enum AppUid : int
     UID_vkPipeline_end = UID_vkPipeline_0 + kMaxAppInstance,
     UID_vkSurface_0,
     UID_vkSurface_end = UID_vkSurface_0 + kMaxAppInstance,
+    UID_vkImage_texture_0,
+    UID_vkImage_texture_end = UID_vkImage_texture_0 + kMaxAppInstance,
+    UID_vkImageView_texture_0,
+    UID_vkImageView_texture_end = UID_vkImageView_texture_0 + kMaxAppInstance,
+    UID_vkSampler_texture_0,
+    UID_vkSampler_texture_end = UID_vkSampler_texture_0 + kMaxAppInstance,
+    UID_vkBuffer_vertex_0,
+    UID_vkBuffer_vertex_end = UID_vkBuffer_vertex_0 + kMaxAppInstance,
+    UID_vkBuffer_index_0,
+    UID_vkBuffer_index_end = UID_vkBuffer_index_0 + kMaxAppInstance,
+    UID_vkRenderPass_0,
+    UID_vkRenderPass_end = UID_vkRenderPass_0 + kMaxAppInstance,
+    UID_vkSwapchain_0,
+    UID_vkSwapchain_end = UID_vkSwapchain_0 + kMaxAppInstance,
 
     UID_vkImage_color_0,
     UID_vkImage_color_0_end = UID_vkImage_color_0 + kMaxAppInstance * kMaxSwapchainImage,
@@ -65,9 +81,6 @@ enum AppUid : int
     UID_vkDescriptorSet_0,
     UID_vkDescriptorSet_end = UID_vkDescriptorSet_0 + kMaxAppInstance * kMaxFrameInfight,
 
-    UID_vkShader_vert,
-    UID_vkShader_frag,
-
     UID_wlSurface_0,
     UID_wlSurface_end = UID_wlSurface_0 + kMaxAppInstance,
 };
@@ -88,9 +101,22 @@ public:
         CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
                                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
                                                  vk::CommandPoolCreateFlagBits::eTransient));
-        CHECK_ERR_RET(vk_->createDescriptorPool(
-            UID_vkDescriptorPool_0 + id_, 2, {{vk::DescriptorType::eStorageBuffer, 4}},
-            vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
+        CHECK_ERR_RET(
+            vk_->createDescriptorPool(UID_vkDescriptorPool_0 + id_, 1000,
+                                      {
+                                          {vk::DescriptorType::eSampler, 1000},
+                                          {vk::DescriptorType::eCombinedImageSampler, 1000},
+                                          {vk::DescriptorType::eSampledImage, 1000},
+                                          {vk::DescriptorType::eStorageImage, 1000},
+                                          {vk::DescriptorType::eUniformTexelBuffer, 1000},
+                                          {vk::DescriptorType::eStorageTexelBuffer, 1000},
+                                          {vk::DescriptorType::eUniformBuffer, 1000},
+                                          {vk::DescriptorType::eStorageBuffer, 1000},
+                                          {vk::DescriptorType::eUniformBufferDynamic, 1000},
+                                          {vk::DescriptorType::eStorageBufferDynamic, 1000},
+                                          {vk::DescriptorType::eInputAttachment, 1000},
+                                      },
+                                      vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
 
         return MyErrCode::kOk;
     }
@@ -207,7 +233,8 @@ MyErrCode run()
         CHECK_ERR_RET(wl.createSurface(UID_wlSurface_0 + i, FSTR("vkwl{}", i), FSTR("vkwl{}", i)));
     }
 
-    CHECK_ERR_RET(vk.createInstance("vkwl", {"VK_EXT_debug_utils"}));
+    CHECK_ERR_RET(vk.createInstance(
+        "vkwl", {"VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_wayland_surface"}));
     CHECK_ERR_RET(vk.createPhysicalDevice());
     uint32_t queue_family;
     auto queue_picker = [](uint32_t family_index, vk::QueueFamilyProperties const& prop) -> bool {
@@ -218,13 +245,26 @@ MyErrCode run()
     for (int i = 0; i < kMaxAppInstance; ++i) {
         queue_ids.insert(UID_vkQueue_0 + i);
     }
-    CHECK_ERR_RET(vk.createDeviceAndQueues({}, {{queue_family, queue_ids}}));
+    CHECK_ERR_RET(vk.createDeviceAndQueues({"VK_KHR_swapchain"}, {{queue_family, queue_ids}}));
     CHECK_ERR_RET(vk.createAllocator());
+    CHECK_ERR_RET(
+        vk.createShaderModule(UID_vkShader_vert, toolkit::getDataDir() / "vkwl.vert.spv"));
+    CHECK_ERR_RET(
+        vk.createShaderModule(UID_vkShader_frag, toolkit::getDataDir() / "vkwl.frag.spv"));
 
     std::vector<std::thread> app_threads;
     for (int i = 0; i < kMaxAppInstance; ++i) {
-        wl_surface* surface = wl.getRawSurface(UID_wlSurface_0 + i);
-        CHECK_ERR_RET(apps[i].init(surface, &vk, "model_path", "texture_path"));
+        wl_surface* wl_surface = wl.getSurface(UID_wlSurface_0 + i);
+        VkSurfaceKHR vk_surface;
+        VkWaylandSurfaceCreateInfoKHR surface_ci = {};
+        surface_ci.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+        surface_ci.display = wl.getDisplay();
+        surface_ci.surface = wl_surface;
+        CHECK_VK_RET(
+            vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
+        CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
+        CHECK_ERR_RET(apps[i].init(wl_surface, &vk, toolkit::getDataDir() / "lyran.obj",
+                                   toolkit::getDataDir() / "lyran-diffuse.jpg"));
         app_threads.emplace_back([&apps, i] { apps[i].drawLoop(); });
     }
 

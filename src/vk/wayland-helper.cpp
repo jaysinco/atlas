@@ -103,8 +103,6 @@ Surface& Context::getSurface(Uid id)
     return surfaces_.at(id);
 }
 
-wl_surface* Context::getRawSurface(Uid id) { return getSurface(id).surface_; }
-
 MyErrCode Context::destroySurface(Uid id)
 {
     if (auto it = surfaces_.find(id); it != surfaces_.end()) {
