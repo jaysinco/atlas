@@ -92,14 +92,14 @@ class AppInstance
 public:
     explicit AppInstance(int id): id_(id) {}
 
-    MyErrCode init(wl_surface* wls, myvk::Context* vk, int init_width, int init_height,
+    MyErrCode init(myvk::Context* vk, int init_width, int init_height,
                    std::filesystem::path const& model_path,
                    std::filesystem::path const& texture_path)
     {
-        wls_ = wls;
         vk_ = vk;
         curr_width_ = init_width;
         curr_height_ = init_height;
+        swapchain_image_format_ = vk::Format::eB8G8R8A8Srgb;
         depth_image_format_ = vk::Format::eD32SfloatS8Uint;
         msaa_sample_count_ = vk::SampleCountFlagBits::e4;
 
@@ -126,6 +126,19 @@ public:
                                           {vk::DescriptorType::eInputAttachment, 1000},
                                       },
                                       vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
+
+        for (int i = 0; i < swapchain_image_count_; ++i) {
+            int id_offset = kMaxSwapchainImage * id_ + i;
+            CHECK_ERR_RET(
+                vk_->createBinarySemaphore(UID_vkSemaphore_render_finished_0 + id_offset));
+        }
+
+        for (int i = 0; i < kMaxFrameInfight; ++i) {
+            int id_offset = kMaxFrameInfight * id_ + i;
+            CHECK_ERR_RET(
+                vk_->createBinarySemaphore(UID_vkSemaphore_image_available_0 + id_offset));
+            CHECK_ERR_RET(vk_->createFence(UID_vkFence_inflight_0 + id_offset));
+        }
 
         return MyErrCode::kOk;
     }
@@ -208,15 +221,26 @@ public:
     MyErrCode createSwapchain(bool recreate = false)
     {
         if (recreate) {
+            // CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
             CHECK_ERR_RET(vk_->waitDeviceIdle());
+            for (int i = 0; i < swapchain_image_count_; ++i) {
+                int id_offset = kMaxSwapchainImage * id_ + i;
+                CHECK_ERR_RET(vk_->destroyFramebuffer(UID_vkFrameBuffer_0 + id_offset));
+                CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_depth_0 + id_offset));
+                CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_depth_0 + id_offset));
+                CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_color_0 + id_offset));
+                CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_color_0 + id_offset));
+            }
+            CHECK_ERR_RET(vk_->destroySwapchain(UID_vkSwapchain_0 + id_));
         }
 
-        CHECK_ERR_RET(vk_->createSwapchain(UID_vkSwapchain_0 + id_, UID_vkSurface_0 + id_,
-                                           {.extent = {curr_width_, curr_height_}}));
+        CHECK_ERR_RET(vk_->createSwapchain(
+            UID_vkSwapchain_0 + id_, UID_vkSurface_0 + id_,
+            {.surface_format = {swapchain_image_format_, vk::ColorSpaceKHR::eSrgbNonlinear},
+             .extent = {curr_width_, curr_height_}}));
 
         auto& swapchain = vk_->getSwapchain(UID_vkSwapchain_0 + id_);
         swapchain_image_count_ = swapchain.getImageCount();
-        swapchain_image_format_ = swapchain.getMeta().surface_format.format;
 
         for (int i = 0; i < swapchain_image_count_; ++i) {
             int id_offset = kMaxSwapchainImage * id_ + i;
@@ -253,7 +277,7 @@ public:
 
             CHECK_ERR_RET(vk_->createFramebuffer(
                 UID_vkFrameBuffer_0 + id_offset, UID_vkRenderPass_0 + id_,
-                {UID_vkImage_color_0 + id_offset, UID_vkImage_depth_0 + id_offset,
+                {UID_vkImageView_color_0 + id_offset, UID_vkImageView_depth_0 + id_offset,
                  swapchain.getImageViewId(i)}));
         }
         return MyErrCode::kOk;
@@ -262,14 +286,30 @@ public:
     MyErrCode drawLoop()
     {
         auto exit_guard = toolkit::scopeExit([] { g_app_still_run -= 1; });
+        int curr_frame = 0;
         quit_ = false;
         while (!quit_) {
-            // vk render...
-            // ...
-            // ...
+            uint32_t image_index;
+            bool recreate_swapchain;
+            CHECK_ERR_RET(vk_->acquireNextImage(
+                UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
+                UID_vkSemaphore_render_finished_0 + kMaxSwapchainImage * id_ + curr_frame));
+            if (recreate_swapchain) {
+                CHECK_ERR_RET(createSwapchain(true));
+            }
+
+            CHECK_ERR_RET(vk_->present(
+                UID_vkQueue_0 + id_, UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
+                {UID_vkSemaphore_render_finished_0 + kMaxSwapchainImage * id_ + curr_frame}));
+            if (recreate_swapchain) {
+                CHECK_ERR_RET(createSwapchain(true));
+            }
+
             CHECK_ERR_RET(handleEvent());
+            curr_frame = (curr_frame + 1) % swapchain_image_count_;
         }
 
+        ILOG("quit app {}", id_);
         return MyErrCode::kOk;
     }
 
@@ -277,34 +317,34 @@ public:
     {
         Event ev;
         while (evq_.try_dequeue(ev)) {
-            ILOG("{} receive event {}", id_, static_cast<int>(ev.type));
             switch (ev.type) {
                 case EventType::kSurfaceClose: {
                     quit_ = true;
                     break;
                 }
                 case EventType::kSurfaceResize: {
-                    CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
-                    curr_width_ = ev.ix;
-                    curr_height_ = ev.iy;
-                    CHECK_ERR_RET(createSwapchain());
-                    wl_surface_commit(wls_);
+                    if (ev.ix != curr_width_ || ev.iy != curr_height_) {
+                        // CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
+                        curr_width_ = ev.ix;
+                        curr_height_ = ev.iy;
+                        CHECK_ERR_RET(createSwapchain(true));
+                    }
                     break;
                 }
                 case EventType::kPointerMove: {
-                    CHECK_ERR_RET(sc_.onPointerMove(ev.dx, ev.dy));
+                    // CHECK_ERR_RET(sc_.onPointerMove(ev.dx, ev.dy));
                     break;
                 }
                 case EventType::kPointerPress: {
-                    CHECK_ERR_RET(sc_.onPointerPress(ev.ix, ev.iy));
+                    // CHECK_ERR_RET(sc_.onPointerPress(ev.ix, ev.iy));
                     break;
                 }
                 case EventType::kPointerScroll: {
-                    CHECK_ERR_RET(sc_.onPointerScroll(ev.dx, ev.dy));
+                    // CHECK_ERR_RET(sc_.onPointerScroll(ev.dx, ev.dy));
                     break;
                 }
                 case EventType::kKeyboardPress: {
-                    CHECK_ERR_RET(sc_.onKeyboardPress(ev.ux, ev.ix, quit_));
+                    // CHECK_ERR_RET(sc_.onKeyboardPress(ev.ux, ev.ix, quit_));
                     break;
                 }
                 default:
@@ -322,7 +362,6 @@ public:
 
 private:
     int id_;
-    wl_surface* wls_;
     myvk::Context* vk_;
     moodycamel::ConcurrentQueue<Event> evq_;
     scene::Scene sc_;
@@ -342,7 +381,6 @@ class AppEventHandler: public mywl::EventHandler
 public:
     MyErrCode onEvent(Uid surface_id, mywl::EventData const& event) override
     {
-        ILOG("on event {} {}", surface_id, static_cast<int>(event.type));
         CHECK_ERR_RET(app_surfaces_.at(surface_id)->postEvent(event));
         return MyErrCode::kOk;
     }
@@ -372,7 +410,7 @@ MyErrCode run()
     CHECK_ERR_RET(wl.createDisplay(&app_event));
     for (int i = 0; i < kMaxAppInstance; ++i) {
         CHECK_ERR_RET(app_event.registerAppSurface(UID_wlSurface_0 + i, &apps[i]));
-        CHECK_ERR_RET(wl.createSurface(UID_wlSurface_0 + i, FSTR("vkwl{}", i), FSTR("vkwl{}", i)));
+        CHECK_ERR_RET(wl.createSurface(UID_wlSurface_0 + i, "", FSTR("vkwl-{}", i)));
     }
 
     CHECK_ERR_RET(vk.createInstance(
@@ -396,18 +434,20 @@ MyErrCode run()
 
     std::vector<std::thread> app_threads;
     for (int i = 0; i < kMaxAppInstance; ++i) {
-        wl_surface* wl_surface = wl.getSurface(UID_wlSurface_0 + i);
         VkSurfaceKHR vk_surface;
         VkWaylandSurfaceCreateInfoKHR surface_ci = {};
         surface_ci.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
         surface_ci.display = wl.getDisplay();
-        surface_ci.surface = wl_surface;
+        surface_ci.surface = wl.getSurface(UID_wlSurface_0 + i);
         CHECK_VK_RET(
             vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
         CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
-        CHECK_ERR_RET(apps[i].init(wl_surface, &vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
+        CHECK_ERR_RET(apps[i].init(&vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
                                    toolkit::getDataDir() / "lyran-diffuse.jpg"));
-        app_threads.emplace_back([&apps, i] { apps[i].drawLoop(); });
+        app_threads.emplace_back([&wl, &apps, i] {
+            apps[i].drawLoop();
+            wl.destroySurface(UID_wlSurface_0 + i);
+        });
     }
 
     while (g_app_still_run > 0) {
@@ -429,6 +469,7 @@ MY_MAIN
     MY_TRY
     toolkit::Args args(argc, argv);
     args.parse();
+    CHECK_ERR_RET(toolkit::installCrashHook());
     EASY_MAIN_THREAD;
     profiler::startListen(28077);
     CHECK_ERR_RET(run());

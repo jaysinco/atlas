@@ -90,7 +90,7 @@ void Allocation::invalid(vk::DeviceSize offset, vk::DeviceSize size)
 void Allocation::flush(vk::DeviceSize offset, vk::DeviceSize size)
 {
     if (auto err = vmaFlushAllocation(allocator_, alloc_, offset, size); err != VK_SUCCESS) {
-        MY_THROW("failed to invalidate memory: {}", err);
+        MY_THROW("failed to flush memory: {}", err);
     }
 }
 
@@ -342,6 +342,7 @@ MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& v
             old.second = std::move(val);
         },
         std::move(val));
+    TLOG("create id {} ({})", id, typeid(T).name());
     return MyErrCode::kOk;
 }
 
@@ -349,7 +350,7 @@ template <typename T>
 T& Context::get(UidMap<T>& map, Uid id)
 {
     if (auto it = map.find(id); it == map.end()) {
-        MY_THROW("id not exist: {}", id);
+        MY_THROW("get id not exist: {} ({})", id, typeid(T).name());
     } else {
         return it->second;
     }
@@ -366,14 +367,15 @@ MyErrCode Context::destroy(UidMap<T>& map)
 template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map, Uid id)
 {
-    bool erased = surfaces_.erase_if(id, [&](auto& old) {
+    bool erased = map.erase_if(id, [&](auto& old) {
         destroy(old.second);
         return true;
     });
     if (!erased) {
-        ELOG("id not exist: {}", id);
+        ELOG("destroy id not exist: {} ({})", id, typeid(T).name());
         return MyErrCode::kFailed;
     }
+    TLOG("destroy id {} ({})", id, typeid(T).name());
     return MyErrCode::kOk;
 }
 
@@ -1377,7 +1379,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
 
     auto swap = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
     auto images = CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swap));
-    ILOG("create {} swapchain images with size={}x{}, format={}", images.size(), meta.extent.width,
+    DLOG("create {} swapchain images with size={}x{}, format={}", images.size(), meta.extent.width,
          meta.extent.height, meta.surface_format.format);
 
     ImageMeta image_meta = {.type = vk::ImageType::e2D,

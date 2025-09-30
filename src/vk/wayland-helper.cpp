@@ -8,7 +8,12 @@ namespace mywl
 Surface::Surface() = default;
 
 Surface::Surface(wl_surface* surface, xdg_surface* shell_surface, xdg_toplevel* toplevel)
-    : surface_(surface), shell_surface_(shell_surface), toplevel_(toplevel)
+    : surface_(surface),
+      shell_surface_(shell_surface),
+      toplevel_(toplevel),
+      need_resize_(false),
+      width_(0),
+      height_(0)
 {
 }
 
@@ -189,18 +194,17 @@ void Context::handleRegistry(void* data, wl_registry* registry, uint32_t name,
 {
     Context* ctx = static_cast<Context*>(data);
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
-        CHECK_WL(ctx->compositor_ = (wl_compositor*)wl_registry_bind(
-                     registry, name, &wl_compositor_interface, version));
+        CHECK_WL(ctx->compositor_ =
+                     (wl_compositor*)wl_registry_bind(registry, name, &wl_compositor_interface, 1));
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        CHECK_WL(ctx->shell_ = (xdg_wm_base*)wl_registry_bind(registry, name,
-                                                              &xdg_wm_base_interface, version));
+        CHECK_WL(ctx->shell_ =
+                     (xdg_wm_base*)wl_registry_bind(registry, name, &xdg_wm_base_interface, 1));
         xdg_wm_base_add_listener(ctx->shell_, &shell_listener, data);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
-        CHECK_WL(ctx->seat_ =
-                     (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, version));
+        CHECK_WL(ctx->seat_ = (wl_seat*)wl_registry_bind(registry, name, &wl_seat_interface, 1));
         wl_seat_add_listener(ctx->seat_, &seat_listener, data);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
-        CHECK_WL(ctx->shm_ = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, version));
+        CHECK_WL(ctx->shm_ = (wl_shm*)wl_registry_bind(registry, name, &wl_shm_interface, 1));
         CHECK_WL(ctx->cursor_theme_ = wl_cursor_theme_load(nullptr, 24, ctx->shm_));
         CHECK_WL(ctx->cursor_ = wl_cursor_theme_get_cursor(ctx->cursor_theme_, "left_ptr"));
     }
