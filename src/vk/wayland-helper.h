@@ -5,6 +5,7 @@
 #include <map>
 #include "toolkit/format.h"
 #include "toolkit/toolkit.h"
+#include <parallel_hashmap/phmap.h>
 
 #define CHECK_WL(err) \
     if (!(err)) ELOG("failed to call wl")
@@ -21,6 +22,12 @@ namespace mywl
 {
 
 using Uid = toolkit::Uid;
+
+template <typename T>
+using UidMap = phmap::parallel_node_hash_map_m<Uid, T>;
+
+template <typename T>
+using UidRevMap = phmap::parallel_node_hash_map_m<T, Uid>;
 
 class Surface
 {
@@ -114,9 +121,21 @@ private:
     static void handleKeyboardRepeat(void* data, wl_keyboard* wl_keyboard, int32_t rate,
                                      int32_t delay);
 
+private:
+    template <typename T>
+    MyErrCode create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& val);
+    template <typename T>
+    T& get(UidMap<T>& map, Uid id);
+
     Uid getSurfaceId(wl_surface* surface);
     Uid getSurfaceId(xdg_surface* shell_surface);
     Uid getSurfaceId(xdg_toplevel* toplevel);
+
+    template <typename T>
+    MyErrCode destroy(UidMap<T>& map);
+    template <typename T>
+    MyErrCode destroy(UidMap<T>& map, Uid id);
+    MyErrCode destroy(Surface const& surface);
 
 private:
     wl_display* display_;
@@ -131,9 +150,12 @@ private:
     wl_cursor* cursor_;
     wl_surface* cursor_surface_;
 
-    EventHandler* event_handler_;
-    std::map<Uid, Surface> surfaces_;
+    UidMap<Surface> surfaces_;
+    UidRevMap<wl_surface*> wl_surfaces_;
+    UidRevMap<xdg_surface*> shell_surfaces_;
+    UidRevMap<xdg_toplevel*> toplevels_;
 
+    EventHandler* event_handler_;
     Uid pointer_surface_id_ = Uid::kNull;
     Uid keyboard_surface_id_ = Uid::kNull;
 

@@ -221,8 +221,7 @@ public:
     MyErrCode createSwapchain(bool recreate = false)
     {
         if (recreate) {
-            // CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
-            CHECK_ERR_RET(vk_->waitDeviceIdle());
+            CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
             for (int i = 0; i < swapchain_image_count_; ++i) {
                 int id_offset = kMaxSwapchainImage * id_ + i;
                 CHECK_ERR_RET(vk_->destroyFramebuffer(UID_vkFrameBuffer_0 + id_offset));
