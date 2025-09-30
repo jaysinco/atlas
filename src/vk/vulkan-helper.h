@@ -325,6 +325,9 @@ public:
     Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
               std::vector<Uid> const& image_ids, std::vector<Uid> const& image_view_ids);
     SwapchainMeta const& getMeta() const;
+    uint32_t getImageCount() const;
+    Uid getImageId(int image_index) const;
+    Uid getImageViewId(int image_index) const;
     operator vk::SwapchainKHR() const;
     operator bool() const;
 

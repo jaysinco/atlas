@@ -92,15 +92,24 @@ class AppInstance
 public:
     explicit AppInstance(int id): id_(id) {}
 
-    MyErrCode init(wl_surface* wls, myvk::Context* vk, std::filesystem::path const& model_path,
+    MyErrCode init(wl_surface* wls, myvk::Context* vk, int init_width, int init_height,
+                   std::filesystem::path const& model_path,
                    std::filesystem::path const& texture_path)
     {
         wls_ = wls;
         vk_ = vk;
+        curr_width_ = init_width;
+        curr_height_ = init_height;
+        depth_image_format_ = vk::Format::eD32SfloatS8Uint;
+        msaa_sample_count_ = vk::SampleCountFlagBits::e4;
+
+        CHECK_ERR_RET(createRenderPass());
+        CHECK_ERR_RET(createSwapchain());
 
         CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
                                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
                                                  vk::CommandPoolCreateFlagBits::eTransient));
+
         CHECK_ERR_RET(
             vk_->createDescriptorPool(UID_vkDescriptorPool_0 + id_, 1000,
                                       {
@@ -127,7 +136,128 @@ public:
         return MyErrCode::kOk;
     }
 
-    MyErrCode recreateSwapchain() { return MyErrCode::kOk; }
+    MyErrCode createRenderPass()
+    {
+        vk::AttachmentDescription color_attach{{},
+                                               swapchain_image_format_,
+                                               msaa_sample_count_,
+                                               vk::AttachmentLoadOp::eClear,
+                                               vk::AttachmentStoreOp::eStore,
+                                               vk::AttachmentLoadOp::eDontCare,
+                                               vk::AttachmentStoreOp::eDontCare,
+                                               vk::ImageLayout::eUndefined,
+                                               vk::ImageLayout::eColorAttachmentOptimal};
+
+        vk::AttachmentReference color_attach_ref{0, vk::ImageLayout::eColorAttachmentOptimal};
+
+        vk::AttachmentDescription depth_attach{{},
+                                               depth_image_format_,
+                                               msaa_sample_count_,
+                                               vk::AttachmentLoadOp::eClear,
+                                               vk::AttachmentStoreOp::eDontCare,
+                                               vk::AttachmentLoadOp::eDontCare,
+                                               vk::AttachmentStoreOp::eDontCare,
+                                               vk::ImageLayout::eUndefined,
+                                               vk::ImageLayout::eDepthStencilAttachmentOptimal};
+
+        vk::AttachmentReference depth_attach_ref{1,
+                                                 vk::ImageLayout::eDepthStencilAttachmentOptimal};
+
+        vk::AttachmentDescription resolve_attach{{},
+                                                 swapchain_image_format_,
+                                                 vk::SampleCountFlagBits::e1,
+                                                 vk::AttachmentLoadOp::eDontCare,
+                                                 vk::AttachmentStoreOp::eStore,
+                                                 vk::AttachmentLoadOp::eDontCare,
+                                                 vk::AttachmentStoreOp::eDontCare,
+                                                 vk::ImageLayout::eUndefined,
+                                                 vk::ImageLayout::ePresentSrcKHR};
+
+        vk::AttachmentReference resolve_attach_ref{2, vk::ImageLayout::eColorAttachmentOptimal};
+
+        myvk::RenderPassMeta meta;
+        meta.attachments = {color_attach, depth_attach, resolve_attach};
+        meta.attachment_refs = {color_attach_ref, depth_attach_ref, resolve_attach_ref};
+
+        vk::SubpassDescription subpass{{},
+                                       vk::PipelineBindPoint::eGraphics,
+                                       0,
+                                       nullptr,
+                                       1,
+                                       &meta.attachment_refs[0],
+                                       &meta.attachment_refs[2],
+                                       &meta.attachment_refs[1]};
+
+        vk::SubpassDependency dependency{vk::SubpassExternal,
+                                         0,
+                                         vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                                             vk::PipelineStageFlagBits::eEarlyFragmentTests,
+                                         vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                                             vk::PipelineStageFlagBits::eEarlyFragmentTests,
+                                         vk::AccessFlagBits::eNone,
+                                         vk::AccessFlagBits::eColorAttachmentWrite |
+                                             vk::AccessFlagBits::eDepthStencilAttachmentWrite};
+
+        meta.subpasses = {subpass};
+        meta.dependencies = {dependency};
+
+        CHECK_ERR_RET(vk_->createRenderPass(UID_vkRenderPass_0 + id_, meta));
+        return MyErrCode::kOk;
+    }
+
+    MyErrCode createSwapchain(bool recreate = false)
+    {
+        if (recreate) {
+            CHECK_ERR_RET(vk_->waitDeviceIdle());
+        }
+
+        CHECK_ERR_RET(vk_->createSwapchain(UID_vkSwapchain_0 + id_, UID_vkSurface_0 + id_,
+                                           {.extent = {curr_width_, curr_height_}}));
+
+        auto& swapchain = vk_->getSwapchain(UID_vkSwapchain_0 + id_);
+        swapchain_image_count_ = swapchain.getImageCount();
+        swapchain_image_format_ = swapchain.getMeta().surface_format.format;
+
+        for (int i = 0; i < swapchain_image_count_; ++i) {
+            int id_offset = kMaxSwapchainImage * id_ + i;
+            CHECK_ERR_RET(
+                vk_->createImage(UID_vkImage_color_0 + id_offset,
+                                 {
+                                     .format = swapchain_image_format_,
+                                     .aspects = vk::ImageAspectFlagBits::eColor,
+                                     .extent = {curr_width_, curr_height_, 1},
+                                     .mip_levels = 1,
+                                     .samples = msaa_sample_count_,
+                                     .usages = vk::ImageUsageFlagBits::eTransientAttachment |
+                                               vk::ImageUsageFlagBits::eColorAttachment,
+                                 },
+                                 vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+            CHECK_ERR_RET(vk_->createImageView(UID_vkImageView_color_0 + id_offset,
+                                               UID_vkImage_color_0 + id_offset, {}));
+
+            CHECK_ERR_RET(
+                vk_->createImage(UID_vkImage_depth_0 + id_offset,
+                                 {
+                                     .format = depth_image_format_,
+                                     .aspects = vk::ImageAspectFlagBits::eDepth,
+                                     .extent = {curr_width_, curr_height_, 1},
+                                     .mip_levels = 1,
+                                     .samples = msaa_sample_count_,
+                                     .usages = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                                 },
+                                 vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+            CHECK_ERR_RET(vk_->createImageView(UID_vkImageView_depth_0 + id_offset,
+                                               UID_vkImage_depth_0 + id_offset, {}));
+
+            CHECK_ERR_RET(vk_->createFramebuffer(
+                UID_vkFrameBuffer_0 + id_offset, UID_vkRenderPass_0 + id_,
+                {UID_vkImage_color_0 + id_offset, UID_vkImage_depth_0 + id_offset,
+                 swapchain.getImageViewId(i)}));
+        }
+        return MyErrCode::kOk;
+    }
 
     MyErrCode drawLoop()
     {
@@ -155,6 +285,10 @@ public:
                 }
                 case EventType::kSurfaceResize: {
                     CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
+                    curr_width_ = ev.ix;
+                    curr_height_ = ev.iy;
+                    CHECK_ERR_RET(createSwapchain());
+                    wl_surface_commit(wls_);
                     break;
                 }
                 case EventType::kPointerMove: {
@@ -192,7 +326,15 @@ private:
     myvk::Context* vk_;
     moodycamel::ConcurrentQueue<Event> evq_;
     scene::Scene sc_;
+
     bool quit_;
+    uint32_t curr_width_;
+    uint32_t curr_height_;
+    uint32_t swapchain_image_count_;
+    vk::Format swapchain_image_format_;
+    vk::Format depth_image_format_;
+    uint32_t texture_mip_levels_;
+    vk::SampleCountFlagBits msaa_sample_count_;
 };
 
 class AppEventHandler: public mywl::EventHandler
@@ -263,7 +405,7 @@ MyErrCode run()
         CHECK_VK_RET(
             vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
         CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
-        CHECK_ERR_RET(apps[i].init(wl_surface, &vk, toolkit::getDataDir() / "lyran.obj",
+        CHECK_ERR_RET(apps[i].init(wl_surface, &vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
                                    toolkit::getDataDir() / "lyran-diffuse.jpg"));
         app_threads.emplace_back([&apps, i] { apps[i].drawLoop(); });
     }

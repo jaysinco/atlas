@@ -173,6 +173,12 @@ Swapchain::Swapchain(SwapchainMeta const& meta, vk::SwapchainKHR swapchain,
 
 SwapchainMeta const& Swapchain::getMeta() const { return meta_; }
 
+uint32_t Swapchain::getImageCount() const { return image_ids_.size(); }
+
+Uid Swapchain::getImageId(int image_index) const { return image_ids_.at(image_index); }
+
+Uid Swapchain::getImageViewId(int image_index) const { return image_view_ids_.at(image_index); }
+
 Swapchain::operator vk::SwapchainKHR() const { return swapchain_; }
 
 Swapchain::operator bool() const { return swapchain_; }
