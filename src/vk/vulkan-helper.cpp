@@ -338,11 +338,12 @@ MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& v
     map.try_emplace_l(
         id,
         [&](auto& old) {
+            TLOG("destroy id {} ({})", id, typeid(T).name());
             destroy(old.second);
             old.second = std::move(val);
         },
         std::move(val));
-    TLOG("create id {} ({})", id, typeid(T).name());
+    CHECK_ERR_RET(debugCreate(id, map.at(id)));
     return MyErrCode::kOk;
 }
 
@@ -357,9 +358,19 @@ T& Context::get(UidMap<T>& map, Uid id)
 }
 
 template <typename T>
+MyErrCode Context::debugCreate(Uid id, T const& val)
+{
+    TLOG("create id {} ({})", id, typeid(T).name());
+    return MyErrCode::kOk;
+}
+
+template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map)
 {
-    map.for_each([&](auto const& v) { destroy(v.second); });
+    map.for_each([&](auto const& v) {
+        TLOG("destroy id {} ({})", v.first, typeid(T).name());
+        destroy(v.second);
+    });
     map.clear();
     return MyErrCode::kOk;
 }
@@ -368,6 +379,7 @@ template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map, Uid id)
 {
     bool erased = map.erase_if(id, [&](auto& old) {
+        TLOG("destroy id {} ({})", id, typeid(T).name());
         destroy(old.second);
         return true;
     });
@@ -375,7 +387,6 @@ MyErrCode Context::destroy(UidMap<T>& map, Uid id)
         ELOG("destroy id not exist: {} ({})", id, typeid(T).name());
         return MyErrCode::kFailed;
     }
-    TLOG("destroy id {} ({})", id, typeid(T).name());
     return MyErrCode::kOk;
 }
 
@@ -1379,8 +1390,6 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
 
     auto swap = CHECK_VKHPP_VAL(device_.createSwapchainKHR(swapchain_info));
     auto images = CHECK_VKHPP_VAL(device_.getSwapchainImagesKHR(swap));
-    DLOG("create {} swapchain images with size={}x{}, format={}", images.size(), meta.extent.width,
-         meta.extent.height, meta.surface_format.format);
 
     ImageMeta image_meta = {.type = vk::ImageType::e2D,
                             .format = meta.surface_format.format,
@@ -1407,6 +1416,15 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
     }
 
     return create(swapchains_, id, Swapchain{meta, swap, image_ids, view_ids});
+}
+
+MyErrCode Context::debugCreate(Uid id, Swapchain const& swapchain)
+{
+    auto& meta = swapchain.getMeta();
+    ILOG("create id {} ({}): images={}, size={}x{}, format={}", id, typeid(Swapchain).name(),
+         swapchain.getImageCount(), meta.extent.width, meta.extent.height,
+         meta.surface_format.format);
+    return MyErrCode::kOk;
 }
 
 Swapchain& Context::getSwapchain(Uid id) { return get(swapchains_, id); }

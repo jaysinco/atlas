@@ -583,6 +583,11 @@ private:
 
     template <typename T>
     MyErrCode create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& val);
+
+    template <typename T>
+    MyErrCode debugCreate(Uid id, T const& val);
+    MyErrCode debugCreate(Uid id, Swapchain const& swapchain);
+
     template <typename T>
     T& get(UidMap<T>& map, Uid id);
 

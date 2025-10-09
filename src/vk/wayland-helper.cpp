@@ -36,9 +36,7 @@ wl_display* Context::getDisplay() { return display_; }
 
 MyErrCode Context::destroy()
 {
-    while (!surfaces_.empty()) {
-        CHECK_ERR_RET(destroySurface(surfaces_.begin()->first));
-    }
+    CHECK_ERR_RET(destroy(surfaces_));
     if (cursor_surface_) {
         wl_surface_destroy(cursor_surface_);
     }
@@ -74,10 +72,6 @@ MyErrCode Context::destroy()
 
 MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string const& title)
 {
-    if (surfaces_.find(id) != surfaces_.end()) {
-        CHECK_ERR_RET(destroySurface(id));
-    }
-
     wl_surface* surface;
     xdg_surface* shell_surface;
     xdg_toplevel* toplevel;
@@ -85,7 +79,11 @@ MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string 
     CHECK_WL_RET(surface = wl_compositor_create_surface(compositor_));
     CHECK_WL_RET(shell_surface = xdg_wm_base_get_xdg_surface(shell_, surface));
     CHECK_WL_RET(toplevel = xdg_surface_get_toplevel(shell_surface));
-    surfaces_[id] = {surface, shell_surface, toplevel};
+
+    CHECK_ERR_RET(create(surfaces_, id, Surface{surface, shell_surface, toplevel}));
+    wl_surfaces_.insert(std::make_pair(surface, id));
+    shell_surfaces_.insert(std::make_pair(shell_surface, id));
+    toplevels_.insert(std::make_pair(toplevel, id));
 
     xdg_surface_add_listener(shell_surface, &shell_surface_listener, this);
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, this);
@@ -100,27 +98,9 @@ MyErrCode Context::createSurface(Uid id, std::string const& app_id, std::string 
     return MyErrCode::kOk;
 }
 
-Surface& Context::getSurface(Uid id)
-{
-    if (surfaces_.find(id) == surfaces_.end()) {
-        MY_THROW("surface not exist: {}", id);
-    }
-    return surfaces_.at(id);
-}
+Surface& Context::getSurface(Uid id) { return get(surfaces_, id); }
 
-MyErrCode Context::destroySurface(Uid id)
-{
-    if (auto it = surfaces_.find(id); it != surfaces_.end()) {
-        xdg_toplevel_destroy(it->second.toplevel_);
-        xdg_surface_destroy(it->second.shell_surface_);
-        wl_surface_destroy(it->second.surface_);
-        surfaces_.erase(it);
-        return MyErrCode::kOk;
-    } else {
-        ELOG("surface not exist: {}", id);
-        return MyErrCode::kFailed;
-    }
-}
+MyErrCode Context::destroySurface(Uid id) { return destroy(surfaces_, id); }
 
 MyErrCode Context::dispatch()
 {
@@ -128,25 +108,87 @@ MyErrCode Context::dispatch()
     return MyErrCode::kOk;
 }
 
+template <typename T>
+MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& val)
+{
+    map.try_emplace_l(
+        id,
+        [&](auto& old) {
+            TLOG("destroy id {} ({})", id, typeid(T).name());
+            destroy(old.second);
+            old.second = std::move(val);
+        },
+        std::move(val));
+    TLOG("create id {} ({})", id, typeid(T).name());
+    return MyErrCode::kOk;
+}
+
+template <typename T>
+T& Context::get(UidMap<T>& map, Uid id)
+{
+    if (auto it = map.find(id); it == map.end()) {
+        MY_THROW("get id not exist: {} ({})", id, typeid(T).name());
+    } else {
+        return it->second;
+    }
+}
+
 Uid Context::getSurfaceId(wl_surface* surface)
 {
-    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
-                           [&](auto& s) { return s.second.surface_ == surface; });
-    return it == surfaces_.end() ? Uid::kNull : it->first;
+    auto it = wl_surfaces_.find(surface);
+    return it == wl_surfaces_.end() ? Uid::kNull : it->second;
 }
 
 Uid Context::getSurfaceId(xdg_surface* shell_surface)
 {
-    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
-                           [&](auto& s) { return s.second.shell_surface_ == shell_surface; });
-    return it == surfaces_.end() ? Uid::kNull : it->first;
+    auto it = shell_surfaces_.find(shell_surface);
+    return it == shell_surfaces_.end() ? Uid::kNull : it->second;
 }
 
 Uid Context::getSurfaceId(xdg_toplevel* toplevel)
 {
-    auto it = std::find_if(surfaces_.begin(), surfaces_.end(),
-                           [&](auto& s) { return s.second.toplevel_ == toplevel; });
-    return it == surfaces_.end() ? Uid::kNull : it->first;
+    auto it = toplevels_.find(toplevel);
+    return it == toplevels_.end() ? Uid::kNull : it->second;
+}
+
+template <typename T>
+MyErrCode Context::destroy(UidMap<T>& map)
+{
+    map.for_each([&](auto const& v) {
+        TLOG("destroy id {} ({})", v.first, typeid(T).name());
+        destroy(v.second);
+    });
+    map.clear();
+    return MyErrCode::kOk;
+}
+
+template <typename T>
+MyErrCode Context::destroy(UidMap<T>& map, Uid id)
+{
+    bool erased = map.erase_if(id, [&](auto& old) {
+        TLOG("destroy id {} ({})", id, typeid(T).name());
+        destroy(old.second);
+        return true;
+    });
+    if (!erased) {
+        ELOG("destroy id not exist: {} ({})", id, typeid(T).name());
+        return MyErrCode::kFailed;
+    }
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::destroy(Surface const& surface)
+{
+    // lock order should be same as create
+    wl_surfaces_.erase(surface.surface_);
+    shell_surfaces_.erase(surface.shell_surface_);
+    toplevels_.erase(surface.toplevel_);
+
+    xdg_toplevel_destroy(surface.toplevel_);
+    xdg_surface_destroy(surface.shell_surface_);
+    wl_surface_destroy(surface.surface_);
+
+    return MyErrCode::kOk;
 }
 
 wl_registry_listener Context::registry_listener = {
