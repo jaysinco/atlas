@@ -222,8 +222,6 @@ struct GraphicPipelineMeta
     vk::CompareOp depth_compare_op = vk::CompareOp::eLess;
     std::vector<vk::VertexInputBindingDescription> vert_input_binds;
     std::vector<vk::VertexInputAttributeDescription> vert_input_attrs;
-    std::vector<vk::DynamicState> dynamic_states = {vk::DynamicState::eViewport,
-                                                    vk::DynamicState::eScissor};
 };
 
 class Allocation
@@ -523,8 +521,9 @@ public:
     MyErrCode copyHostToImage(Uid queue_id, Uid command_pool_id, void const* src_host,
                               Uid dst_img_id, vk::ImageLayout dst_img_layout,
                               ImageSubArea dst_img_area = {});
-    MyErrCode generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_id,
-                              vk::ImageLayout image_layout);
+    MyErrCode generateMipmaps(
+        Uid queue_id, Uid command_pool_id, Uid image_id, vk::ImageLayout image_input_layout,
+        vk::ImageLayout image_output_layout = vk::ImageLayout::eTransferSrcOptimal);
     MyErrCode updateDescriptorSet(
         Uid set_id, std::map<uint32_t, WriteDescriptorSetBinding> const& write_bindings);
     MyErrCode waitDeviceIdle();

@@ -229,7 +229,12 @@ MyErrCode Texture::load(std::filesystem::path const& file_path)
 
 std::vector<uint8_t> const& Texture::getData() const { return data_; }
 
-std::pair<int, int> Texture::getSize() const { return {width_, height_}; }
+std::pair<uint32_t, uint32_t> Texture::getSize() const { return {width_, height_}; }
+
+uint32_t Texture::getMaxMipLevels() const
+{
+    return std::floor(std::log2(std::max(width_, height_))) + 1;
+}
 
 void Texture::unload()
 {

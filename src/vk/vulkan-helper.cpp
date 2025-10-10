@@ -656,6 +656,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     vk::PhysicalDeviceVulkan12Features feat_12;
     vk::PhysicalDeviceVulkan13Features feat_13;
 
+    feat_10.features.sampleRateShading = true;
     feat_12.timelineSemaphore = true;
     feat_13.synchronization2 = true;
 
@@ -796,9 +797,9 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
 MyErrCode Context::debugCreate(Uid id, Image const& image)
 {
     auto& meta = image.getMeta();
-    TLOG("create id {} ({}): format {}, extent {}x{}x{}, layers {}, mip levels {}, samplers {}", id,
+    TLOG("create id {} ({}): format {}, extent {}x{}x{}, levels {}, layers {}, samplers {}", id,
          typeid(Image).name(), meta.format, meta.extent.width, meta.extent.height,
-         meta.extent.depth, meta.layers, meta.mip_levels, meta.samples);
+         meta.extent.depth, meta.mip_levels, meta.layers, meta.samples);
     return MyErrCode::kOk;
 }
 
@@ -928,7 +929,9 @@ MyErrCode Context::createGraphicPipeline(Uid id, GraphicPipelineMeta const& meta
             {}, vk::ShaderStageFlagBits::eFragment, getShaderModule(meta.frag_shader_id), "main"});
     }
 
-    vk::PipelineDynamicStateCreateInfo dynamic_states{{}, meta.dynamic_states};
+    std::vector<vk::DynamicState> dynamic_state_lst{vk::DynamicState::eViewport,
+                                                    vk::DynamicState::eScissor};
+    vk::PipelineDynamicStateCreateInfo dynamic_states{{}, dynamic_state_lst};
 
     vk::PipelineVertexInputStateCreateInfo vert_input{
         {}, meta.vert_input_binds, meta.vert_input_attrs};
@@ -1162,7 +1165,8 @@ MyErrCode CommandBuffer::pipelineImageBarrier(Uid image_id, ImageBarrierMeta con
     if (meta.old_layout == meta.new_layout) {
         return MyErrCode::kOk;
     }
-    DLOG("transform image {} layout: {} -> {}", image_id, meta.old_layout, meta.new_layout);
+    DLOG("transform image layout {}: {} -> {}, levels {}/{}", image_id, meta.old_layout,
+         meta.new_layout, range.base_level, range.num_levels);
     Image image = ctx_->getImage(image_id);
     completeImageSubRange(image, range);
     vk::ImageMemoryBarrier2 barrier(
@@ -1339,7 +1343,8 @@ MyErrCode Context::copyHostToImage(Uid queue_id, Uid command_pool_id, void const
 }
 
 MyErrCode Context::generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_id,
-                                   vk::ImageLayout image_layout)
+                                   vk::ImageLayout image_input_layout,
+                                   vk::ImageLayout image_output_layout)
 {
     Image& image = getImage(image_id);
     ImageMeta const& meta = image.getMeta();
@@ -1348,7 +1353,8 @@ MyErrCode Context::generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_
     }
 
     CHECK_ERR_RET(oneTimeSubmit(queue_id, command_pool_id, [&](CommandBuffer& cmd) -> MyErrCode {
-        cmd.pipelineImageBarrier(image_id, image_layout, vk::ImageLayout::eTransferDstOptimal);
+        cmd.pipelineImageBarrier(image_id, image_input_layout,
+                                 vk::ImageLayout::eTransferDstOptimal);
         for (uint32_t i = 1; i < meta.mip_levels; ++i) {
             cmd.pipelineImageBarrier(image_id, vk::ImageLayout::eTransferDstOptimal,
                                      vk::ImageLayout::eTransferSrcOptimal, {i - 1, 1});
@@ -1357,6 +1363,8 @@ MyErrCode Context::generateMipmaps(Uid queue_id, Uid command_pool_id, Uid image_
         }
         cmd.pipelineImageBarrier(image_id, vk::ImageLayout::eTransferDstOptimal,
                                  vk::ImageLayout::eTransferSrcOptimal, {meta.mip_levels - 1, 1});
+        cmd.pipelineImageBarrier(image_id, vk::ImageLayout::eTransferSrcOptimal,
+                                 image_output_layout);
         return MyErrCode::kOk;
     }));
 

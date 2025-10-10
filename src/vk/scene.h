@@ -110,12 +110,13 @@ class Texture
 public:
     MyErrCode load(std::filesystem::path const& file_path);
     std::vector<uint8_t> const& getData() const;
-    std::pair<int, int> getSize() const;
+    std::pair<uint32_t, uint32_t> getSize() const;
+    uint32_t getMaxMipLevels() const;
     void unload();
 
 private:
-    int width_;
-    int height_;
+    uint32_t width_;
+    uint32_t height_;
     std::vector<uint8_t> data_;
 };
 
@@ -130,16 +131,16 @@ struct UniformBuffer
 
 struct GuiState
 {
-    double last_mouse_x;
-    double last_mouse_y;
-    bool left_mouse_pressed;
-    bool right_mouse_pressed;
-    bool middle_mouse_pressed;
-    bool shift_down;
-    bool ctrl_down;
-    bool show_demo;
-    bool wire_frame;
-    bool face_clockwise;
+    double last_mouse_x = 0.0;
+    double last_mouse_y = 0.0;
+    bool left_mouse_pressed = false;
+    bool right_mouse_pressed = false;
+    bool middle_mouse_pressed = false;
+    bool shift_down = false;
+    bool ctrl_down = false;
+    bool show_demo = false;
+    bool wire_frame = false;
+    bool face_clockwise = false;
 };
 
 class Scene

@@ -83,6 +83,11 @@ enum AppUid : int
 
     UID_wlSurface_0,
     UID_wlSurface_end = UID_wlSurface_0 + kMaxAppInstance,
+
+    UID_scModel_0,
+    UID_scModel_end = UID_scModel_0 + kMaxAppInstance,
+    UID_scTexture_0,
+    UID_scTexture_end = UID_scTexture_0 + kMaxAppInstance,
 };
 
 // NOLINTEND
@@ -126,6 +131,52 @@ public:
                                           {vk::DescriptorType::eInputAttachment, 1000},
                                       },
                                       vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
+
+        CHECK_ERR_RET(vk_->createDescriptorSetLayout(
+            UID_vkDescriptorSetLayout_0 + id_,
+            {
+                {vk::DescriptorType::eUniformBuffer,
+                 vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment},
+                {vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment},
+            }));
+
+        CHECK_ERR_RET(vk_->createPipelineLayout(UID_vkPipelineLayout_0 + id_,
+                                                {UID_vkDescriptorSetLayout_0 + id_}));
+
+        CHECK_ERR_RET(createPipeline(false));
+
+        // upload texture
+        CHECK_ERR_RET(sc_.createTexture(UID_scTexture_0 + id_, texture_path));
+        auto& texture = sc_.getTexture(UID_scTexture_0 + id_);
+        auto texture_size = texture.getSize();
+        auto texture_mip_levels = texture.getMaxMipLevels();
+
+        CHECK_ERR_RET(vk_->createImage(
+            UID_vkImage_texture_0 + id_,
+            {
+                .format = vk::Format::eB8G8R8A8Srgb,
+                .aspects = vk::ImageAspectFlagBits::eColor,
+                .extent = {texture_size.first, texture_size.second, 1},
+                .mip_levels = texture_mip_levels,
+                .samples = vk::SampleCountFlagBits::e1,
+                .usages = vk::ImageUsageFlagBits::eTransferSrc |
+                          vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+            },
+            vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+        CHECK_ERR_RET(vk_->copyHostToImage(UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_,
+                                           texture.getData().data(), UID_vkImage_texture_0 + id_,
+                                           vk::ImageLayout::eUndefined));
+        CHECK_ERR_RET(vk_->generateMipmaps(
+            UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_, UID_vkImage_texture_0 + id_,
+            vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal));
+
+        CHECK_ERR_RET(
+            vk_->createImageView(UID_vkImageView_texture_0 + id_, UID_vkImage_texture_0 + id_, {}));
+
+        // upload model
+        CHECK_ERR_RET(sc_.createModel(UID_scModel_0 + id_, model_path));
+        auto& model = sc_.getModel(UID_scModel_0 + id_);
 
         for (int i = 0; i < swapchain_image_count_; ++i) {
             int id_offset = kMaxSwapchainImage * id_ + i;
@@ -287,6 +338,35 @@ public:
             CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_color_0 + id_offset));
         }
         CHECK_ERR_RET(vk_->destroySwapchain(UID_vkSwapchain_0 + id_));
+        return MyErrCode::kOk;
+    }
+
+    MyErrCode createPipeline(bool recreate)
+    {
+        if (recreate) {
+            CHECK_ERR_RET(vk_->destroyPipeline(UID_vkPipeline_0 + id_));
+        }
+
+        vk::VertexInputBindingDescription input_bind{0, sizeof(scene::Vertex),
+                                                     vk::VertexInputRate::eVertex};
+
+        std::vector<vk::VertexInputAttributeDescription> input_attrs(3);
+        input_attrs[0] = {0, 0, vk::Format::eR32G32B32Sfloat, offsetof(scene::Vertex, pos)};
+        input_attrs[1] = {1, 0, vk::Format::eR32G32B32Sfloat, offsetof(scene::Vertex, normal)};
+        input_attrs[2] = {2, 0, vk::Format::eR32G32Sfloat, offsetof(scene::Vertex, tex_coord)};
+
+        CHECK_ERR_RET(vk_->createGraphicPipeline(
+            UID_vkPipeline_0 + id_, {
+                                        .pipeline_layout_id = UID_vkPipelineLayout_0 + id_,
+                                        .render_pass_id = UID_vkRenderPass_0 + id_,
+                                        .vert_shader_id = UID_vkShader_vert,
+                                        .frag_shader_id = UID_vkShader_frag,
+                                        .polygon_mode = vk::PolygonMode::eFill,
+                                        .front_face = vk::FrontFace::eClockwise,
+                                        .raster_samples = msaa_sample_count_,
+                                        .vert_input_binds = {input_bind},
+                                        .vert_input_attrs = input_attrs,
+                                    }));
         return MyErrCode::kOk;
     }
 
@@ -510,10 +590,11 @@ MyErrCode run()
         CHECK_VK_RET(
             vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
         CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
-        CHECK_ERR_RET(apps[i].init(&vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
-                                   toolkit::getDataDir() / "lyran-diffuse.jpg"));
-        app_threads.emplace_back([&wl, &apps, i] {
+        app_threads.emplace_back([&wl, &vk, &apps, i] {
+            apps[i].init(&vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
+                         toolkit::getDataDir() / "lyran-diffuse.jpg");
             apps[i].drawLoop();
+            apps[i].destroy();
             wl.destroySurface(UID_wlSurface_0 + i);
             g_app_still_run -= 1;
         });
@@ -526,7 +607,6 @@ MyErrCode run()
 
     for (int i = 0; i < kMaxAppInstance; ++i) {
         app_threads[i].join();
-        CHECK_ERR_RET(apps[i].destroy());
     }
 
     CHECK_ERR_RET(vk.destroy());
