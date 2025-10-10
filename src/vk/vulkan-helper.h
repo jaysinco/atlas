@@ -586,7 +586,10 @@ private:
 
     template <typename T>
     MyErrCode debugCreate(Uid id, T const& val);
+    MyErrCode debugCreate(Uid id, Buffer const& buffer);
+    MyErrCode debugCreate(Uid id, Image const& image);
     MyErrCode debugCreate(Uid id, Swapchain const& swapchain);
+    MyErrCode debugCreate(Uid id, Queue const& queue);
 
     template <typename T>
     T& get(UidMap<T>& map, Uid id);

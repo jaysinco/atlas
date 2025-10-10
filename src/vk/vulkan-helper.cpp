@@ -338,8 +338,8 @@ MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& v
     map.try_emplace_l(
         id,
         [&](auto& old) {
-            TLOG("destroy id {} ({})", id, typeid(T).name());
             destroy(old.second);
+            TLOG("destroy id {} ({})", id, typeid(T).name());
             old.second = std::move(val);
         },
         std::move(val));
@@ -368,8 +368,8 @@ template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map)
 {
     map.for_each([&](auto const& v) {
-        TLOG("destroy id {} ({})", v.first, typeid(T).name());
         destroy(v.second);
+        TLOG("destroy id {} ({})", v.first, typeid(T).name());
     });
     map.clear();
     return MyErrCode::kOk;
@@ -379,8 +379,8 @@ template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map, Uid id)
 {
     bool erased = map.erase_if(id, [&](auto& old) {
-        TLOG("destroy id {} ({})", id, typeid(T).name());
         destroy(old.second);
+        TLOG("destroy id {} ({})", id, typeid(T).name());
         return true;
     });
     if (!erased) {
@@ -486,6 +486,12 @@ MyErrCode Context::destroy(DescriptorSet const& descriptor_set)
 
 MyErrCode Context::destroy(Swapchain const& swapchain)
 {
+    for (auto id: swapchain.image_ids_) {
+        CHECK_ERR_RET(destroyImage(id));
+    }
+    for (auto id: swapchain.image_view_ids_) {
+        CHECK_ERR_RET(destroyImageView(id));
+    }
     device_.destroy(swapchain);
     return MyErrCode::kOk;
 }
@@ -669,10 +675,17 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
         for (auto id: ids) {
             auto queue = device_.getQueue(family, i++);
             CHECK_ERR_RET(create(queues_, id, Queue{queue, family}));
-            DLOG("create queue {}: family {}, {}", id, family, family_props[family].queueFlags);
         }
     }
 
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::debugCreate(Uid id, Queue const& queue)
+{
+    auto family_props = physical_device_.getQueueFamilyProperties();
+    DLOG("create id {} ({}): family index {}, flags {}", id, typeid(Queue).name(),
+         queue.family_index_, family_props[queue.family_index_].queueFlags);
     return MyErrCode::kOk;
 }
 
@@ -747,7 +760,14 @@ MyErrCode Context::createBuffer(Uid id, BufferMeta const& meta, vk::MemoryProper
     CHECK_VK_RET(vmaCreateBuffer(allocator_, buffer_info, &creation_info, &buf, &alloc, nullptr));
 
     CHECK_ERR_RET(create(buffers_, id, Buffer{meta, buf, alloc, allocator_}));
-    DLOG("create buffer {}: {} bytes, {}", id, meta.size, buffers_.at(id).getMemProp());
+    return MyErrCode::kOk;
+}
+
+MyErrCode Context::debugCreate(Uid id, Buffer const& buffer)
+{
+    auto& meta = buffer.getMeta();
+    DLOG("create id {} ({}): bytes {}, properties {}", id, typeid(Buffer).name(), meta.size,
+         buffer.getMemProp());
     return MyErrCode::kOk;
 }
 
@@ -771,6 +791,15 @@ MyErrCode Context::createImage(Uid id, ImageMeta const& meta, vk::MemoryProperty
     CHECK_VK_RET(vmaCreateImage(allocator_, image_info, &vma_info, &img, &alloc, nullptr));
 
     return create(images_, id, Image{meta, img, alloc, allocator_});
+}
+
+MyErrCode Context::debugCreate(Uid id, Image const& image)
+{
+    auto& meta = image.getMeta();
+    TLOG("create id {} ({}): format {}, extent {}x{}x{}, layers {}, mip levels {}, samplers {}", id,
+         typeid(Image).name(), meta.format, meta.extent.width, meta.extent.height,
+         meta.extent.depth, meta.layers, meta.mip_levels, meta.samples);
+    return MyErrCode::kOk;
 }
 
 Image& Context::getImage(Uid id) { return get(images_, id); }
@@ -1421,7 +1450,7 @@ MyErrCode Context::createSwapchain(Uid id, Uid surface_id, SwapchainMeta const& 
 MyErrCode Context::debugCreate(Uid id, Swapchain const& swapchain)
 {
     auto& meta = swapchain.getMeta();
-    ILOG("create id {} ({}): images={}, size={}x{}, format={}", id, typeid(Swapchain).name(),
+    DLOG("create id {} ({}): images {}, extent {}x{}, format {}", id, typeid(Swapchain).name(),
          swapchain.getImageCount(), meta.extent.width, meta.extent.height,
          meta.surface_format.format);
     return MyErrCode::kOk;
@@ -1630,9 +1659,9 @@ MyErrCode Context::destroy()
     CHECK_ERR_RET(destroy(fences_));
     CHECK_ERR_RET(destroy(semaphores_));
     CHECK_ERR_RET(destroy(command_buffers_));
+    CHECK_ERR_RET(destroy(swapchains_));
     CHECK_ERR_RET(destroy(image_views_));
     CHECK_ERR_RET(destroy(images_));
-    CHECK_ERR_RET(destroy(swapchains_));
     CHECK_ERR_RET(destroy(buffers_));
     CHECK_ERR_RET(destroy(samplers_));
     CHECK_ERR_RET(destroy(shader_modules_));

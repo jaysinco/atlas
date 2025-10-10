@@ -114,8 +114,8 @@ MyErrCode Context::create(UidMap<std::remove_reference_t<T>>& map, Uid id, T&& v
     map.try_emplace_l(
         id,
         [&](auto& old) {
-            TLOG("destroy id {} ({})", id, typeid(T).name());
             destroy(old.second);
+            TLOG("destroy id {} ({})", id, typeid(T).name());
             old.second = std::move(val);
         },
         std::move(val));
@@ -155,8 +155,8 @@ template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map)
 {
     map.for_each([&](auto const& v) {
-        TLOG("destroy id {} ({})", v.first, typeid(T).name());
         destroy(v.second);
+        TLOG("destroy id {} ({})", v.first, typeid(T).name());
     });
     map.clear();
     return MyErrCode::kOk;
@@ -166,8 +166,8 @@ template <typename T>
 MyErrCode Context::destroy(UidMap<T>& map, Uid id)
 {
     bool erased = map.erase_if(id, [&](auto& old) {
-        TLOG("destroy id {} ({})", id, typeid(T).name());
         destroy(old.second);
+        TLOG("destroy id {} ({})", id, typeid(T).name());
         return true;
     });
     if (!erased) {
