@@ -159,7 +159,7 @@ struct SwapchainMeta
     vk::SurfaceFormatKHR surface_format = {vk::Format::eB8G8R8A8Srgb,
                                            vk::ColorSpaceKHR::eSrgbNonlinear};
     vk::Extent2D extent = {0, 0};
-    vk::PresentModeKHR mode = vk::PresentModeKHR::eMailbox;
+    vk::PresentModeKHR mode = vk::PresentModeKHR::eFifo;
     vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eColorAttachment;
 };
 
@@ -308,7 +308,7 @@ private:
 class SemaphoreSubmitInfo
 {
 public:
-    SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages);
+    SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages = vk::PipelineStageFlagBits2::eNone);
     SemaphoreSubmitInfo(Uid id, vk::PipelineStageFlags2 stages, uint64_t val);
     SemaphoreSubmitInfo(Uid id, uint64_t val);
 
@@ -430,7 +430,11 @@ public:
     MyErrCode bindComputePipeline(Uid pipeline_id);
     MyErrCode bindDescriptorSets(vk::PipelineBindPoint bind_point, Uid pipeline_layout_id,
                                  std::vector<Uid> const& set_ids);
+    MyErrCode beginRenderPass(Uid render_pass_id, Uid framebuffer_id, vk::Rect2D render_area,
+                              std::vector<vk::ClearValue> clear_values,
+                              vk::SubpassContents contents);
 
+    using vk::CommandBuffer::beginRenderPass;
     using vk::CommandBuffer::bindDescriptorSets;
     using vk::CommandBuffer::blitImage;
     using vk::CommandBuffer::copyBufferToImage;

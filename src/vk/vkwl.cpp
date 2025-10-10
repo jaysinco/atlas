@@ -104,7 +104,7 @@ public:
         msaa_sample_count_ = vk::SampleCountFlagBits::e4;
 
         CHECK_ERR_RET(createRenderPass());
-        CHECK_ERR_RET(createSwapchain());
+        CHECK_ERR_RET(createSwapchain(false));
 
         CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
                                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
@@ -137,7 +137,9 @@ public:
             int id_offset = kMaxFrameInfight * id_ + i;
             CHECK_ERR_RET(
                 vk_->createBinarySemaphore(UID_vkSemaphore_image_available_0 + id_offset));
-            CHECK_ERR_RET(vk_->createFence(UID_vkFence_inflight_0 + id_offset));
+            CHECK_ERR_RET(vk_->createFence(UID_vkFence_inflight_0 + id_offset, true));
+            CHECK_ERR_RET(vk_->createCommandBuffer(UID_vkCommandBuffer_0 + id_offset,
+                                                   UID_vkCommandPool_0 + id_));
         }
 
         return MyErrCode::kOk;
@@ -218,7 +220,7 @@ public:
         return MyErrCode::kOk;
     }
 
-    MyErrCode createSwapchain(bool recreate = false)
+    MyErrCode createSwapchain(bool recreate)
     {
         if (recreate) {
             CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
@@ -282,30 +284,90 @@ public:
         return MyErrCode::kOk;
     }
 
+    MyErrCode recordFrame(myvk::CommandBuffer& cmd, int curr_frame, int image_index)
+    {
+        std::vector<vk::ClearValue> clear_values(2);
+        clear_values[0] = vk::ClearColorValue{0.1f * (id_ + 1), 0.5f * id_, 0.0f, 1.0f};
+        clear_values[1] = vk::ClearDepthStencilValue{1.0f, 0};
+
+        cmd.beginRenderPass(
+            UID_vkRenderPass_0 + id_, UID_vkFrameBuffer_0 + kMaxSwapchainImage * id_ + image_index,
+            {{0, 0}, {curr_width_, curr_height_}}, clear_values, vk::SubpassContents::eInline);
+
+        // vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+        // VkBuffer vertex_buffers[] = {vertex_buffer.buf};
+        // VkDeviceSize vertex_buffer_offsets[] = {0};
+        // vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_buffer_offsets);
+        // vkCmdBindIndexBuffer(command_buffer, index_buffer.buf, 0, VK_INDEX_TYPE_UINT32);
+
+        vk::Viewport viewport{
+            0.0f, 0.0f, static_cast<float>(curr_width_), static_cast<float>(curr_height_),
+            0.0f, 1.0f};
+        cmd.setViewport(0, viewport);
+
+        vk::Rect2D scissor{{0, 0}, {curr_width_, curr_height_}};
+        cmd.setScissor(0, scissor);
+
+        // vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
+        // 0,
+        //                         1, &descriptor_sets[curr_frame], 0, nullptr);
+        //
+        // vkCmdDrawIndexed(command_buffer, scene->getIndexSize(), 1, 0, 0, 0);
+
+        // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
+
+        cmd.endRenderPass();
+        return MyErrCode::kOk;
+    }
+
     MyErrCode drawLoop()
     {
-        auto exit_guard = toolkit::scopeExit([] { g_app_still_run -= 1; });
         int curr_frame = 0;
         quit_ = false;
         while (!quit_) {
+            int inflight_id_offset = kMaxFrameInfight * id_ + curr_frame;
+
+            CHECK_ERR_RET(vk_->waitFences({UID_vkFence_inflight_0 + inflight_id_offset}));
+
             uint32_t image_index;
             bool recreate_swapchain;
-            CHECK_ERR_RET(vk_->acquireNextImage(
-                UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
-                UID_vkSemaphore_render_finished_0 + kMaxSwapchainImage * id_ + curr_frame));
+            CHECK_ERR_RET(
+                vk_->acquireNextImage(UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
+                                      UID_vkSemaphore_image_available_0 + inflight_id_offset));
             if (recreate_swapchain) {
+                ILOG("acquire next image need recreate swapchain");
                 CHECK_ERR_RET(createSwapchain(true));
+                continue;
             }
 
-            CHECK_ERR_RET(vk_->present(
-                UID_vkQueue_0 + id_, UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
-                {UID_vkSemaphore_render_finished_0 + kMaxSwapchainImage * id_ + curr_frame}));
+            int swap_id_offset = kMaxSwapchainImage * id_ + image_index;
+
+            CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_id_offset}));
+
+            CHECK_ERR_RET(vk_->recordCommand(
+                UID_vkCommandBuffer_0 + inflight_id_offset,
+                vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+                [=](myvk::CommandBuffer& cmd) { return recordFrame(cmd, curr_frame, image_index); },
+                true));
+
+            CHECK_ERR_RET(vk_->submit(UID_vkQueue_0 + id_,
+                                      UID_vkCommandBuffer_0 + inflight_id_offset,
+                                      {{UID_vkSemaphore_image_available_0 + inflight_id_offset,
+                                        vk::PipelineStageFlagBits2::eColorAttachmentOutput}},
+                                      {{UID_vkSemaphore_render_finished_0 + swap_id_offset}},
+                                      UID_vkFence_inflight_0 + inflight_id_offset));
+
+            CHECK_ERR_RET(vk_->present(UID_vkQueue_0 + id_, UID_vkSwapchain_0 + id_, image_index,
+                                       recreate_swapchain,
+                                       {UID_vkSemaphore_render_finished_0 + swap_id_offset}));
             if (recreate_swapchain) {
+                ILOG("present need recreate swapchain");
                 CHECK_ERR_RET(createSwapchain(true));
             }
 
             CHECK_ERR_RET(handleEvent());
-            curr_frame = (curr_frame + 1) % swapchain_image_count_;
+            curr_frame = (curr_frame + 1) % kMaxFrameInfight;
         }
 
         ILOG("quit app {}", id_);
@@ -446,12 +508,14 @@ MyErrCode run()
         app_threads.emplace_back([&wl, &apps, i] {
             apps[i].drawLoop();
             wl.destroySurface(UID_wlSurface_0 + i);
+            g_app_still_run -= 1;
         });
     }
 
     while (g_app_still_run > 0) {
-        CHECK_ERR_RET(wl.dispatch());
+        CHECK_ERR_RET(wl.dispatch(false));
     }
+    CHECK_ERR_RET(wl.dispatch(true));
 
     for (int i = 0; i < kMaxAppInstance; ++i) {
         app_threads[i].join();

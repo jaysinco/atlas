@@ -102,9 +102,13 @@ Surface& Context::getSurface(Uid id) { return get(surfaces_, id); }
 
 MyErrCode Context::destroySurface(Uid id) { return destroy(surfaces_, id); }
 
-MyErrCode Context::dispatch()
+MyErrCode Context::dispatch(bool sync)
 {
-    wl_display_roundtrip(display_);
+    if (sync) {
+        wl_display_roundtrip(display_);
+    } else {
+        wl_display_dispatch(display_);
+    }
     return MyErrCode::kOk;
 }
 

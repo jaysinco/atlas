@@ -1245,6 +1245,18 @@ MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
     return MyErrCode::kOk;
 }
 
+MyErrCode CommandBuffer::beginRenderPass(Uid render_pass_id, Uid framebuffer_id,
+                                         vk::Rect2D render_area,
+                                         std::vector<vk::ClearValue> clear_values,
+                                         vk::SubpassContents contents)
+{
+    vk::RenderPassBeginInfo begin_info{ctx_->getRenderPass(render_pass_id),
+                                       ctx_->getFramebuffer(framebuffer_id), render_area,
+                                       clear_values};
+    beginRenderPass(begin_info, contents);
+    return MyErrCode::kOk;
+}
+
 MyErrCode Context::copyBufferToBuffer(Uid queue_id, Uid command_pool_id, Uid src_buf_id,
                                       Uid dst_buf_id, vk::DeviceSize src_offset,
                                       vk::DeviceSize dst_offset, vk::DeviceSize size)

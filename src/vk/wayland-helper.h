@@ -80,7 +80,7 @@ public:
     MyErrCode createSurface(Uid id, std::string const& app_id, std::string const& title);
     wl_display* getDisplay();
     Surface& getSurface(Uid id);
-    MyErrCode dispatch();
+    MyErrCode dispatch(bool sync);
     MyErrCode destroySurface(Uid id);
     MyErrCode destroy();
 
