@@ -104,7 +104,7 @@ public:
         msaa_sample_count_ = vk::SampleCountFlagBits::e4;
 
         CHECK_ERR_RET(createRenderPass());
-        CHECK_ERR_RET(createSwapchain(false));
+        CHECK_ERR_RET(createSwapImages(false));
 
         CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
                                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
@@ -220,19 +220,10 @@ public:
         return MyErrCode::kOk;
     }
 
-    MyErrCode createSwapchain(bool recreate)
+    MyErrCode createSwapImages(bool recreate)
     {
         if (recreate) {
-            CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
-            for (int i = 0; i < swapchain_image_count_; ++i) {
-                int id_offset = kMaxSwapchainImage * id_ + i;
-                CHECK_ERR_RET(vk_->destroyFramebuffer(UID_vkFrameBuffer_0 + id_offset));
-                CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_depth_0 + id_offset));
-                CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_depth_0 + id_offset));
-                CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_color_0 + id_offset));
-                CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_color_0 + id_offset));
-            }
-            CHECK_ERR_RET(vk_->destroySwapchain(UID_vkSwapchain_0 + id_));
+            CHECK_ERR_RET(destroySwapImages());
         }
 
         CHECK_ERR_RET(vk_->createSwapchain(
@@ -284,10 +275,25 @@ public:
         return MyErrCode::kOk;
     }
 
+    MyErrCode destroySwapImages()
+    {
+        CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
+        for (int i = 0; i < swapchain_image_count_; ++i) {
+            int id_offset = kMaxSwapchainImage * id_ + i;
+            CHECK_ERR_RET(vk_->destroyFramebuffer(UID_vkFrameBuffer_0 + id_offset));
+            CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_depth_0 + id_offset));
+            CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_depth_0 + id_offset));
+            CHECK_ERR_RET(vk_->destroyImageView(UID_vkImageView_color_0 + id_offset));
+            CHECK_ERR_RET(vk_->destroyImage(UID_vkImage_color_0 + id_offset));
+        }
+        CHECK_ERR_RET(vk_->destroySwapchain(UID_vkSwapchain_0 + id_));
+        return MyErrCode::kOk;
+    }
+
     MyErrCode recordFrame(myvk::CommandBuffer& cmd, int curr_frame, int image_index)
     {
         std::vector<vk::ClearValue> clear_values(2);
-        clear_values[0] = vk::ClearColorValue{0.1f * (id_ + 1), 0.5f * id_, 0.0f, 1.0f};
+        clear_values[0] = vk::ClearColorValue{0.0f, 0.0f, 0.0f, 1.0f};
         clear_values[1] = vk::ClearDepthStencilValue{1.0f, 0};
 
         cmd.beginRenderPass(
@@ -326,50 +332,51 @@ public:
         int curr_frame = 0;
         quit_ = false;
         while (!quit_) {
-            int inflight_id_offset = kMaxFrameInfight * id_ + curr_frame;
+            int inflight_frame_id_offset = kMaxFrameInfight * id_ + curr_frame;
 
-            CHECK_ERR_RET(vk_->waitFences({UID_vkFence_inflight_0 + inflight_id_offset}));
+            CHECK_ERR_RET(vk_->waitFences({UID_vkFence_inflight_0 + inflight_frame_id_offset}));
 
             uint32_t image_index;
             bool recreate_swapchain;
-            CHECK_ERR_RET(
-                vk_->acquireNextImage(UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
-                                      UID_vkSemaphore_image_available_0 + inflight_id_offset));
+            CHECK_ERR_RET(vk_->acquireNextImage(
+                UID_vkSwapchain_0 + id_, image_index, recreate_swapchain,
+                UID_vkSemaphore_image_available_0 + inflight_frame_id_offset));
             if (recreate_swapchain) {
                 ILOG("acquire next image need recreate swapchain");
-                CHECK_ERR_RET(createSwapchain(true));
+                CHECK_ERR_RET(createSwapImages(true));
                 continue;
             }
 
-            int swap_id_offset = kMaxSwapchainImage * id_ + image_index;
+            int swap_image_id_offset = kMaxSwapchainImage * id_ + image_index;
 
-            CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_id_offset}));
+            CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_frame_id_offset}));
 
             CHECK_ERR_RET(vk_->recordCommand(
-                UID_vkCommandBuffer_0 + inflight_id_offset,
+                UID_vkCommandBuffer_0 + inflight_frame_id_offset,
                 vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-                [=](myvk::CommandBuffer& cmd) { return recordFrame(cmd, curr_frame, image_index); },
+                [&](myvk::CommandBuffer& cmd) { return recordFrame(cmd, curr_frame, image_index); },
                 true));
 
-            CHECK_ERR_RET(vk_->submit(UID_vkQueue_0 + id_,
-                                      UID_vkCommandBuffer_0 + inflight_id_offset,
-                                      {{UID_vkSemaphore_image_available_0 + inflight_id_offset,
-                                        vk::PipelineStageFlagBits2::eColorAttachmentOutput}},
-                                      {{UID_vkSemaphore_render_finished_0 + swap_id_offset}},
-                                      UID_vkFence_inflight_0 + inflight_id_offset));
+            CHECK_ERR_RET(
+                vk_->submit(UID_vkQueue_0 + id_, UID_vkCommandBuffer_0 + inflight_frame_id_offset,
+                            {{UID_vkSemaphore_image_available_0 + inflight_frame_id_offset,
+                              vk::PipelineStageFlagBits2::eColorAttachmentOutput}},
+                            {{UID_vkSemaphore_render_finished_0 + swap_image_id_offset}},
+                            UID_vkFence_inflight_0 + inflight_frame_id_offset));
 
             CHECK_ERR_RET(vk_->present(UID_vkQueue_0 + id_, UID_vkSwapchain_0 + id_, image_index,
                                        recreate_swapchain,
-                                       {UID_vkSemaphore_render_finished_0 + swap_id_offset}));
+                                       {UID_vkSemaphore_render_finished_0 + swap_image_id_offset}));
             if (recreate_swapchain) {
                 ILOG("present need recreate swapchain");
-                CHECK_ERR_RET(createSwapchain(true));
+                CHECK_ERR_RET(createSwapImages(true));
             }
 
             CHECK_ERR_RET(handleEvent());
             curr_frame = (curr_frame + 1) % kMaxFrameInfight;
         }
 
+        CHECK_ERR_RET(destroySwapImages());
         ILOG("quit app {}", id_);
         return MyErrCode::kOk;
     }
@@ -388,7 +395,7 @@ public:
                         // CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
                         curr_width_ = ev.ix;
                         curr_height_ = ev.iy;
-                        CHECK_ERR_RET(createSwapchain(true));
+                        CHECK_ERR_RET(createSwapImages(true));
                     }
                     break;
                 }

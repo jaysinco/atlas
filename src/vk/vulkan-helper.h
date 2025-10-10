@@ -159,7 +159,7 @@ struct SwapchainMeta
     vk::SurfaceFormatKHR surface_format = {vk::Format::eB8G8R8A8Srgb,
                                            vk::ColorSpaceKHR::eSrgbNonlinear};
     vk::Extent2D extent = {0, 0};
-    vk::PresentModeKHR mode = vk::PresentModeKHR::eFifo;
+    vk::PresentModeKHR mode = vk::PresentModeKHR::eMailbox;
     vk::ImageUsageFlags usages = vk::ImageUsageFlagBits::eColorAttachment;
 };
 
