@@ -11,7 +11,7 @@
 #include <easy/profiler.h>
 #include <easy/arbitrary_value.h>
 
-static constexpr int kMaxAppInstance = 2;
+static constexpr int kMaxAppInstance = 1;
 static constexpr int kMaxSwapchainImage = 10;
 static constexpr int kMaxFrameInfight = 2;
 
@@ -500,8 +500,10 @@ public:
 
     MyErrCode drawLoop()
     {
-        int curr_frame = 0;
         quit_ = false;
+        int curr_frame = 0;
+        auto last_time = std::chrono::high_resolution_clock::now();
+
         while (!quit_) {
             int inflight_frame_id_offset = kMaxFrameInfight * id_ + curr_frame;
 
@@ -522,8 +524,14 @@ public:
 
             CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_frame_id_offset}));
 
+            auto curr_time = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<float> delta_duration = curr_time - last_time;
+            float delta_time = delta_duration.count();
+            last_time = curr_time;
+
             ImGuiIO& io = ImGui::GetIO();
             io.DisplaySize = ImVec2(curr_width_, curr_height_);
+            io.DeltaTime = delta_time;
             ImGui_ImplVulkan_NewFrame();
             ImGui::NewFrame();
             bool recreate_pipeline = false;
