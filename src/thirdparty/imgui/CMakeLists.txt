@@ -7,9 +7,12 @@ add_library(imgui STATIC
     ${TC_INSTALL_DIR}/src/imgui/backends/imgui_impl_vulkan.cpp
 )
 
+target_compile_definitions(imgui PUBLIC IMGUI_USER_CONFIG="myimconfig.h")
+
 target_link_libraries(imgui vulkan dl)
 
 target_include_directories(imgui PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}
     ${TC_INSTALL_DIR}/src
     ${TC_INSTALL_DIR}/src/imgui
 )

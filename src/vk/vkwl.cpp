@@ -19,6 +19,7 @@ using Uid = toolkit::Uid;
 using Event = mywl::EventData;
 using EventType = mywl::EventType;
 
+thread_local ImGuiContext* MyImGuiTLS;
 static std::atomic<int> g_app_still_run = kMaxAppInstance;
 
 // NOLINTBEGIN
@@ -244,20 +245,22 @@ public:
                 }));
         }
 
-        // CHECK_ERR_RET(setupImgui());
+        CHECK_ERR_RET(setupImgui());
 
         return MyErrCode::kOk;
     }
 
     MyErrCode destroy()
     {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui::DestroyContext();
         CHECK_ERR_RET(sc_.destroy());
         return MyErrCode::kOk;
     }
 
     MyErrCode setupImgui()
     {
-        ImGui::CreateContext();
+        ImGui::SetCurrentContext(ImGui::CreateContext());
 
         ImGuiIO& io = ImGui::GetIO();
         io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
@@ -484,7 +487,7 @@ public:
 
         cmd.drawIndexed(sc_.getModel(UID_scModel_0 + id_).getIndicesCount(), 1, 0, 0, 0);
 
-        // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
         cmd.endRenderPass();
         return MyErrCode::kOk;
@@ -513,6 +516,17 @@ public:
             int swap_image_id_offset = kMaxSwapchainImage * id_ + image_index;
 
             CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_frame_id_offset}));
+
+            ImGuiIO& io = ImGui::GetIO();
+            io.DisplaySize = ImVec2(curr_width_, curr_height_);
+            ImGui_ImplVulkan_NewFrame();
+            ImGui::NewFrame();
+            bool recreate_pipeline = false;
+            CHECK_ERR_RET(sc_.onFrameDraw(recreate_pipeline));
+            if (recreate_pipeline) {
+                CHECK_ERR_RET(createPipeline(true));
+            }
+            ImGui::Render();
 
             void* uniform_mapped_data =
                 vk_->getBuffer(UID_vkBuffer_uniform_0 + inflight_frame_id_offset).getMappedData();
@@ -560,7 +574,7 @@ public:
                 }
                 case EventType::kSurfaceResize: {
                     if (ev.ix != curr_width_ || ev.iy != curr_height_) {
-                        // CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
+                        CHECK_ERR_RET(sc_.onSurfaceResize(ev.ix, ev.iy));
                         curr_width_ = ev.ix;
                         curr_height_ = ev.iy;
                         CHECK_ERR_RET(createSwapImages(true));
@@ -568,19 +582,19 @@ public:
                     break;
                 }
                 case EventType::kPointerMove: {
-                    // CHECK_ERR_RET(sc_.onPointerMove(ev.dx, ev.dy));
+                    CHECK_ERR_RET(sc_.onPointerMove(ev.dx, ev.dy));
                     break;
                 }
                 case EventType::kPointerPress: {
-                    // CHECK_ERR_RET(sc_.onPointerPress(ev.ix, ev.iy));
+                    CHECK_ERR_RET(sc_.onPointerPress(ev.ix, ev.iy));
                     break;
                 }
                 case EventType::kPointerScroll: {
-                    // CHECK_ERR_RET(sc_.onPointerScroll(ev.dx, ev.dy));
+                    CHECK_ERR_RET(sc_.onPointerScroll(ev.dx, ev.dy));
                     break;
                 }
                 case EventType::kKeyboardPress: {
-                    // CHECK_ERR_RET(sc_.onKeyboardPress(ev.ux, ev.ix, quit_));
+                    CHECK_ERR_RET(sc_.onKeyboardPress(ev.ux, ev.ix, quit_));
                     break;
                 }
                 default:
