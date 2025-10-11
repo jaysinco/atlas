@@ -158,7 +158,7 @@ MyErrCode Model::load(std::filesystem::path const& file_path)
     bbox_.lower = glm::vec3(std::numeric_limits<float>::max());
     bbox_.high = glm::vec3(std::numeric_limits<float>::min());
     CHECK_ERR_RET(visitNode(scene, scene->mRootNode));
-    index_size_ = indices_.size();
+    indices_count_ = indices_.size();
 
     glm::vec3 center = (bbox_.high + bbox_.lower) / 2.0f;
     glm::vec3 size = bbox_.high - bbox_.lower;
@@ -208,7 +208,7 @@ std::vector<Vertex> const& Model::getVertices() const { return vertices_; }
 
 std::vector<uint32_t> const& Model::getIndices() const { return indices_; }
 
-uint32_t Model::getIndexSize() const { return index_size_; }
+uint32_t Model::getIndicesCount() const { return indices_count_; }
 
 MyErrCode Texture::load(std::filesystem::path const& file_path)
 {

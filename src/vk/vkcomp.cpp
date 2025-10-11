@@ -117,7 +117,7 @@ MY_MAIN
         cmd.pushConstants(UID_vkPipelineLayout_compute, vk::ShaderStageFlagBits::eCompute, 0,
                           sizeof(contants), &contants);
 
-        cmd.bindComputePipeline(UID_vkPipeline_square);
+        cmd.bindPipeline(UID_vkPipeline_square, vk::PipelineBindPoint::eCompute);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, UID_vkPipelineLayout_compute,
                                {UID_vkDescriptorSet_square});
         cmd.dispatch(num_elements, 1, 1);
@@ -127,7 +127,7 @@ MY_MAIN
                                    .dst_stage = vk::PipelineStageFlagBits2::eComputeShader,
                                    .dst_access = vk::AccessFlagBits2::eShaderRead});
 
-        cmd.bindComputePipeline(UID_vkPipeline_mul2);
+        cmd.bindPipeline(UID_vkPipeline_mul2, vk::PipelineBindPoint::eCompute);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, UID_vkPipelineLayout_compute,
                                {UID_vkDescriptorSet_mul2});
         cmd.dispatch(num_elements, 1, 1);

@@ -189,6 +189,8 @@ uint32_t Queue::getFamilyIndex() const { return family_index_; }
 
 Queue::operator vk::Queue() const { return queue_; }
 
+Queue::operator VkQueue() const { return queue_; }
+
 Queue::operator bool() const { return queue_; }
 
 DescriptorSetLayout::DescriptorSetLayout(
@@ -657,6 +659,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
     vk::PhysicalDeviceVulkan13Features feat_13;
 
     feat_10.features.sampleRateShading = true;
+    feat_10.features.samplerAnisotropy = true;
     feat_12.timelineSemaphore = true;
     feat_13.synchronization2 = true;
 
@@ -1232,9 +1235,9 @@ MyErrCode CommandBuffer::pushConstants(Uid pipeline_layout_id, vk::ShaderStageFl
     return MyErrCode::kOk;
 }
 
-MyErrCode CommandBuffer::bindComputePipeline(Uid pipeline_id)
+MyErrCode CommandBuffer::bindPipeline(Uid pipeline_id, vk::PipelineBindPoint bind_point)
 {
-    bindPipeline(vk::PipelineBindPoint::eCompute, ctx_->getPipeline(pipeline_id));
+    bindPipeline(bind_point, ctx_->getPipeline(pipeline_id));
     return MyErrCode::kOk;
 }
 
@@ -1246,6 +1249,19 @@ MyErrCode CommandBuffer::bindDescriptorSets(vk::PipelineBindPoint bind_point,
         sets.push_back(ctx_->getDescriptorSet(id));
     }
     bindDescriptorSets(bind_point, ctx_->getPipelineLayout(pipeline_layout_id), 0, sets, {});
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::bindVertexBuffer(Uid buffer_id, uint32_t binding)
+{
+    vk::Buffer buffer = ctx_->getBuffer(buffer_id);
+    bindVertexBuffers(binding, buffer, {0});
+    return MyErrCode::kOk;
+}
+
+MyErrCode CommandBuffer::bindIndexBuffer(Uid buffer_id, vk::IndexType index_type)
+{
+    bindIndexBuffer(ctx_->getBuffer(buffer_id), 0, index_type);
     return MyErrCode::kOk;
 }
 
@@ -1386,6 +1402,12 @@ MyErrCode Context::updateDescriptorSet(
         vk::DescriptorType type = set.layout_bindings_->at(binding).descriptorType;
         switch (type) {
             case vk::DescriptorType::eStorageBuffer: {
+                auto& buffer = getBuffer(write.id_0_);
+                buffer_infos.emplace_back(buffer, 0, buffer.getMeta().size);
+                set_writes.emplace_back(set, binding, 0, 1, type, nullptr, &buffer_infos.back());
+                break;
+            }
+            case vk::DescriptorType::eUniformBuffer: {
                 auto& buffer = getBuffer(write.id_0_);
                 buffer_infos.emplace_back(buffer, 0, buffer.getMeta().size);
                 set_writes.emplace_back(set, binding, 0, 1, type, nullptr, &buffer_infos.back());

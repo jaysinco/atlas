@@ -343,6 +343,7 @@ public:
     Queue(vk::Queue queue, uint32_t family_index);
     uint32_t getFamilyIndex() const;
     operator vk::Queue() const;
+    operator VkQueue() const;
     operator bool() const;
 
 private:
@@ -425,15 +426,19 @@ public:
                                    vk::ImageLayout new_layout, ImageSubRange range = {});
     MyErrCode pushConstants(Uid pipeline_layout_id, vk::ShaderStageFlags stages, uint32_t offset,
                             uint32_t size, void const* data);
-    MyErrCode bindComputePipeline(Uid pipeline_id);
+    MyErrCode bindPipeline(Uid pipeline_id, vk::PipelineBindPoint bind_point);
     MyErrCode bindDescriptorSets(vk::PipelineBindPoint bind_point, Uid pipeline_layout_id,
                                  std::vector<Uid> const& set_ids);
+    MyErrCode bindVertexBuffer(Uid buffer_id, uint32_t binding = 0);
+    MyErrCode bindIndexBuffer(Uid buffer_id, vk::IndexType index_type = vk::IndexType::eUint32);
     MyErrCode beginRenderPass(Uid render_pass_id, Uid framebuffer_id, vk::Rect2D render_area,
                               std::vector<vk::ClearValue> clear_values,
                               vk::SubpassContents contents);
 
     using vk::CommandBuffer::beginRenderPass;
     using vk::CommandBuffer::bindDescriptorSets;
+    using vk::CommandBuffer::bindIndexBuffer;
+    using vk::CommandBuffer::bindPipeline;
     using vk::CommandBuffer::blitImage;
     using vk::CommandBuffer::copyBufferToImage;
     using vk::CommandBuffer::pushConstants;

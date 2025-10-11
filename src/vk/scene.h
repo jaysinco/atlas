@@ -90,7 +90,7 @@ public:
     glm::mat4 getModelMatrix() const;
     std::vector<Vertex> const& getVertices() const;
     std::vector<uint32_t> const& getIndices() const;
-    uint32_t getIndexSize() const;
+    uint32_t getIndicesCount() const;
 
 private:
     MyErrCode visitNode(aiScene const* scene, aiNode const* node);
@@ -98,7 +98,7 @@ private:
 
 private:
     friend class Scene;
-    uint32_t index_size_;
+    uint32_t indices_count_;
     std::vector<Vertex> vertices_;
     std::vector<uint32_t> indices_;
     BoundingBox bbox_;

@@ -5,6 +5,7 @@
 #include "toolkit/logging.h"
 #include <thread>
 #include <moodycamel/concurrentqueue.h>
+#include <imgui/backends/imgui_impl_vulkan.h>
 #define BUILD_WITH_EASY_PROFILER
 #define USING_EASY_PROFILER
 #include <easy/profiler.h>
@@ -111,6 +112,18 @@ public:
         CHECK_ERR_RET(createRenderPass());
         CHECK_ERR_RET(createSwapImages(false));
 
+        CHECK_ERR_RET(vk_->createDescriptorSetLayout(
+            UID_vkDescriptorSetLayout_0 + id_,
+            {
+                {vk::DescriptorType::eUniformBuffer,
+                 vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment},
+                {vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment},
+            }));
+
+        CHECK_ERR_RET(vk_->createPipelineLayout(UID_vkPipelineLayout_0 + id_,
+                                                {UID_vkDescriptorSetLayout_0 + id_}));
+        CHECK_ERR_RET(createPipeline(false));
+
         CHECK_ERR_RET(vk_->createCommandPool(UID_vkCommandPool_0 + id_, UID_vkQueue_0 + id_,
                                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer |
                                                  vk::CommandPoolCreateFlagBits::eTransient));
@@ -131,19 +144,6 @@ public:
                                           {vk::DescriptorType::eInputAttachment, 1000},
                                       },
                                       vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet));
-
-        CHECK_ERR_RET(vk_->createDescriptorSetLayout(
-            UID_vkDescriptorSetLayout_0 + id_,
-            {
-                {vk::DescriptorType::eUniformBuffer,
-                 vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment},
-                {vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment},
-            }));
-
-        CHECK_ERR_RET(vk_->createPipelineLayout(UID_vkPipelineLayout_0 + id_,
-                                                {UID_vkDescriptorSetLayout_0 + id_}));
-
-        CHECK_ERR_RET(createPipeline(false));
 
         // upload texture
         CHECK_ERR_RET(sc_.createTexture(UID_scTexture_0 + id_, texture_path));
@@ -167,6 +167,9 @@ public:
         CHECK_ERR_RET(vk_->copyHostToImage(UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_,
                                            texture.getData().data(), UID_vkImage_texture_0 + id_,
                                            vk::ImageLayout::eUndefined));
+
+        texture.unload();
+
         CHECK_ERR_RET(vk_->generateMipmaps(
             UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_, UID_vkImage_texture_0 + id_,
             vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal));
@@ -174,10 +177,38 @@ public:
         CHECK_ERR_RET(
             vk_->createImageView(UID_vkImageView_texture_0 + id_, UID_vkImage_texture_0 + id_, {}));
 
+        CHECK_ERR_RET(vk_->createSampler(
+            UID_vkSampler_texture_0 + id_,
+            {.min_lod = 0.0f, .max_lod = static_cast<float>(texture_mip_levels)}));
+
         // upload model
         CHECK_ERR_RET(sc_.createModel(UID_scModel_0 + id_, model_path));
         auto& model = sc_.getModel(UID_scModel_0 + id_);
+        uint64_t model_vertex_size = model.getVertices().size() * sizeof(scene::Vertex);
+        uint64_t model_index_size = model.getIndices().size() * sizeof(uint32_t);
 
+        CHECK_ERR_RET(vk_->createBuffer(
+            UID_vkBuffer_vertex_0 + id_,
+            {model_vertex_size,
+             vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer},
+            vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+        CHECK_ERR_RET(vk_->copyHostToBuffer(UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_,
+                                            model.getVertices().data(),
+                                            UID_vkBuffer_vertex_0 + id_));
+
+        CHECK_ERR_RET(vk_->createBuffer(
+            UID_vkBuffer_index_0 + id_,
+            {model_index_size,
+             vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer},
+            vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+        CHECK_ERR_RET(vk_->copyHostToBuffer(UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_,
+                                            model.getIndices().data(), UID_vkBuffer_index_0 + id_));
+
+        model.unload();
+
+        // group
         for (int i = 0; i < swapchain_image_count_; ++i) {
             int id_offset = kMaxSwapchainImage * id_ + i;
             CHECK_ERR_RET(
@@ -191,7 +222,29 @@ public:
             CHECK_ERR_RET(vk_->createFence(UID_vkFence_inflight_0 + id_offset, true));
             CHECK_ERR_RET(vk_->createCommandBuffer(UID_vkCommandBuffer_0 + id_offset,
                                                    UID_vkCommandPool_0 + id_));
+
+            CHECK_ERR_RET(vk_->createBuffer(
+                UID_vkBuffer_uniform_0 + id_offset,
+                {sizeof(scene::UniformBuffer), vk::BufferUsageFlagBits::eUniformBuffer},
+                vk::MemoryPropertyFlagBits::eHostVisible |
+                    vk::MemoryPropertyFlagBits::eHostCoherent,
+                VMA_ALLOCATION_CREATE_MAPPED_BIT));
+
+            CHECK_ERR_RET(vk_->createDescriptorSet(UID_vkDescriptorSet_0 + id_offset,
+                                                   UID_vkDescriptorSetLayout_0 + id_,
+                                                   UID_vkDescriptorPool_0 + id_));
+
+            CHECK_ERR_RET(vk_->updateDescriptorSet(
+                UID_vkDescriptorSet_0 + id_offset,
+                {
+                    {0, UID_vkBuffer_uniform_0 + id_offset},
+                    {1,
+                     {UID_vkImageView_texture_0 + id_, UID_vkSampler_texture_0 + id_,
+                      vk::ImageLayout::eShaderReadOnlyOptimal}},
+                }));
         }
+
+        // CHECK_ERR_RET(setupImgui());
 
         return MyErrCode::kOk;
     }
@@ -199,6 +252,41 @@ public:
     MyErrCode destroy()
     {
         CHECK_ERR_RET(sc_.destroy());
+        return MyErrCode::kOk;
+    }
+
+    MyErrCode setupImgui()
+    {
+        ImGui::CreateContext();
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+        io.IniFilename = nullptr;
+        io.LogFilename = nullptr;
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.Alpha = 1.0;
+        style.ButtonTextAlign = ImVec2(0.0, 0.0);
+
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = vk_->getInstance();
+        init_info.PhysicalDevice = vk_->getPhysicalDevice();
+        init_info.Device = vk_->getDevice();
+        init_info.Queue = vk_->getQueue(UID_vkQueue_0 + id_);
+        init_info.DescriptorPool = vk_->getDescriptorPool(UID_vkDescriptorPool_0 + id_);
+        init_info.MinImageCount = swapchain_image_count_;
+        init_info.ImageCount = swapchain_image_count_;
+        init_info.MSAASamples = static_cast<VkSampleCountFlagBits>(msaa_sample_count_);
+        ImGui_ImplVulkan_Init(&init_info, vk_->getRenderPass(UID_vkRenderPass_0 + id_));
+
+        CHECK_ERR_RET(vk_->oneTimeSubmit(UID_vkQueue_0 + id_, UID_vkCommandPool_0 + id_,
+                                         [&](myvk::CommandBuffer& cmd) -> MyErrCode {
+                                             ImGui_ImplVulkan_CreateFontsTexture(cmd);
+                                             return MyErrCode::kOk;
+                                         }));
+
+        ImGui_ImplVulkan_DestroyFontUploadObjects();
+
         return MyErrCode::kOk;
     }
 
@@ -380,13 +468,6 @@ public:
             UID_vkRenderPass_0 + id_, UID_vkFrameBuffer_0 + kMaxSwapchainImage * id_ + image_index,
             {{0, 0}, {curr_width_, curr_height_}}, clear_values, vk::SubpassContents::eInline);
 
-        // vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
-
-        // VkBuffer vertex_buffers[] = {vertex_buffer.buf};
-        // VkDeviceSize vertex_buffer_offsets[] = {0};
-        // vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_buffer_offsets);
-        // vkCmdBindIndexBuffer(command_buffer, index_buffer.buf, 0, VK_INDEX_TYPE_UINT32);
-
         vk::Viewport viewport{
             0.0f, 0.0f, static_cast<float>(curr_width_), static_cast<float>(curr_height_),
             0.0f, 1.0f};
@@ -395,11 +476,13 @@ public:
         vk::Rect2D scissor{{0, 0}, {curr_width_, curr_height_}};
         cmd.setScissor(0, scissor);
 
-        // vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout,
-        // 0,
-        //                         1, &descriptor_sets[curr_frame], 0, nullptr);
-        //
-        // vkCmdDrawIndexed(command_buffer, scene->getIndexSize(), 1, 0, 0, 0);
+        cmd.bindPipeline(UID_vkPipeline_0 + id_, vk::PipelineBindPoint::eGraphics);
+        cmd.bindVertexBuffer(UID_vkBuffer_vertex_0 + id_);
+        cmd.bindIndexBuffer(UID_vkBuffer_index_0 + id_);
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, UID_vkPipelineLayout_0 + id_,
+                               {UID_vkDescriptorSet_0 + kMaxFrameInfight * id_ + curr_frame});
+
+        cmd.drawIndexed(sc_.getModel(UID_scModel_0 + id_).getIndicesCount(), 1, 0, 0, 0);
 
         // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
 
@@ -430,6 +513,11 @@ public:
             int swap_image_id_offset = kMaxSwapchainImage * id_ + image_index;
 
             CHECK_ERR_RET(vk_->resetFences({UID_vkFence_inflight_0 + inflight_frame_id_offset}));
+
+            void* uniform_mapped_data =
+                vk_->getBuffer(UID_vkBuffer_uniform_0 + inflight_frame_id_offset).getMappedData();
+            scene::UniformBuffer uniform_data = sc_.getUniformBuffer(UID_scModel_0 + id_);
+            memcpy(uniform_mapped_data, &uniform_data, sizeof(scene::UniformBuffer));
 
             CHECK_ERR_RET(vk_->recordCommand(
                 UID_vkCommandBuffer_0 + inflight_frame_id_offset,
@@ -591,7 +679,7 @@ MyErrCode run()
             vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
         CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
         app_threads.emplace_back([&wl, &vk, &apps, i] {
-            apps[i].init(&vk, 500, 300, toolkit::getDataDir() / "lyran.obj",
+            apps[i].init(&vk, 350, 300, toolkit::getDataDir() / "lyran.obj",
                          toolkit::getDataDir() / "lyran-diffuse.jpg");
             apps[i].drawLoop();
             apps[i].destroy();
