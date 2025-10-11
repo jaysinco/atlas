@@ -660,6 +660,7 @@ MyErrCode Context::createDeviceAndQueues(std::vector<char const*> const& extensi
 
     feat_10.features.sampleRateShading = true;
     feat_10.features.samplerAnisotropy = true;
+    feat_10.features.fillModeNonSolid = true;
     feat_12.timelineSemaphore = true;
     feat_13.synchronization2 = true;
 

@@ -435,6 +435,7 @@ public:
     MyErrCode createPipeline(bool recreate)
     {
         if (recreate) {
+            CHECK_ERR_RET(vk_->waitQueueIdle(UID_vkQueue_0 + id_));
             CHECK_ERR_RET(vk_->destroyPipeline(UID_vkPipeline_0 + id_));
         }
 
@@ -446,18 +447,22 @@ public:
         input_attrs[1] = {1, 0, vk::Format::eR32G32B32Sfloat, offsetof(scene::Vertex, normal)};
         input_attrs[2] = {2, 0, vk::Format::eR32G32Sfloat, offsetof(scene::Vertex, tex_coord)};
 
+        auto& gui_state = sc_.getGuiState();
         CHECK_ERR_RET(vk_->createGraphicPipeline(
-            UID_vkPipeline_0 + id_, {
-                                        .pipeline_layout_id = UID_vkPipelineLayout_0 + id_,
-                                        .render_pass_id = UID_vkRenderPass_0 + id_,
-                                        .vert_shader_id = UID_vkShader_vert,
-                                        .frag_shader_id = UID_vkShader_frag,
-                                        .polygon_mode = vk::PolygonMode::eFill,
-                                        .front_face = vk::FrontFace::eClockwise,
-                                        .raster_samples = msaa_sample_count_,
-                                        .vert_input_binds = {input_bind},
-                                        .vert_input_attrs = input_attrs,
-                                    }));
+            UID_vkPipeline_0 + id_,
+            {
+                .pipeline_layout_id = UID_vkPipelineLayout_0 + id_,
+                .render_pass_id = UID_vkRenderPass_0 + id_,
+                .vert_shader_id = UID_vkShader_vert,
+                .frag_shader_id = UID_vkShader_frag,
+                .polygon_mode =
+                    gui_state.wire_frame ? vk::PolygonMode::eLine : vk::PolygonMode::eFill,
+                .front_face = gui_state.face_clockwise ? vk::FrontFace::eClockwise
+                                                       : vk::FrontFace::eCounterClockwise,
+                .raster_samples = msaa_sample_count_,
+                .vert_input_binds = {input_bind},
+                .vert_input_attrs = input_attrs,
+            }));
         return MyErrCode::kOk;
     }
 
@@ -682,6 +687,11 @@ MyErrCode run()
     CHECK_ERR_RET(
         vk.createShaderModule(UID_vkShader_frag, toolkit::getDataDir() / "vkwl.frag.spv"));
 
+    std::vector<std::pair<std::string, std::string>> app_files = {
+        {"lyran.obj", "lyran-diffuse.jpg"},
+        {"lloyd.obj", "lloyd-diffuse.jpg"},
+    };
+
     std::vector<std::thread> app_threads;
     for (int i = 0; i < kMaxAppInstance; ++i) {
         VkSurfaceKHR vk_surface;
@@ -692,9 +702,9 @@ MyErrCode run()
         CHECK_VK_RET(
             vkCreateWaylandSurfaceKHR(vk.getInstance(), &surface_ci, nullptr, &vk_surface));
         CHECK_ERR_RET(vk.createSurface(UID_vkSurface_0 + i, vk_surface));
-        app_threads.emplace_back([&wl, &vk, &apps, i] {
-            apps[i].init(&vk, 350, 300, toolkit::getDataDir() / "lyran.obj",
-                         toolkit::getDataDir() / "lyran-diffuse.jpg");
+        app_threads.emplace_back([&, i] {
+            apps[i].init(&vk, 350, 300, toolkit::getDataDir() / app_files.at(i).first,
+                         toolkit::getDataDir() / app_files.at(i).second);
             apps[i].drawLoop();
             apps[i].destroy();
             wl.destroySurface(UID_wlSurface_0 + i);
